@@ -4,104 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SecureSharing (SSDID Edition) — Zero-knowledge encrypted file sharing with pure SSDID authentication.
+SsdidDrive is an ASP.NET Core 10 (.NET 10) Web API for a secure file-sharing platform using SSDID (Self-Sovereign Digital Identity) authentication. There are no passwords or OAuth — authentication is purely DID-based challenge-response with Verifiable Credentials, supporting 19 post-quantum and classical algorithms.
 
-This is a fork of SecureSharing that replaces all traditional authentication (email/password, JWT, WebAuthn, OIDC) with **pure SSDID (Self-Sovereign Distributed Identity)** based on W3C DID 1.1.
+## Build & Run Commands
+
+```bash
+# Start PostgreSQL (required before running the API)
+docker compose up -d
+
+# Build
+dotnet build src/SsdidDrive.Api
+
+# Run (auto-migrates DB in Development)
+dotnet run --project src/SsdidDrive.Api
+
+# Run tests (when test projects exist)
+dotnet test
+
+# Add a new EF Core migration
+dotnet ef migrations add <Name> --project src/SsdidDrive.Api
+
+# Apply migrations manually
+dotnet ef database update --project src/SsdidDrive.Api
+```
 
 ## Architecture
 
-```
-Mobile/Desktop Client                SecureSharing Backend            SSDID Registry
-┌─────────────────────┐             ┌─────────────────────┐         ┌──────────────┐
-│ SSDID Vault (keys)  │◄──mutual──►│ ssdid_server (lib)  │◄──DID──►│ DID Documents│
-│ SSDID Client        │   auth     │ Session Store        │  resolve│ Challenge API│
-│ File encryption     │            │ VC Verifier          │         └──────────────┘
-│ Key encapsulation   │            │ Phoenix API          │
-└─────────────────────┘            │ PostgreSQL (metadata)│
-                                   │ S3/Garage (blobs)    │
-                                   └─────────────────────┘
-```
+**Single-project solution** at `src/SsdidDrive.Api/` using Minimal APIs with vertical slice (feature-based) organization.
 
-## Key Differences from Original SecureSharing
+### Key Directories
 
-| Feature | Original | SSDID Edition |
-|---------|----------|---------------|
-| Identity | Email + Password | DID (Decentralized Identifier) |
-| Auth | JWT tokens (Joken) | SSDID session tokens (challenge-response) |
-| Login | Bcrypt password verification | Mutual auth via DID signatures |
-| WebAuthn | Yes (wax_ library) | Removed (SSDID replaces it) |
-| OIDC | Yes (multiple providers) | Removed (SSDID replaces it) |
-| PII Service | Yes (separate service) | Removed |
-| User table | email required, hashed_password | did required, email optional |
-| Session | JWT in Authorization header | SSDID session token in Authorization header |
+- `Features/` — Vertical slices. Each feature folder (Auth, Users, Health) contains a `*Feature.cs` that maps the route group, plus individual endpoint files (one class per endpoint).
+- `Ssdid/` — Core SSDID identity and authentication layer: encoding utilities (`SsdidCrypto`), server identity management (`SsdidIdentity`), auth service (`SsdidAuthService`), in-memory session store (`SessionStore`), and DID registry client (`RegistryClient`).
+- `Crypto/` — Multi-algorithm cryptography: `ICryptoProvider` strategy interface, `AlgorithmRegistry` (W3C type mappings), `CryptoProviderFactory` (DI-based dispatch), and `Providers/` with 5 family implementations (Ed25519, ECDSA, ML-DSA, SLH-DSA, KAZ-Sign). `Native/KazSign.cs` is the vendored P/Invoke wrapper.
+- `Common/` — Cross-cutting: `Result<T>` monad for error handling, `AppError` for typed RFC 7807 problem responses, `CurrentUserAccessor` (scoped, populated by auth middleware).
+- `Data/` — EF Core: `AppDbContext`, entity classes, migrations.
+- `Middleware/` — `SsdidAuthMiddleware` validates Bearer tokens against `SessionStore`, loads the `User` from DB, and populates `CurrentUserAccessor`.
 
-## Repository Structure
+### Authentication Flow
 
-```
-ssdid-securesharing/
-├── services/
-│   └── securesharing/          # Backend (Elixir/Phoenix + ssdid_server)
-│       ├── lib/
-│       │   ├── secure_sharing/
-│       │   │   ├── ssdid.ex              # SSDID identity init + context
-│       │   │   ├── accounts.ex           # DID-based user management
-│       │   │   └── accounts/user.ex      # User schema (DID primary identity)
-│       │   └── secure_sharing_web/
-│       │       ├── controllers/api/
-│       │       │   └── ssdid_auth_controller.ex  # SSDID auth endpoints
-│       │       ├── plugs/authenticate.ex          # SSDID session verification
-│       │       └── router.ex                      # Routes
-│       └── config/
-├── clients/
-│   ├── android/                # Android app (Kotlin/Compose)
-│   ├── ios/                    # iOS app (Swift/SwiftUI)
-│   └── desktop/                # Desktop app (Tauri + React)
-└── docs/
-```
+1. Client calls `POST /api/auth/ssdid/register` with their DID — server resolves it via the SSDID Registry, returns a signed challenge.
+2. Client signs the challenge and calls `POST /api/auth/ssdid/register/verify` — server verifies signature, issues a Verifiable Credential (W3C VC format).
+3. Client presents the VC to `POST /api/auth/ssdid/authenticate` — server verifies offline, creates an in-memory session, returns a Bearer token.
+4. All `/api/*` endpoints (except the auth endpoints above) require the Bearer token via `SsdidAuthMiddleware`.
 
-## Authentication Flow
+### Conventions
 
-```
-1. Client → POST /api/auth/ssdid/register {did, key_id}
-   Server → {challenge, server_did, server_signature}
+- **API JSON**: snake_case (configured globally in `Program.cs`). Verifiable Credentials use camelCase to match W3C spec — they are serialized to `JsonElement` to bypass the global policy.
+- **Error responses**: RFC 7807 Problem Details everywhere. Use `AppError` factory methods → `.ToProblemResult()`.
+- **Result pattern**: Endpoints return `Result<T>` from service methods, matched with `.Match(ok => ..., err => ...)`.
+- **Endpoint pattern**: Each endpoint is a static class with a `Map(RouteGroupBuilder)` method and a private `Handle` method.
+- **Database**: PostgreSQL 17 via EF Core with Npgsql. Auto-migrates in Development mode. Tables use lowercase snake_case names.
+- **Crypto**: Strategy pattern via `ICryptoProvider` with 5 family providers. Ed25519 uses BouncyCastle; ECDSA, ML-DSA, SLH-DSA use native .NET 10 (`System.Security.Cryptography`); KAZ-Sign uses vendored P/Invoke (`libkazsign`). `AlgorithmRegistry` maps 19 W3C verification method type strings to provider families. `CryptoProviderFactory` dispatches operations by type. ML-DSA/SLH-DSA are `[Experimental]` (SYSLIB5006 suppressed).
+- **Server identity**: Persists to `data/server-identity.json` (gitignored — contains private key). Auto-generated on first run. Algorithm configurable via `Ssdid:Algorithm` in `appsettings.json` (default: `KazSignVerificationKey2024`).
+- **Sessions**: In-memory `ConcurrentDictionary` with TTL (1h sessions, 5m challenges). Single-instance only — needs distributed cache for scaling.
 
-2. Client verifies server signature (mutual auth)
-   Client → POST /api/auth/ssdid/register/verify {did, key_id, signed_challenge}
-   Server → {credential (VC)}
+### Database Entities
 
-3. Client → POST /api/auth/ssdid/authenticate {credential}
-   Server → {session_token, server_signature, user, tenants}
-
-4. All subsequent requests: Authorization: Bearer <session_token>
-```
-
-## SSDID Dependency
-
-The backend depends on `ssdid_server_sdk` as a path dependency:
-```
-../../../SSDID/src/ssdid_server_sdk
-```
-
-This requires the SSDID repo to be checked out at `../../SSDID/` relative to this project root.
-
-## Development
-
-```bash
-# Start infrastructure
-docker-compose up -d
-
-# Backend
-cd services/securesharing
-export SSDID_IDENTITY_PASSWORD=dev_password
-mix deps.get && mix ecto.setup && mix phx.server
-```
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SSDID_IDENTITY_PASSWORD` | Yes | Password protecting server's SSDID keypair |
-| `SSDID_REGISTRY_URL` | No | Registry URL (default: https://registry.ssdid.my) |
-| `DATABASE_URL` | Yes (prod) | PostgreSQL connection string |
-| `SECRET_KEY_BASE` | Yes (prod) | Phoenix secret key |
-| `S3_BUCKET` | No | S3 bucket for file storage |
+- `User` — identified by DID, stores client-encrypted key material (zero-knowledge), belongs to optional primary `Tenant`
+- `Tenant` — organizational unit with unique slug
+- `UserTenant` — many-to-many with role (Owner/Admin/Member)
