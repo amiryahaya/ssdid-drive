@@ -1,5 +1,6 @@
 import FileProvider
 import UniformTypeIdentifiers
+import CryptoKit
 
 /// File Provider extension for SsdidDrive.
 /// Makes encrypted files appear natively in Finder/Files.app with on-demand download and upload.
@@ -70,10 +71,14 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 let encryptedData = try await apiClient.downloadFile(itemIdentifier.rawValue)
                 progress.completedUnitCount = 80
 
-                // Attempt decryption — if keys unavailable or decryption fails, serve encrypted (graceful degradation)
+                // Attempt decryption using folder key hierarchy first, then PQC fallback
                 let fileData: Data
-                if var kazKey = FPKeychainReader.readKazKemPrivateKey(),
-                   var mlKey = FPKeychainReader.readMlKemPrivateKey() {
+                if let decrypted = try? self.decryptWithFolderKeyHierarchy(fileItem: fileItem, encryptedData: encryptedData) {
+                    // Folder key hierarchy decryption succeeded
+                    fileData = decrypted
+                } else if var kazKey = FPKeychainReader.readKazKemPrivateKey(),
+                          var mlKey = FPKeychainReader.readMlKemPrivateKey() {
+                    // Fallback: PQC hybrid decryption (legacy envelope format)
                     defer {
                         FPDecryptor.fpSecureZero(&kazKey)
                         FPDecryptor.fpSecureZero(&mlKey)
@@ -84,6 +89,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                         mlKemPrivateKey: mlKey
                     )) ?? encryptedData
                 } else {
+                    // No keys available — serve raw data (graceful degradation)
                     fileData = encryptedData
                 }
 
@@ -122,21 +128,44 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                     let fileData = try Data(contentsOf: url)
                     progress.completedUnitCount = 20
 
-                    // Encrypt data if public keys are available
-                    let uploadData = self.encryptIfPossible(fileData)
-                    progress.completedUnitCount = 50
-
                     let mimeType = itemTemplate.contentType?.preferredMIMEType ?? "application/octet-stream"
-                    let uploaded = try await apiClient.uploadFile(
-                        name: itemTemplate.filename,
-                        data: uploadData,
-                        mimeType: mimeType,
-                        folderId: parentId
-                    )
-                    progress.completedUnitCount = 90
 
-                    let item = FileProviderItem.from(fpFile: uploaded, parentIdentifier: itemTemplate.parentItemIdentifier)
-                    completionHandler(item, [], false, nil)
+                    // Try folder key hierarchy encryption first
+                    if let parentId,
+                       let folderKey = self.readFolderKey(folderId: parentId) {
+                        let result = try self.encryptWithFolderKey(data: fileData, folderKey: folderKey)
+                        progress.completedUnitCount = 50
+
+                        let uploaded = try await apiClient.uploadFile(
+                            name: itemTemplate.filename,
+                            data: result.encryptedData,
+                            mimeType: mimeType,
+                            folderId: parentId,
+                            encryptedFileKey: result.wrappedFileKey,
+                            nonce: result.nonce,
+                            keyNonce: result.keyNonce,
+                            algorithm: "aes-256-gcm"
+                        )
+                        progress.completedUnitCount = 90
+
+                        let item = FileProviderItem.from(fpFile: uploaded, parentIdentifier: itemTemplate.parentItemIdentifier)
+                        completionHandler(item, [], false, nil)
+                    } else {
+                        // Fallback: PQC hybrid encryption or plaintext
+                        let uploadData = self.encryptIfPossible(fileData)
+                        progress.completedUnitCount = 50
+
+                        let uploaded = try await apiClient.uploadFile(
+                            name: itemTemplate.filename,
+                            data: uploadData,
+                            mimeType: mimeType,
+                            folderId: parentId
+                        )
+                        progress.completedUnitCount = 90
+
+                        let item = FileProviderItem.from(fpFile: uploaded, parentIdentifier: itemTemplate.parentItemIdentifier)
+                        completionHandler(item, [], false, nil)
+                    }
                 }
                 progress.completedUnitCount = 100
             } catch {
@@ -170,15 +199,33 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 // Handle content update
                 if changedFields.contains(.contents), let contentsURL = newContents {
                     let fileData = try Data(contentsOf: contentsURL)
-                    let uploadData = self.encryptIfPossible(fileData)
                     let mimeType = item.contentType?.preferredMIMEType ?? "application/octet-stream"
-                    let uploaded = try await apiClient.uploadFile(
-                        name: item.filename,
-                        data: uploadData,
-                        mimeType: mimeType,
-                        folderId: resolveParentId(item.parentItemIdentifier)
-                    )
-                    resultItem = FileProviderItem.from(fpFile: uploaded, parentIdentifier: item.parentItemIdentifier)
+                    let parentFolderId = resolveParentId(item.parentItemIdentifier)
+
+                    if let parentFolderId,
+                       let folderKey = self.readFolderKey(folderId: parentFolderId) {
+                        let result = try self.encryptWithFolderKey(data: fileData, folderKey: folderKey)
+                        let uploaded = try await apiClient.uploadFile(
+                            name: item.filename,
+                            data: result.encryptedData,
+                            mimeType: mimeType,
+                            folderId: parentFolderId,
+                            encryptedFileKey: result.wrappedFileKey,
+                            nonce: result.nonce,
+                            keyNonce: result.keyNonce,
+                            algorithm: "aes-256-gcm"
+                        )
+                        resultItem = FileProviderItem.from(fpFile: uploaded, parentIdentifier: item.parentItemIdentifier)
+                    } else {
+                        let uploadData = self.encryptIfPossible(fileData)
+                        let uploaded = try await apiClient.uploadFile(
+                            name: item.filename,
+                            data: uploadData,
+                            mimeType: mimeType,
+                            folderId: parentFolderId
+                        )
+                        resultItem = FileProviderItem.from(fpFile: uploaded, parentIdentifier: item.parentItemIdentifier)
+                    }
                 }
 
                 if let resultItem {
@@ -286,5 +333,111 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             }
         }
         return error
+    }
+
+    // MARK: - Folder Key Hierarchy Encryption
+
+    /// Result of encrypting file data with the folder key hierarchy.
+    private struct FolderKeyEncryptionResult {
+        let encryptedData: Data     // encrypted file content (ciphertext + tag)
+        let wrappedFileKey: String  // base64: wrapped file DEK (ciphertext + tag)
+        let nonce: String           // base64: file data nonce
+        let keyNonce: String        // base64: key wrapping nonce
+    }
+
+    /// Read a decrypted folder key from the shared keychain.
+    /// The main app stores folder keys keyed by folder ID after unlocking them.
+    private func readFolderKey(folderId: String) -> Data? {
+        FPKeychainReader.readFolderKey(folderId: folderId)
+    }
+
+    /// Encrypt file data using the folder key hierarchy (AES-256-GCM).
+    ///
+    /// 1. Generate a random 256-bit file DEK.
+    /// 2. Encrypt file data with the file DEK.
+    /// 3. Wrap the file DEK with the folder KEK.
+    private func encryptWithFolderKey(data: Data, folderKey: Data) throws -> FolderKeyEncryptionResult {
+        // Generate file DEK
+        var fileKey = Data(count: 32)
+        fileKey.withUnsafeMutableBytes { ptr in
+            _ = SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
+        }
+        defer {
+            fileKey.withUnsafeMutableBytes { ptr in
+                if let base = ptr.baseAddress { memset(base, 0, ptr.count) }
+            }
+        }
+
+        // Encrypt file data with file DEK
+        let fileSymKey = SymmetricKey(data: fileKey)
+        let fileNonce = AES.GCM.Nonce()
+        let fileSealedBox = try AES.GCM.seal(data, using: fileSymKey, nonce: fileNonce)
+        let encryptedData = fileSealedBox.ciphertext + fileSealedBox.tag
+
+        // Wrap file DEK with folder KEK
+        let wrapSymKey = SymmetricKey(data: folderKey)
+        let wrapNonce = AES.GCM.Nonce()
+        let wrapSealedBox = try AES.GCM.seal(fileKey, using: wrapSymKey, nonce: wrapNonce)
+        let wrappedKey = wrapSealedBox.ciphertext + wrapSealedBox.tag
+
+        return FolderKeyEncryptionResult(
+            encryptedData: Data(encryptedData),
+            wrappedFileKey: Data(wrappedKey).base64EncodedString(),
+            nonce: Data(fileNonce).base64EncodedString(),
+            keyNonce: Data(wrapNonce).base64EncodedString()
+        )
+    }
+
+    /// Decrypt file data using the folder key hierarchy.
+    ///
+    /// Requires the file to have encryption metadata (encrypted_file_key, nonce, key_nonce)
+    /// and the folder key to be available in the shared keychain.
+    private func decryptWithFolderKeyHierarchy(fileItem: FPFileItem, encryptedData: Data) throws -> Data {
+        guard let encryptedFileKeyB64 = fileItem.encryptedFileKey,
+              let nonceB64 = fileItem.nonce,
+              let keyNonceB64 = fileItem.keyNonce,
+              let folderId = fileItem.folderId,
+              let wrappedFileKey = Data(base64Encoded: encryptedFileKeyB64),
+              let fileNonceData = Data(base64Encoded: nonceB64),
+              let keyNonceData = Data(base64Encoded: keyNonceB64),
+              let folderKey = readFolderKey(folderId: folderId) else {
+            throw NSFileProviderError(.cannotSynchronize)
+        }
+
+        // Unwrap file DEK
+        let tagSize = 16
+        guard wrappedFileKey.count >= tagSize else {
+            throw NSFileProviderError(.cannotSynchronize)
+        }
+
+        let wrapSymKey = SymmetricKey(data: folderKey)
+        guard let wrapNonce = try? AES.GCM.Nonce(data: keyNonceData) else {
+            throw NSFileProviderError(.cannotSynchronize)
+        }
+
+        let wrapCiphertext = wrappedFileKey.prefix(wrappedFileKey.count - tagSize)
+        let wrapTag = wrappedFileKey.suffix(tagSize)
+        let wrapBox = try AES.GCM.SealedBox(nonce: wrapNonce, ciphertext: wrapCiphertext, tag: wrapTag)
+        var fileKey = try AES.GCM.open(wrapBox, using: wrapSymKey)
+        defer {
+            fileKey.withUnsafeMutableBytes { ptr in
+                if let base = ptr.baseAddress { memset(base, 0, ptr.count) }
+            }
+        }
+
+        // Decrypt file data
+        guard encryptedData.count >= tagSize else {
+            throw NSFileProviderError(.cannotSynchronize)
+        }
+
+        let fileSymKey = SymmetricKey(data: fileKey)
+        guard let fileNonce = try? AES.GCM.Nonce(data: fileNonceData) else {
+            throw NSFileProviderError(.cannotSynchronize)
+        }
+
+        let fileCiphertext = encryptedData.prefix(encryptedData.count - tagSize)
+        let fileTag = encryptedData.suffix(tagSize)
+        let fileBox = try AES.GCM.SealedBox(nonce: fileNonce, ciphertext: fileCiphertext, tag: fileTag)
+        return try AES.GCM.open(fileBox, using: fileSymKey)
     }
 }

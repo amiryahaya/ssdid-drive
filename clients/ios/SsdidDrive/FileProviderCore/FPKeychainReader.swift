@@ -41,6 +41,12 @@ enum FPKeychainReader {
         readData(account: FPConstants.mlKemPublicKey)
     }
 
+    /// Read a decrypted folder key from the shared keychain.
+    /// The main app stores folder keys keyed by folder ID after unlocking them.
+    static func readFolderKey(folderId: String) -> Data? {
+        readData(account: "shared_folder_key_\(folderId)")
+    }
+
     // MARK: - Private
 
     private static func readString(account: String) -> String? {

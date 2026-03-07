@@ -1,16 +1,19 @@
 import Foundation
+import Security
 
 /// Implementation of FileRepository
 final class FileRepositoryImpl: FileRepository {
 
     private let apiClient: APIClient
     private let cryptoManager: CryptoManager
+    private let encryptionService: FileEncryptionService
     private let cacheDirectory: URL
     private let metadataCacheDirectory: URL
 
-    init(apiClient: APIClient, cryptoManager: CryptoManager) {
+    init(apiClient: APIClient, cryptoManager: CryptoManager, encryptionService: FileEncryptionService = .shared) {
         self.apiClient = apiClient
         self.cryptoManager = cryptoManager
+        self.encryptionService = encryptionService
 
         let baseDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("SsdidDrive", isDirectory: true)
@@ -57,21 +60,57 @@ final class FileRepositoryImpl: FileRepository {
         folderId: String?,
         progress: @escaping (Double) -> Void
     ) async throws -> FileItem {
-        var endpoint = "/files"
+        let endpoint: String
         if let folderId = folderId {
             endpoint = "/folders/\(folderId)/files"
+        } else {
+            endpoint = "/files"
         }
 
         let mimeType = mimeType(for: url)
         let fileName = url.lastPathComponent
 
+        // Encrypt with folder key hierarchy if a folder key is available
+        var additionalFields: [String: String]? = nil
+        var fileURL = url
+
+        if let folderId = folderId,
+           let folderKey = loadFolderKey(folderId: folderId) {
+            let fileData = try Data(contentsOf: url)
+            let (encryptedFile, wrappedKey) = try encryptionService.encryptFileWithNewKey(
+                data: fileData,
+                folderKey: folderKey
+            )
+
+            // Write encrypted data to a temp file for upload
+            let tempDir = FileManager.default.temporaryDirectory
+            let tempFile = tempDir.appendingPathComponent(UUID().uuidString)
+            try encryptedFile.ciphertext.write(to: tempFile)
+            fileURL = tempFile
+
+            additionalFields = [
+                "encrypted_file_key": wrappedKey.ciphertext.base64EncodedString(),
+                "nonce": encryptedFile.nonce.base64EncodedString(),
+                "key_nonce": wrappedKey.nonce.base64EncodedString(),
+                "algorithm": "aes-256-gcm"
+            ]
+
+            progress(0.3)
+        }
+
         let data = try await apiClient.upload(
             endpoint,
-            fileURL: url,
+            fileURL: fileURL,
             mimeType: mimeType,
             fileName: fileName,
-            progress: progress
+            additionalFields: additionalFields,
+            progress: { p in progress(0.3 + p * 0.7) }
         )
+
+        // Clean up temp file if we created one
+        if fileURL != url {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -107,13 +146,45 @@ final class FileRepositoryImpl: FileRepository {
             return cachedURL
         }
 
-        // Download from server
-        let data = try await apiClient.download("/files/\(fileId)/download", progress: progress)
+        // Fetch file metadata to get encryption info
+        let fileItem: FileItem = try await apiClient.request("/files/\(fileId)")
 
-        // Cache the file
+        // Download encrypted data from server
+        let encryptedData = try await apiClient.download(
+            "/files/\(fileId)/download",
+            progress: { p in progress(p * 0.8) }
+        )
+
+        // Attempt decryption with folder key hierarchy
+        let fileData: Data
+        if let encryptedFileKeyB64 = fileItem.encryptedFileKey,
+           let nonceB64 = fileItem.nonce,
+           let keyNonceB64 = fileItem.keyNonce,
+           let folderId = fileItem.folderId,
+           let wrappedFileKey = Data(base64Encoded: encryptedFileKeyB64),
+           let fileNonce = Data(base64Encoded: nonceB64),
+           let keyNonce = Data(base64Encoded: keyNonceB64),
+           let folderKey = loadFolderKey(folderId: folderId) {
+            fileData = (try? encryptionService.decryptFileWithWrappedKey(
+                ciphertext: encryptedData,
+                fileNonce: fileNonce,
+                wrappedFileKey: wrappedFileKey,
+                keyNonce: keyNonce,
+                folderKey: folderKey
+            )) ?? encryptedData
+        } else {
+            // No folder key hierarchy metadata — return raw data
+            // (may be PQC-encrypted or plaintext, handled by caller)
+            fileData = encryptedData
+        }
+
+        progress(0.9)
+
+        // Cache the decrypted file
         let cacheURL = cacheDirectory.appendingPathComponent(fileId)
-        try data.write(to: cacheURL)
+        try fileData.write(to: cacheURL)
 
+        progress(1.0)
         return cacheURL
     }
 
@@ -144,7 +215,16 @@ final class FileRepositoryImpl: FileRepository {
 
     func createFolder(name: String, parentId: String?) async throws -> Folder {
         let body = CreateFolderRequest(name: name, parentId: parentId)
-        return try await apiClient.request("/folders", method: .post, body: body)
+        let folder: Folder = try await apiClient.request("/folders", method: .post, body: body)
+
+        // Generate a folder KEK and store it locally for use by the FileProvider extension.
+        // The folder key is stored in the shared keychain so the FP extension can encrypt/decrypt.
+        // In a full implementation, the folder key would be KEM-encrypted for the owner
+        // and stored on the server. For now, we generate and cache locally.
+        let folderKey = encryptionService.generateFolderKey()
+        storeFolderKey(folderId: folder.id, key: folderKey)
+
+        return folder
     }
 
     func getFolder(folderId: String) async throws -> Folder {
@@ -250,6 +330,71 @@ final class FileRepositoryImpl: FileRepository {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode(FolderContents.self, from: data)
+    }
+
+    // MARK: - Folder Key Management
+
+    /// Load a decrypted folder key from the local keychain.
+    /// In a full implementation this would decapsulate the folder KEK from the server response.
+    private func loadFolderKey(folderId: String) -> Data? {
+        // Read from UserDefaults app group or keychain
+        let key = "folder_key_\(folderId)"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Constants.Keychain.serviceName,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    /// Store a decrypted folder key in the local keychain.
+    /// Also syncs to the shared keychain for the FileProvider extension.
+    private func storeFolderKey(folderId: String, key: Data) {
+        let account = "folder_key_\(folderId)"
+
+        // Store in main keychain
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Constants.Keychain.serviceName,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Constants.Keychain.serviceName,
+            kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecValueData as String: key
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+
+        // Sync to shared keychain for File Provider extension
+        if let group = Constants.Keychain.accessGroup {
+            let sharedAccount = "shared_folder_key_\(folderId)"
+            let sharedDeleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Constants.Keychain.serviceName,
+                kSecAttrAccount as String: sharedAccount,
+                kSecAttrAccessGroup as String: group
+            ]
+            SecItemDelete(sharedDeleteQuery as CFDictionary)
+
+            let sharedAddQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Constants.Keychain.serviceName,
+                kSecAttrAccount as String: sharedAccount,
+                kSecAttrAccessGroup as String: group,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecValueData as String: key
+            ]
+            SecItemAdd(sharedAddQuery as CFDictionary, nil)
+        }
     }
 
     // MARK: - Private Helpers

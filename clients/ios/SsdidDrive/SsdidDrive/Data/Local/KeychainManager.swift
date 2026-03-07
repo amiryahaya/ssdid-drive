@@ -256,6 +256,24 @@ final class KeychainManager: KeychainManaging {
         try saveToSharedKeychain(mlKemPublicKey, for: "ml_kem_public_key")
     }
 
+    /// Sync a decrypted folder key to the shared keychain for the File Provider extension.
+    /// Called after the folder key is unlocked (decapsulated) in the main app.
+    func syncFolderKeyToSharedKeychain(folderId: String, folderKey: Data) throws {
+        try saveToSharedKeychain(folderKey, for: "folder_key_\(folderId)")
+    }
+
+    /// Remove a folder key from the shared keychain.
+    func clearSharedFolderKey(folderId: String) {
+        guard let group = Constants.Keychain.accessGroup else { return }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: "shared_folder_key_\(folderId)",
+            kSecAttrAccessGroup as String: group
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
     /// Clear KEM keys from the shared keychain.
     /// Called on lock and logout to prevent the extension from decrypting/encrypting.
     func clearSharedKemKeys() {

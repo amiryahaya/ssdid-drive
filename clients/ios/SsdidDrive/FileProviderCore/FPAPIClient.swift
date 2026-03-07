@@ -29,12 +29,19 @@ final class FPAPIClient {
         return try await get(path)
     }
 
-    func createFolder(name: String, parentId: String?) async throws -> FPFolder {
+    func createFolder(name: String, parentId: String?, encryptedFolderKey: String? = nil, kemAlgorithm: String? = nil) async throws -> FPFolder {
         struct Body: Encodable {
             let name: String
             let parent_id: String?
+            let encrypted_folder_key: String?
+            let kem_algorithm: String?
         }
-        let response: FPFolderResponse = try await post("/folders", body: Body(name: name, parent_id: parentId))
+        let response: FPFolderResponse = try await post("/folders", body: Body(
+            name: name,
+            parent_id: parentId,
+            encrypted_folder_key: encryptedFolderKey,
+            kem_algorithm: kemAlgorithm
+        ))
         return response.folder
     }
 
@@ -67,7 +74,27 @@ final class FPAPIClient {
         return data
     }
 
-    func uploadFile(name: String, data fileData: Data, mimeType: String, folderId: String?) async throws -> FPFileItem {
+    /// Upload a file with optional encryption metadata.
+    ///
+    /// - Parameters:
+    ///   - name: Display filename.
+    ///   - fileData: File content (encrypted or plaintext).
+    ///   - mimeType: MIME type of the original file.
+    ///   - folderId: Parent folder ID (nil for root).
+    ///   - encryptedFileKey: Base64-encoded wrapped file DEK (ciphertext + tag).
+    ///   - nonce: Base64-encoded AES-GCM nonce for the file data.
+    ///   - keyNonce: Base64-encoded AES-GCM nonce for the wrapped file key.
+    ///   - algorithm: Encryption algorithm identifier (e.g. "aes-256-gcm").
+    func uploadFile(
+        name: String,
+        data fileData: Data,
+        mimeType: String,
+        folderId: String?,
+        encryptedFileKey: String? = nil,
+        nonce: String? = nil,
+        keyNonce: String? = nil,
+        algorithm: String? = nil
+    ) async throws -> FPFileItem {
         let token = try requireToken()
         let boundary = UUID().uuidString
         var request = URLRequest(url: URL(string: "\(baseURL)/files/upload")!)
@@ -87,11 +114,30 @@ final class FPAPIClient {
         body.append(fileData)
         body.append("\r\n".data(using: .utf8)!)
 
+        // Helper to append a multipart text field
+        func appendField(_ fieldName: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(fieldName)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+
         // Folder ID field
         if let folderId {
-            body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"folder_id\"\r\n\r\n".data(using: .utf8)!)
-            body.append("\(folderId)\r\n".data(using: .utf8)!)
+            appendField("folder_id", folderId)
+        }
+
+        // Encryption metadata fields
+        if let encryptedFileKey {
+            appendField("encrypted_file_key", encryptedFileKey)
+        }
+        if let nonce {
+            appendField("nonce", nonce)
+        }
+        if let keyNonce {
+            appendField("key_nonce", keyNonce)
+        }
+        if let algorithm {
+            appendField("algorithm", algorithm)
         }
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)

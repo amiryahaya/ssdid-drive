@@ -10,14 +10,20 @@ struct FPFileItem: Codable {
     let size: Int64
     let folderId: String?
     let ownerId: String
+    let encryptedFileKey: String?  // base64-encoded wrapped file DEK (ciphertext + tag)
+    let nonce: String?             // base64-encoded AES-GCM nonce for the file data
+    let keyNonce: String?          // base64-encoded AES-GCM nonce for the wrapped file key
+    let algorithm: String?         // encryption algorithm, e.g. "aes-256-gcm"
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, name, size
+        case id, name, size, nonce, algorithm
         case mimeType = "mime_type"
         case folderId = "folder_id"
         case ownerId = "owner_id"
+        case encryptedFileKey = "encrypted_file_key"
+        case keyNonce = "key_nonce"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -28,6 +34,8 @@ struct FPFolder: Codable {
     let name: String
     let parentId: String?
     let ownerId: String
+    let encryptedFolderKey: String?  // base64-encoded encrypted folder KEK
+    let kemAlgorithm: String?        // KEM algorithm used to encrypt the folder key
     let createdAt: Date
     let updatedAt: Date
 
@@ -35,6 +43,8 @@ struct FPFolder: Codable {
         case id, name
         case parentId = "parent_id"
         case ownerId = "owner_id"
+        case encryptedFolderKey = "encrypted_folder_key"
+        case kemAlgorithm = "kem_algorithm"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

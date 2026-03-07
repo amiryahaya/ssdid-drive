@@ -10,6 +10,10 @@ struct FileItem: Codable, Identifiable, Equatable, Hashable {
     let folderId: String?
     let ownerId: String
     let encryptedKey: Data?
+    let encryptedFileKey: String?  // base64-encoded wrapped file DEK (ciphertext + tag)
+    let nonce: String?             // base64-encoded AES-GCM nonce for the file data
+    let keyNonce: String?          // base64-encoded AES-GCM nonce for the wrapped file key
+    let algorithm: String?         // encryption algorithm, e.g. "aes-256-gcm"
     let createdAt: Date
     let updatedAt: Date
     let isFolder: Bool
@@ -22,12 +26,16 @@ struct FileItem: Codable, Identifiable, Equatable, Hashable {
         case folderId = "folder_id"
         case ownerId = "owner_id"
         case encryptedKey = "encrypted_key"
+        case encryptedFileKey = "encrypted_file_key"
+        case nonce
+        case keyNonce = "key_nonce"
+        case algorithm
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isFolder = "is_folder"
     }
 
-    init(id: String, name: String, mimeType: String, size: Int64, folderId: String?, ownerId: String, encryptedKey: Data?, createdAt: Date, updatedAt: Date, isFolder: Bool = false) {
+    init(id: String, name: String, mimeType: String, size: Int64, folderId: String?, ownerId: String, encryptedKey: Data?, encryptedFileKey: String? = nil, nonce: String? = nil, keyNonce: String? = nil, algorithm: String? = nil, createdAt: Date, updatedAt: Date, isFolder: Bool = false) {
         self.id = id
         self.name = name
         self.mimeType = mimeType
@@ -35,6 +43,10 @@ struct FileItem: Codable, Identifiable, Equatable, Hashable {
         self.folderId = folderId
         self.ownerId = ownerId
         self.encryptedKey = encryptedKey
+        self.encryptedFileKey = encryptedFileKey
+        self.nonce = nonce
+        self.keyNonce = keyNonce
+        self.algorithm = algorithm
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.isFolder = isFolder
@@ -113,6 +125,8 @@ struct Folder: Codable, Identifiable, Equatable, Hashable {
     let name: String
     let parentId: String?
     let ownerId: String
+    let encryptedFolderKey: String?  // base64-encoded encrypted folder KEK
+    let kemAlgorithm: String?        // KEM algorithm used to encrypt the folder key
     let createdAt: Date
     let updatedAt: Date
 
@@ -121,6 +135,8 @@ struct Folder: Codable, Identifiable, Equatable, Hashable {
         case name
         case parentId = "parent_id"
         case ownerId = "owner_id"
+        case encryptedFolderKey = "encrypted_folder_key"
+        case kemAlgorithm = "kem_algorithm"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
