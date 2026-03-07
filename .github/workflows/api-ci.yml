@@ -1,0 +1,52 @@
+name: API CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/SsdidDrive.Api/**'
+      - 'tests/SsdidDrive.Api.Tests/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/SsdidDrive.Api/**'
+      - 'tests/SsdidDrive.Api.Tests/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ssdid
+          POSTGRES_PASSWORD: ssdid_test
+          POSTGRES_DB: ssdid_drive_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Restore
+        run: dotnet restore src/SsdidDrive.Api/SsdidDrive.Api.csproj
+
+      - name: Build
+        run: dotnet build src/SsdidDrive.Api/SsdidDrive.Api.csproj --no-restore -c Release
+
+      - name: Test
+        run: dotnet test tests/SsdidDrive.Api.Tests/ --no-restore -c Release --logger "trx;LogFileName=results.trx"
+        env:
+          ConnectionStrings__Default: "Host=localhost;Database=ssdid_drive_test;Username=ssdid;Password=ssdid_test"

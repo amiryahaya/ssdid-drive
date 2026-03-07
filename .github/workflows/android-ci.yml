@@ -1,0 +1,36 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'clients/android/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'clients/android/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon
