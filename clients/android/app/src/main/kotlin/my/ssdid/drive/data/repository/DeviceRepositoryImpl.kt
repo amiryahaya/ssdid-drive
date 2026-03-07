@@ -1,13 +1,11 @@
 package my.ssdid.drive.data.repository
 
 import android.util.Base64
-import my.ssdid.drive.crypto.DeviceManager
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
 import my.ssdid.drive.data.remote.dto.DeviceDto
 import my.ssdid.drive.data.remote.dto.DeviceEnrollmentDto
 import my.ssdid.drive.data.remote.dto.DeviceInfoDto
-import my.ssdid.drive.data.remote.dto.EnrollDeviceRequest
 import my.ssdid.drive.data.remote.dto.UpdateDeviceRequest
 import my.ssdid.drive.domain.model.Device
 import my.ssdid.drive.domain.model.DeviceEnrollment
@@ -27,74 +25,20 @@ import javax.inject.Singleton
 /**
  * Implementation of DeviceRepository.
  *
- * Handles device enrollment, key management, and request signing.
+ * Device key enrollment and request signing are now handled by the
+ * SSDID Wallet.  This implementation retains read-only server queries
+ * and push notification management.
  */
 @Singleton
 class DeviceRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
     private val secureStorage: SecureStorage,
-    private val deviceManager: DeviceManager,
     private val pushNotificationManager: PushNotificationManager
 ) : DeviceRepository {
 
     override suspend fun enrollDevice(deviceName: String?): Result<DeviceEnrollment> {
-        return try {
-            // 1. Generate device fingerprint
-            val fingerprint = deviceManager.generateDeviceFingerprint()
-
-            // 2. Generate device signing key pair
-            val algorithm = deviceManager.getPreferredAlgorithm()
-            val (publicKey, privateKey) = deviceManager.generateDeviceKeyPair(algorithm)
-
-            // 3. Get device info
-            val deviceInfo = deviceManager.getDeviceInfo()
-
-            // 4. Build enrollment request
-            val request = EnrollDeviceRequest(
-                deviceFingerprint = fingerprint,
-                platform = "android",
-                deviceInfo = DeviceInfoDto(
-                    model = deviceInfo.model,
-                    manufacturer = deviceInfo.manufacturer,
-                    osVersion = deviceInfo.osVersion,
-                    appVersion = deviceInfo.appVersion,
-                    sdkVersion = deviceInfo.sdkVersion
-                ),
-                devicePublicKey = Base64.encodeToString(publicKey, Base64.NO_WRAP),
-                keyAlgorithm = algorithm.toApiString(),
-                deviceName = deviceName ?: "${deviceInfo.manufacturer} ${deviceInfo.model}"
-            )
-
-            // 5. Call API
-            val response = apiService.enrollDevice(request)
-
-            if (response.isSuccessful) {
-                val enrollmentDto = response.body()!!.data
-
-                // 6. Store device keys securely
-                deviceManager.storeDeviceKeys(publicKey, privateKey, algorithm)
-
-                // 7. Store enrollment ID
-                secureStorage.saveDeviceEnrollmentId(enrollmentDto.id)
-                secureStorage.saveDeviceId(enrollmentDto.deviceId)
-
-                Result.success(enrollmentDto.toDomain())
-            } else {
-                // Clean up generated keys on failure
-                deviceManager.clearDeviceKey()
-
-                when (response.code()) {
-                    400 -> Result.error(AppException.ValidationError("Invalid device enrollment data"))
-                    401 -> Result.error(AppException.Unauthorized())
-                    403 -> Result.error(AppException.Forbidden("Device enrollment not allowed"))
-                    409 -> Result.error(AppException.Conflict("Device already enrolled"))
-                    else -> Result.error(AppException.Unknown("Failed to enroll device: ${response.code()}"))
-                }
-            }
-        } catch (e: Exception) {
-            deviceManager.clearDeviceKey()
-            Result.error(AppException.Network(e.message ?: "Network error during enrollment"))
-        }
+        // Device enrollment (key generation, fingerprinting) is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Device enrollment is managed by the SSDID Wallet"))
     }
 
     override suspend fun getCurrentEnrollment(): Result<DeviceEnrollment?> {
@@ -108,7 +52,6 @@ class DeviceRepositoryImpl @Inject constructor(
             } else {
                 when (response.code()) {
                     404 -> {
-                        // Enrollment no longer exists, clear local data
                         clearEnrollment()
                         Result.success(null)
                     }
@@ -164,7 +107,6 @@ class DeviceRepositoryImpl @Inject constructor(
             val response = apiService.revokeDeviceEnrollment(enrollmentId)
 
             if (response.isSuccessful) {
-                // If revoking current device, clear local data
                 val currentEnrollmentId = secureStorage.getDeviceEnrollmentId()
                 if (enrollmentId == currentEnrollmentId) {
                     clearEnrollment()
@@ -188,16 +130,8 @@ class DeviceRepositoryImpl @Inject constructor(
     }
 
     override suspend fun signRequest(payload: String): Result<String> {
-        return try {
-            val signature = deviceManager.signRequest(payload)
-            if (signature != null) {
-                Result.success(signature)
-            } else {
-                Result.error(AppException.CryptoError("Failed to sign request - keys not available"))
-            }
-        } catch (e: Exception) {
-            Result.error(AppException.CryptoError("Signing failed: ${e.message}"))
-        }
+        // Request signing is now handled by the SSDID Wallet
+        return Result.error(AppException.CryptoError("Request signing is managed by the SSDID Wallet"))
     }
 
     override suspend fun getEnrollmentId(): String? {
@@ -205,7 +139,7 @@ class DeviceRepositoryImpl @Inject constructor(
     }
 
     override suspend fun clearEnrollment() {
-        deviceManager.clearEnrollment()
+        secureStorage.clearDeviceEnrollment()
     }
 
     // ==================== DTO to Domain Mapping ====================

@@ -6,6 +6,7 @@ import my.ssdid.drive.crypto.providers.KazKemProvider
 import my.ssdid.drive.crypto.providers.KazSignProvider
 import my.ssdid.drive.crypto.providers.MlKemProvider
 import my.ssdid.drive.crypto.providers.MlDsaProvider
+import my.ssdid.drive.util.AnalyticsManager
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -33,6 +34,7 @@ class CryptoManagerTest {
     private lateinit var mlKemProvider: MlKemProvider
     private lateinit var mlDsaProvider: MlDsaProvider
     private lateinit var cryptoConfig: CryptoConfig
+    private lateinit var analyticsManager: AnalyticsManager
     private lateinit var cryptoManager: CryptoManager
 
     // Test data
@@ -50,6 +52,7 @@ class CryptoManagerTest {
         mlKemProvider = mockk()
         mlDsaProvider = mockk()
         cryptoConfig = mockk()
+        analyticsManager = mockk(relaxed = true)
 
         cryptoManager = CryptoManager(
             aesGcmProvider = aesGcmProvider,
@@ -58,7 +61,8 @@ class CryptoManagerTest {
             kazSignProvider = kazSignProvider,
             mlKemProvider = mlKemProvider,
             mlDsaProvider = mlDsaProvider,
-            cryptoConfig = cryptoConfig
+            cryptoConfig = cryptoConfig,
+            analyticsManager = analyticsManager
         )
     }
 
@@ -118,46 +122,6 @@ class CryptoManagerTest {
         val decrypted = cryptoManager.decryptAesGcm(encrypted, testKey)
 
         assertArrayEquals(testPlaintext, decrypted)
-    }
-
-    // ==================== Key Derivation Tests ====================
-
-    @Test
-    fun `deriveKeyLegacy calls hkdfProvider with correct parameters`() {
-        val derivedKey = ByteArray(32)
-        every {
-            hkdfProvider.deriveKey(testPassword, testSalt, info = "SsdidDrive-v1".toByteArray())
-        } returns derivedKey
-
-        val result = cryptoManager.deriveKeyLegacy(testPassword, testSalt)
-
-        verify { hkdfProvider.deriveKey(testPassword, testSalt, info = "SsdidDrive-v1".toByteArray()) }
-        assertArrayEquals(derivedKey, result)
-    }
-
-    @Test
-    fun `deriveKey uses Argon2id output with HKDF`() {
-        // deriveKey internally uses Argon2id (not mocked) then HKDF
-        // We can only verify the HKDF is called with some input
-        val derivedKey = ByteArray(32)
-        every {
-            hkdfProvider.deriveKey(
-                ikm = any(),
-                salt = "SsdidDrive-MasterKey-v1".toByteArray(),
-                info = "mk-encryption-key".toByteArray()
-            )
-        } returns derivedKey
-
-        val result = cryptoManager.deriveKey(testPassword, testSalt)
-
-        verify {
-            hkdfProvider.deriveKey(
-                ikm = any(),
-                salt = "SsdidDrive-MasterKey-v1".toByteArray(),
-                info = "mk-encryption-key".toByteArray()
-            )
-        }
-        assertArrayEquals(derivedKey, result)
     }
 
     // ==================== KAZ-KEM Tests ====================

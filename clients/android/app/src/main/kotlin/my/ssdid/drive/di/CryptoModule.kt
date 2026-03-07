@@ -9,14 +9,13 @@ import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.KeyEncapsulation
 import my.ssdid.drive.crypto.KeyManager
 import my.ssdid.drive.crypto.PublicKeyCache
-import my.ssdid.drive.crypto.RecoveryKeyManager
-import my.ssdid.drive.crypto.ShamirSecretSharing
 import my.ssdid.drive.crypto.providers.AesGcmProvider
 import my.ssdid.drive.crypto.providers.HkdfProvider
 import my.ssdid.drive.crypto.providers.KazKemProvider
 import my.ssdid.drive.crypto.providers.KazSignProvider
 import my.ssdid.drive.crypto.providers.MlKemProvider
 import my.ssdid.drive.crypto.providers.MlDsaProvider
+import my.ssdid.drive.util.AnalyticsManager
 import my.ssdid.drive.util.BufferPool
 import dagger.Module
 import dagger.Provides
@@ -80,7 +79,8 @@ object CryptoModule {
         kazSignProvider: KazSignProvider,
         mlKemProvider: MlKemProvider,
         mlDsaProvider: MlDsaProvider,
-        cryptoConfig: CryptoConfig
+        cryptoConfig: CryptoConfig,
+        analyticsManager: AnalyticsManager
     ): CryptoManager {
         return CryptoManager(
             aesGcmProvider = aesGcmProvider,
@@ -89,17 +89,15 @@ object CryptoModule {
             kazSignProvider = kazSignProvider,
             mlKemProvider = mlKemProvider,
             mlDsaProvider = mlDsaProvider,
-            cryptoConfig = cryptoConfig
+            cryptoConfig = cryptoConfig,
+            analyticsManager = analyticsManager
         )
     }
 
     @Provides
     @Singleton
-    fun provideKeyManager(
-        @ApplicationContext context: Context,
-        cryptoManager: CryptoManager
-    ): KeyManager {
-        return KeyManager(context, cryptoManager)
+    fun provideKeyManager(): KeyManager {
+        return KeyManager()
     }
 
     @Provides
@@ -155,19 +153,4 @@ object CryptoModule {
         return KeyEncapsulation(cryptoManager, keyManager)
     }
 
-    @Provides
-    @Singleton
-    fun provideShamirSecretSharing(): ShamirSecretSharing {
-        return ShamirSecretSharing()
-    }
-
-    @Provides
-    @Singleton
-    fun provideRecoveryKeyManager(
-        cryptoManager: CryptoManager,
-        keyManager: KeyManager,
-        shamirSecretSharing: ShamirSecretSharing
-    ): RecoveryKeyManager {
-        return RecoveryKeyManager(cryptoManager, keyManager, shamirSecretSharing)
-    }
 }

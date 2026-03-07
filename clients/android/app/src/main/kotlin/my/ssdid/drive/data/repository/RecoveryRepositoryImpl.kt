@@ -3,8 +3,6 @@ package my.ssdid.drive.data.repository
 import android.util.Base64
 import my.ssdid.drive.crypto.CryptoManager
 import my.ssdid.drive.crypto.KeyManager
-import my.ssdid.drive.crypto.RecoveryKeyManager
-import my.ssdid.drive.crypto.ShamirSecretSharing
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
 import my.ssdid.drive.data.remote.dto.ApproveRecoveryRequest
@@ -32,17 +30,19 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Recovery operations are now managed by the SSDID Wallet.
+ *
+ * This implementation retains read-only server queries (get config, list shares,
+ * list requests) but delegates all crypto-intensive operations (setup, share
+ * creation, approval, completion) to the wallet via deep links.
+ */
 @Singleton
 class RecoveryRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
     private val secureStorage: SecureStorage,
-    private val cryptoManager: CryptoManager,
-    private val keyManager: KeyManager,
-    private val recoveryKeyManager: RecoveryKeyManager
+    private val keyManager: KeyManager
 ) : RecoveryRepository {
-
-    // Cache for shares during setup (cleared after all shares distributed)
-    private var pendingShares: List<ShamirSecretSharing.Share>? = null
 
     override suspend fun getRecoveryConfig(): Result<RecoveryConfig?> {
         return try {
@@ -53,7 +53,7 @@ class RecoveryRepositoryImpl @Inject constructor(
                 Result.success(config)
             } else {
                 when (response.code()) {
-                    404 -> Result.success(null) // No config exists
+                    404 -> Result.success(null)
                     else -> Result.error(AppException.Unknown("Failed to get recovery config"))
                 }
             }
@@ -66,47 +66,8 @@ class RecoveryRepositoryImpl @Inject constructor(
         threshold: Int,
         totalShares: Int
     ): Result<RecoveryConfig> {
-        return try {
-            // Validate parameters
-            if (threshold < 2) {
-                return Result.error(AppException.ValidationError("Threshold must be at least 2"))
-            }
-            if (totalShares < threshold) {
-                return Result.error(AppException.ValidationError("Total shares must be at least threshold"))
-            }
-
-            // Get master key from key manager
-            val masterKey = keyManager.getUnlockedKeys().masterKey
-
-            // Split master key using Shamir
-            val splitResult = recoveryKeyManager.splitMasterKey(masterKey, threshold, totalShares)
-
-            // Store shares temporarily for distribution
-            pendingShares = splitResult.shares
-
-            // Create recovery config on server
-            val request = SetupRecoveryRequest(
-                threshold = threshold,
-                totalShares = totalShares
-            )
-
-            val response = apiService.setupRecovery(request)
-
-            if (response.isSuccessful) {
-                val config = response.body()!!.data?.toDomain()
-                    ?: return Result.error(AppException.Unknown("No recovery config in response"))
-                Result.success(config)
-            } else {
-                pendingShares = null
-                when (response.code()) {
-                    409 -> Result.error(AppException.ValidationError("Recovery already configured"))
-                    else -> Result.error(AppException.Unknown("Failed to setup recovery"))
-                }
-            }
-        } catch (e: Exception) {
-            pendingShares = null
-            Result.error(AppException.Network("Failed to setup recovery", e))
-        }
+        // Recovery setup (Shamir splitting) is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Recovery setup is managed by the SSDID Wallet"))
     }
 
     override suspend fun disableRecovery(): Result<Unit> {
@@ -114,7 +75,6 @@ class RecoveryRepositoryImpl @Inject constructor(
             val response = apiService.disableRecovery()
 
             if (response.isSuccessful) {
-                pendingShares = null
                 Result.success(Unit)
             } else {
                 when (response.code()) {
@@ -131,62 +91,8 @@ class RecoveryRepositoryImpl @Inject constructor(
         trustee: User,
         shareIndex: Int
     ): Result<RecoveryShare> {
-        return try {
-            // Get the pending share for this index
-            val shares = pendingShares
-                ?: return Result.error(AppException.CryptoError("No pending shares - call setupRecovery first"))
-
-            if (shareIndex < 1 || shareIndex > shares.size) {
-                return Result.error(AppException.ValidationError("Invalid share index"))
-            }
-
-            val share = shares[shareIndex - 1]
-
-            // Verify trustee has public keys
-            val trusteePublicKeys = trustee.publicKeys
-                ?: return Result.error(AppException.ValidationError("Trustee has no public keys"))
-
-            val userId = secureStorage.getUserId()
-                ?: return Result.error(AppException.Unauthorized("User not logged in"))
-
-            // Encrypt share for trustee
-            val encryptedResult = recoveryKeyManager.encryptShareForTrustee(
-                share = share,
-                trusteePublicKeys = trusteePublicKeys,
-                grantorId = userId,
-                trusteeId = trustee.id
-            )
-
-            // Create share on server
-            val request = CreateRecoveryShareRequest(
-                trusteeId = trustee.id,
-                shareIndex = shareIndex,
-                encryptedShare = encryptedResult.encryptedShare,
-                kemCiphertext = encryptedResult.kemCiphertext,
-                mlKemCiphertext = encryptedResult.mlKemCiphertext,
-                signature = encryptedResult.signature
-            )
-
-            val response = apiService.createRecoveryShare(request)
-
-            if (response.isSuccessful) {
-                val recoveryShare = response.body()!!.data.toDomain()
-
-                // Clear pending shares if all distributed
-                if (shareIndex == shares.size) {
-                    pendingShares = null
-                }
-
-                Result.success(recoveryShare)
-            } else {
-                when (response.code()) {
-                    409 -> Result.error(AppException.ValidationError("Share already exists for this trustee"))
-                    else -> Result.error(AppException.Unknown("Failed to create share"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to create share", e))
-        }
+        // Share creation (encryption with trustee keys) is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Share creation is managed by the SSDID Wallet"))
     }
 
     override suspend fun getCreatedShares(): Result<List<RecoveryShare>> {
@@ -277,41 +183,8 @@ class RecoveryRepositoryImpl @Inject constructor(
         password: String,
         reason: String?
     ): Result<RecoveryRequest> {
-        return try {
-            // Generate new key pairs
-            val keyBundle = keyManager.generateKeyBundle()
-
-            // Store new keys temporarily (will be used during completion)
-            // We need to save these somewhere secure temporarily
-
-            // Create request with new public key
-            val newPublicKeysDto = PublicKeysDto(
-                kem = Base64.encodeToString(keyBundle.kazKemPublicKey, Base64.NO_WRAP),
-                sign = Base64.encodeToString(keyBundle.kazSignPublicKey, Base64.NO_WRAP),
-                mlKem = keyBundle.mlKemPublicKey.takeIf { it.isNotEmpty() }?.let { Base64.encodeToString(it, Base64.NO_WRAP) },
-                mlDsa = keyBundle.mlDsaPublicKey.takeIf { it.isNotEmpty() }?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
-            )
-
-            val request = CreateRecoveryRequestRequest(
-                newPublicKey = Base64.encodeToString(keyBundle.kazKemPublicKey, Base64.NO_WRAP),
-                reason = reason
-            )
-
-            val response = apiService.createRecoveryRequest(request)
-
-            if (response.isSuccessful) {
-                val recoveryRequest = response.body()!!.data.toDomain()
-                Result.success(recoveryRequest)
-            } else {
-                when (response.code()) {
-                    404 -> Result.error(AppException.NotFound("No recovery config found"))
-                    409 -> Result.error(AppException.ValidationError("Recovery request already pending"))
-                    else -> Result.error(AppException.Unknown("Failed to initiate recovery"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to initiate recovery", e))
-        }
+        // Recovery initiation (new key generation) is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Recovery initiation is managed by the SSDID Wallet"))
     }
 
     override suspend fun getMyRecoveryRequests(): Result<List<RecoveryRequest>> {
@@ -373,99 +246,16 @@ class RecoveryRepositoryImpl @Inject constructor(
         requestId: String,
         shareId: String
     ): Result<RecoveryApproval> {
-        return try {
-            // Get the recovery request to get the requester's new public keys
-            val requestResponse = apiService.getRecoveryRequest(requestId)
-            if (!requestResponse.isSuccessful) {
-                return Result.error(AppException.NotFound("Recovery request not found"))
-            }
-
-            val recoveryRequest = requestResponse.body()!!.data.request
-
-            // Get the share to decrypt
-            val sharesResponse = apiService.getTrusteeShares()
-            if (!sharesResponse.isSuccessful) {
-                return Result.error(AppException.Unknown("Failed to get shares"))
-            }
-
-            val shareDto = sharesResponse.body()!!.data.find { it.id == shareId }
-                ?: return Result.error(AppException.NotFound("Share not found"))
-
-            // Decrypt the share
-            val share = recoveryKeyManager.decryptShareAsTrustee(
-                encryptedShare = shareDto.encryptedShare,
-                kemCiphertext = shareDto.kemCiphertext,
-                mlKemCiphertext = shareDto.mlKemCiphertext
-            )
-
-            // Get requester's new public keys (from the request)
-            val requesterPublicKey = Base64.decode(recoveryRequest.newPublicKey, Base64.NO_WRAP)
-            // For simplicity, we'll use just the KEM key here
-            // In production, the full PublicKeysDto should be sent with the request
-            val requesterPublicKeys = PublicKeys(
-                kem = requesterPublicKey,
-                sign = requesterPublicKey, // Placeholder
-                mlKem = null,
-                mlDsa = null
-            )
-
-            // Re-encrypt share for requester
-            val reencryptedResult = recoveryKeyManager.reencryptShareForRequester(
-                share = share,
-                requesterPublicKeys = requesterPublicKeys,
-                requestId = requestId,
-                shareId = shareId
-            )
-
-            // Submit approval
-            val request = ApproveRecoveryRequest(
-                shareId = shareId,
-                reencryptedShare = reencryptedResult.encryptedShare,
-                kemCiphertext = reencryptedResult.kemCiphertext,
-                mlKemCiphertext = reencryptedResult.mlKemCiphertext,
-                signature = reencryptedResult.signature
-            )
-
-            val response = apiService.approveRecoveryRequest(requestId, request)
-
-            if (response.isSuccessful) {
-                val approval = response.body()!!.data
-                Result.success(RecoveryApproval(
-                    id = approval.id,
-                    requestId = approval.requestId,
-                    shareId = approval.shareId,
-                    approverId = approval.approverId,
-                    createdAt = Instant.parse(approval.insertedAt)
-                ))
-            } else {
-                when (response.code()) {
-                    404 -> Result.error(AppException.NotFound("Request or share not found"))
-                    409 -> Result.error(AppException.ValidationError("Already approved"))
-                    else -> Result.error(AppException.Unknown("Failed to approve request"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to approve request", e))
-        }
+        // Recovery approval (share decryption/re-encryption) is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Recovery approval is managed by the SSDID Wallet"))
     }
 
     override suspend fun completeRecovery(
         requestId: String,
         password: String
     ): Result<Unit> {
-        return try {
-            // This would:
-            // 1. Fetch all approvals with re-encrypted shares
-            // 2. Decrypt each share using the new private keys
-            // 3. Reconstruct the master key using Shamir
-            // 4. Generate new key material encrypted with password
-            // 5. Submit to server to update user credentials
-
-            // For now, return not implemented
-            Result.error(AppException.Unknown("Recovery completion not fully implemented"))
-        } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to complete recovery", e))
-        }
+        // Recovery completion is now handled by the SSDID Wallet
+        return Result.error(AppException.Unknown("Recovery completion is managed by the SSDID Wallet"))
     }
 
     override suspend fun cancelRecoveryRequest(requestId: String): Result<Unit> {

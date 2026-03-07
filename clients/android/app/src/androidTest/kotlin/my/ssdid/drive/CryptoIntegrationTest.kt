@@ -2,7 +2,6 @@ package my.ssdid.drive
 
 import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import my.ssdid.drive.crypto.ShamirSecretSharing
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -108,106 +107,7 @@ class CryptoIntegrationTest {
         assertArrayEquals(plaintext, decrypted)
     }
 
-    // ==================== Shamir Secret Sharing Tests ====================
-
-    @Test
-    fun shamir_splitAndReconstruct_2of3() {
-        val shamir = ShamirSecretSharing()
-        val secret = generateRandomBytes(32)
-
-        val shares = shamir.split(secret, k = 2, n = 3)
-        assertEquals(3, shares.size)
-
-        // Reconstruct with first two shares
-        val reconstructed = shamir.reconstruct(listOf(shares[0], shares[1]))
-        assertArrayEquals(secret, reconstructed)
-    }
-
-    @Test
-    fun shamir_splitAndReconstruct_3of5() {
-        val shamir = ShamirSecretSharing()
-        val secret = generateRandomBytes(32)
-
-        val shares = shamir.split(secret, k = 3, n = 5)
-
-        // Reconstruct with shares 1, 3, 5
-        val reconstructed = shamir.reconstruct(listOf(shares[0], shares[2], shares[4]))
-        assertArrayEquals(secret, reconstructed)
-    }
-
-    @Test
-    fun shamir_insufficientShares_wrongResult() {
-        val shamir = ShamirSecretSharing()
-        val secret = generateRandomBytes(32)
-
-        val shares = shamir.split(secret, k = 3, n = 5)
-
-        // Try to reconstruct with only 2 shares (insufficient)
-        val wrongResult = shamir.reconstruct(listOf(shares[0], shares[1]))
-
-        // Should not equal the original secret
-        assertFalse(secret.contentEquals(wrongResult))
-    }
-
-    @Test
-    fun shamir_allCombinations_work() {
-        val shamir = ShamirSecretSharing()
-        val secret = generateRandomBytes(32)
-
-        val shares = shamir.split(secret, k = 2, n = 4)
-
-        // Test all possible pairs (6 combinations)
-        val combinations = listOf(
-            listOf(shares[0], shares[1]),
-            listOf(shares[0], shares[2]),
-            listOf(shares[0], shares[3]),
-            listOf(shares[1], shares[2]),
-            listOf(shares[1], shares[3]),
-            listOf(shares[2], shares[3])
-        )
-
-        for ((index, combination) in combinations.withIndex()) {
-            val reconstructed = shamir.reconstruct(combination)
-            assertArrayEquals(
-                "Combination $index failed",
-                secret,
-                reconstructed
-            )
-        }
-    }
-
     // ==================== Full Encryption Flow Test ====================
-
-    @Test
-    fun fullEncryptionFlow_masterKey_protected() {
-        // Simulate full key protection flow:
-        // 1. Generate master key
-        // 2. Encrypt master key with password-derived key
-        // 3. Split master key for recovery
-        // 4. Decrypt and reconstruct
-
-        val shamir = ShamirSecretSharing()
-
-        // 1. Generate master key
-        val masterKey = generateRandomBytes(32)
-
-        // 2. Derive key from password and encrypt master key
-        val password = "user-password-123".toByteArray()
-        val salt = generateRandomBytes(16)
-        val derivedKey = deriveKeyPbkdf2(password, salt)
-        val encryptedMasterKey = encryptAesGcm(masterKey, derivedKey)
-
-        // 3. Split master key for recovery
-        val recoveryShares = shamir.split(masterKey, k = 2, n = 3)
-
-        // Verify decryption with password works
-        val decryptedMasterKey = decryptAesGcm(encryptedMasterKey, derivedKey)
-        assertArrayEquals(masterKey, decryptedMasterKey)
-
-        // Verify recovery works
-        val recoveredMasterKey = shamir.reconstruct(recoveryShares.take(2))
-        assertArrayEquals(masterKey, recoveredMasterKey)
-    }
 
     @Test
     fun fileEncryption_simulation() {

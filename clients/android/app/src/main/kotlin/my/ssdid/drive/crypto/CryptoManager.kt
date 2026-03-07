@@ -8,9 +8,6 @@ import my.ssdid.drive.crypto.providers.MlKemProvider
 import my.ssdid.drive.crypto.providers.MlDsaProvider
 import my.ssdid.drive.util.AnalyticsManager
 import my.ssdid.drive.util.SentryConfig
-import org.bouncycastle.crypto.generators.Argon2BytesGenerator
-import org.bouncycastle.crypto.generators.BCrypt
-import org.bouncycastle.crypto.params.Argon2Parameters
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,25 +35,7 @@ class CryptoManager @Inject constructor(
 ) {
     private val secureRandom = SecureRandom()
 
-    companion object {
-        private const val MASTER_KEY_SALT = "SsdidDrive-MasterKey-v1"
-        private const val MK_ENCRYPTION_KEY_INFO = "mk-encryption-key"
-
-        // Argon2id-standard parameters (64 MiB)
-        private const val ARGON2_MEMORY_KIB = 65536
-        private const val ARGON2_ITERATIONS = 3
-        private const val ARGON2_PARALLELISM = 4
-        private const val ARGON2_OUTPUT_LENGTH = 32
-
-        // Argon2id-low parameters (19 MiB)
-        private const val ARGON2_LOW_MEMORY_KIB = 19456
-        private const val ARGON2_LOW_ITERATIONS = 4
-
-        // Bcrypt-HKDF parameters
-        private const val BCRYPT_COST = 13
-        private const val BCRYPT_HKDF_SALT = "SsdidDrive-Bcrypt-KDF-v1"
-        private const val BCRYPT_HKDF_INFO = "bcrypt-derived-key"
-    }
+    companion object
 
     // ==================== Random Generation ====================
 
@@ -73,117 +52,6 @@ class CryptoManager @Inject constructor(
      * Generate a 32-byte key (256 bits).
      */
     fun generateKey(): ByteArray = generateRandom(32)
-
-    // ==================== Key Derivation ====================
-
-    /**
-     * Derive a key from password using Argon2id + HKDF-SHA384.
-     */
-    fun deriveKey(password: ByteArray, salt: ByteArray): ByteArray {
-        val argon2Output = deriveArgon2id(password, salt)
-        return try {
-            hkdfProvider.deriveKey(
-                ikm = argon2Output,
-                salt = MASTER_KEY_SALT.toByteArray(),
-                info = MK_ENCRYPTION_KEY_INFO.toByteArray()
-            )
-        } finally {
-            SecureMemory.zeroize(argon2Output)
-        }
-    }
-
-    /**
-     * Legacy HKDF-only derivation for backward compatibility.
-     */
-    fun deriveKeyLegacy(password: ByteArray, salt: ByteArray): ByteArray {
-        return hkdfProvider.deriveKey(password, salt, info = "SsdidDrive-v1".toByteArray())
-    }
-
-    /**
-     * Derive a 32-byte key using Argon2id (RFC 9106 parameters).
-     */
-    private fun deriveArgon2id(password: ByteArray, salt: ByteArray): ByteArray {
-        val params = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
-            .withSalt(salt)
-            .withMemoryAsKB(ARGON2_MEMORY_KIB)
-            .withIterations(ARGON2_ITERATIONS)
-            .withParallelism(ARGON2_PARALLELISM)
-            .build()
-
-        val generator = Argon2BytesGenerator()
-        generator.init(params)
-
-        val output = ByteArray(ARGON2_OUTPUT_LENGTH)
-        generator.generateBytes(password, output)
-        return output
-    }
-
-    /**
-     * Derive a 32-byte key using Argon2id-low profile (19 MiB, t=4).
-     */
-    private fun deriveArgon2idLow(password: ByteArray, salt: ByteArray): ByteArray {
-        val params = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
-            .withSalt(salt)
-            .withMemoryAsKB(ARGON2_LOW_MEMORY_KIB)
-            .withIterations(ARGON2_LOW_ITERATIONS)
-            .withParallelism(ARGON2_PARALLELISM)
-            .build()
-
-        val generator = Argon2BytesGenerator()
-        generator.init(params)
-
-        val output = ByteArray(ARGON2_OUTPUT_LENGTH)
-        generator.generateBytes(password, output)
-        return output
-    }
-
-    /**
-     * Derive a 32-byte key using bcrypt + HKDF-SHA-384.
-     *
-     * 1. Bcrypt hash (cost=13) -> 24-byte output
-     * 2. HKDF-SHA-384 stretch to 32 bytes
-     */
-    private fun deriveBcryptHkdf(password: ByteArray, salt: ByteArray): ByteArray {
-        // BCrypt.generate expects 16-byte salt and password as byte array
-        // BouncyCastle BCrypt.generate returns 24 bytes
-        val bcryptOutput = BCrypt.generate(password, salt, BCRYPT_COST)
-
-        return try {
-            hkdfProvider.deriveKey(
-                ikm = bcryptOutput,
-                salt = BCRYPT_HKDF_SALT.toByteArray(),
-                info = BCRYPT_HKDF_INFO.toByteArray(),
-                length = ARGON2_OUTPUT_LENGTH
-            )
-        } finally {
-            SecureMemory.zeroize(bcryptOutput)
-        }
-    }
-
-    /**
-     * Derive a key using the tiered KDF system.
-     *
-     * Parses the profile byte from the first byte of [saltWithProfile],
-     * then dispatches to the correct KDF.
-     *
-     * For backward compatibility: if the salt is not 17 bytes or the first
-     * byte is not a valid profile, falls back to legacy Argon2id-standard.
-     */
-    fun deriveKeyWithProfile(password: ByteArray, saltWithProfile: ByteArray): ByteArray {
-        if (KdfProfile.isTieredSalt(saltWithProfile)) {
-            val profile = KdfProfile.fromByte(saltWithProfile[0])
-            val salt = saltWithProfile.copyOfRange(1, KdfProfile.WIRE_SALT_SIZE)
-
-            return when (profile) {
-                KdfProfile.ARGON2ID_STANDARD -> deriveArgon2id(password, salt)
-                KdfProfile.ARGON2ID_LOW -> deriveArgon2idLow(password, salt)
-                KdfProfile.BCRYPT_HKDF -> deriveBcryptHkdf(password, salt)
-            }
-        }
-
-        // Legacy fallback: use existing deriveKey path (includes HKDF post-processing)
-        return deriveKey(password, saltWithProfile)
-    }
 
     // ==================== AES-GCM Encryption ====================
 

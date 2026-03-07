@@ -6,8 +6,6 @@ import my.ssdid.drive.BuildConfig
 import my.ssdid.drive.data.remote.ApiService
 import my.ssdid.drive.data.remote.PiiApiService
 import my.ssdid.drive.data.remote.AuthInterceptor
-import my.ssdid.drive.data.remote.DeviceSignatureInterceptor
-import my.ssdid.drive.crypto.DeviceManager
 import my.ssdid.drive.data.local.SecureStorage
 import dagger.Module
 import dagger.Provides
@@ -113,15 +111,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideDeviceSignatureInterceptor(
-        secureStorage: SecureStorage,
-        deviceManager: DeviceManager
-    ): DeviceSignatureInterceptor {
-        return DeviceSignatureInterceptor(secureStorage, deviceManager)
-    }
-
-    @Provides
-    @Singleton
     @UnauthenticatedClient
     fun provideUnauthenticatedOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor,
@@ -148,7 +137,6 @@ object NetworkModule {
     fun provideAuthenticatedOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor,
         authInterceptor: AuthInterceptor,
-        deviceSignatureInterceptor: DeviceSignatureInterceptor,
         certificatePinner: CertificatePinner
     ): OkHttpClient {
         return OkHttpClient.Builder()
@@ -156,7 +144,6 @@ object NetworkModule {
             .readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
-            .addInterceptor(deviceSignatureInterceptor)
             .addInterceptor(loggingInterceptor)
             // SECURITY: Certificate pinning to prevent MITM attacks
             // Disabled for debug builds to allow local development with self-signed certs

@@ -6,7 +6,6 @@ import android.net.Uri
 import android.util.Base64
 import my.ssdid.drive.crypto.CryptoConfig
 import my.ssdid.drive.crypto.CryptoManager
-import my.ssdid.drive.crypto.DeviceManager
 import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.KeyManager
 import my.ssdid.drive.crypto.PqcAlgorithm
@@ -42,7 +41,6 @@ class AuthRepositoryImpl @Inject constructor(
     private val keyManager: KeyManager,
     private val cryptoConfig: CryptoConfig,
     private val folderKeyManager: FolderKeyManager,
-    private val deviceManager: DeviceManager,
     private val cacheManager: CacheManager,
     private val pushNotificationManager: PushNotificationManager,
     private val analyticsManager: AnalyticsManager
@@ -108,9 +106,6 @@ class AuthRepositoryImpl @Inject constructor(
             secureStorage.clearAll()
             keyManager.clearUnlockedKeys()
             folderKeyManager.clearCache()
-
-            // SECURITY: Clear device signing key from memory
-            deviceManager.clearDeviceKey()
 
             // Clear file caches (decrypted files)
             cacheManager.clearAllCaches()
@@ -264,34 +259,18 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun unlockWithBiometric(): Result<Unit> {
         return try {
-            // Get master key from biometric-protected storage
-            val masterKey = secureStorage.getBiometricProtectedMasterKey()
-                ?: return Result.error(AppException.CryptoError("No biometric master key found. Please re-enable biometric unlock."))
+            // With SSDID Wallet architecture, biometric unlock re-requests
+            // keys from the wallet rather than decrypting locally stored keys.
+            // For now, check if keys are already available from a prior wallet callback.
+            if (keyManager.hasUnlockedKeys()) {
+                analyticsManager.trackLogin("biometric")
+                Logger.i(TAG, "Keys already unlocked")
+                return Result.success(Unit)
+            }
 
-            // Get encrypted private keys
-            val encryptedPrivateKeys = secureStorage.getEncryptedPrivateKeys()
-                ?: return Result.error(AppException.CryptoError("No encrypted private keys found"))
-
-            // Decrypt private keys with master key
-            val privateKeysBundle = cryptoManager.decryptAesGcm(encryptedPrivateKeys, masterKey)
-
-            // Parse and store unlocked keys
-            val keyBundle = keyManager.deserializePrivateKeys(privateKeysBundle, masterKey.copyOf())
-
-            // SECURITY: Zeroize decrypted private keys bundle
-            SecureMemory.zeroize(privateKeysBundle)
-
-            // SECURITY: Zeroize the master key copy we retrieved
-            SecureMemory.zeroize(masterKey)
-
-            keyManager.setUnlockedKeys(keyBundle)
-
-            analyticsManager.trackLogin("biometric")
-
-            Logger.i(TAG, "Keys unlocked with biometric")
-            Result.success(Unit)
+            // Keys need to be obtained from the wallet via deep link
+            Result.error(AppException.CryptoError("Please authenticate via SSDID Wallet"))
         } catch (e: BiometricKeyInvalidatedException) {
-            // Biometric key was invalidated (e.g., new fingerprint enrolled)
             secureStorage.disableBiometricUnlock()
             secureStorage.setBiometricUnlockPreference(false)
             Logger.w(TAG, "Biometric key invalidated, disabled biometric unlock", e)
