@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copy MenuBarHelper into Contents/Library/LoginItems/ for Catalyst builds.
+# MenuBarHelper is a native macOS target so it builds into the non-catalyst products dir.
+if [ "${IS_MACCATALYST}" = "YES" ]; then
+  HELPER_SRC="${BUILD_DIR}/${CONFIGURATION}/MenuBarHelper.app"
+  LOGIN_ITEMS_DIR="${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}/Contents/Library/LoginItems"
+  if [ -d "${HELPER_SRC}" ]; then
+    mkdir -p "${LOGIN_ITEMS_DIR}"
+    cp -R "${HELPER_SRC}" "${LOGIN_ITEMS_DIR}/"
+  fi
+fi
+

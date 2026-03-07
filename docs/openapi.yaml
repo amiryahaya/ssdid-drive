@@ -1,0 +1,1268 @@
+openapi: 3.0.3
+info:
+  title: SecureSharing API
+  description: |
+    Zero-trust, zero-knowledge file sharing API with post-quantum cryptography support.
+
+    ## Authentication
+    All API endpoints (except `/api/auth/*`) require a Bearer token in the Authorization header.
+    Tokens are obtained via the login endpoint and can be refreshed using the refresh endpoint.
+
+    ## Encryption
+    All file and folder data is end-to-end encrypted. The server never has access to plaintext data.
+    Encryption keys are wrapped using post-quantum KEM algorithms (Kyber/ML-KEM).
+  version: 1.0.0
+  contact:
+    name: SecureSharing Support
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:4000
+    description: Development server
+  - url: https://api.securesharing.example
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User registration, login, and token management
+  - name: Users
+    description: User profile and key management
+  - name: Folders
+    description: Folder CRUD operations
+  - name: Files
+    description: File operations and upload/download URLs
+  - name: Sharing
+    description: Share files and folders with other users
+  - name: Recovery
+    description: Social key recovery with Shamir secret sharing
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: Creates a new user account with cryptographic key material
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_slug, email, password, public_keys, encrypted_private_keys, key_derivation_salt]
+              properties:
+                tenant_slug:
+                  type: string
+                  description: Tenant identifier
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 12
+                public_keys:
+                  type: object
+                  properties:
+                    kem:
+                      type: string
+                      description: Base64-encoded public KEM key
+                    sign:
+                      type: string
+                      description: Base64-encoded public signing key
+                encrypted_private_keys:
+                  type: string
+                  description: Base64-encoded encrypted private keys
+                encrypted_master_key:
+                  type: string
+                  description: Base64-encoded encrypted master key
+                key_derivation_salt:
+                  type: string
+                  description: Base64-encoded key derivation salt
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login user
+      description: Authenticates user and returns access/refresh tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                tenant_slug:
+                  type: string
+                  description: Optional tenant identifier (required if email exists in multiple tenants)
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+        '409':
+          description: Ambiguous tenant - email exists in multiple tenants
+
+  /api/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                      expires_in:
+                        type: integer
+                      token_type:
+                        type: string
+        '401':
+          description: Invalid refresh token
+
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Logout successful
+
+  /api/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /api/me/keys:
+    get:
+      tags: [Users]
+      summary: Get user's key bundle
+      description: Returns encrypted private keys and derivation salt for key recovery
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Key bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyBundleResponse'
+    put:
+      tags: [Users]
+      summary: Update user's keys
+      description: Update encrypted private keys (e.g., after password change)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                public_keys:
+                  type: object
+                encrypted_private_keys:
+                  type: string
+                encrypted_master_key:
+                  type: string
+                key_derivation_salt:
+                  type: string
+      responses:
+        '200':
+          description: Keys updated
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users in tenant
+      description: Returns users in the same tenant for sharing purposes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Filter by email
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicUser'
+
+  /api/users/{id}/public-key:
+    get:
+      tags: [Users]
+      summary: Get user's public key
+      description: Returns public KEM key for encrypting shares
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Public key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      public_keys:
+                        type: object
+
+  /api/folders/root:
+    get:
+      tags: [Folders]
+      summary: Get user's root folder
+      description: Returns the root folder or null if not created
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Root folder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+
+  /api/folders:
+    get:
+      tags: [Folders]
+      summary: List all user's folders
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Folder'
+    post:
+      tags: [Folders]
+      summary: Create folder
+      description: Create a new folder (root or subfolder)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wrapped_kek, kem_ciphertext, owner_wrapped_kek, owner_kem_ciphertext]
+              properties:
+                is_root:
+                  type: boolean
+                  description: Set true to create root folder
+                parent_id:
+                  type: string
+                  format: uuid
+                  description: Parent folder ID (required for non-root folders)
+                encrypted_metadata:
+                  type: string
+                  description: Base64-encoded encrypted folder metadata
+                wrapped_kek:
+                  type: string
+                  description: Base64-encoded wrapped key encryption key
+                kem_ciphertext:
+                  type: string
+                  description: Base64-encoded KEM ciphertext
+                owner_wrapped_kek:
+                  type: string
+                  description: Base64-encoded owner's wrapped KEK
+                owner_kem_ciphertext:
+                  type: string
+                  description: Base64-encoded owner's KEM ciphertext
+      responses:
+        '201':
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+
+  /api/folders/{id}:
+    get:
+      tags: [Folders]
+      summary: Get folder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Folder details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Folder not found
+    put:
+      tags: [Folders]
+      summary: Update folder metadata
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                encrypted_metadata:
+                  type: string
+      responses:
+        '200':
+          description: Folder updated
+    delete:
+      tags: [Folders]
+      summary: Delete folder
+      description: Delete a non-root folder (must be empty)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Folder deleted
+        '422':
+          description: Cannot delete root folder
+
+  /api/folders/{folder_id}/children:
+    get:
+      tags: [Folders]
+      summary: List child folders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: folder_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Child folders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Folder'
+
+  /api/folders/{folder_id}/files:
+    get:
+      tags: [Files]
+      summary: List files in folder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: folder_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+
+  /api/files/upload-url:
+    post:
+      tags: [Files]
+      summary: Create file and get upload URL
+      description: Creates file metadata and returns a presigned URL for uploading the encrypted blob
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folder_id, encrypted_metadata, wrapped_dek, kem_ciphertext, signature, blob_size, blob_hash]
+              properties:
+                folder_id:
+                  type: string
+                  format: uuid
+                encrypted_metadata:
+                  type: string
+                  description: Base64-encoded encrypted file metadata
+                wrapped_dek:
+                  type: string
+                  description: Base64-encoded wrapped data encryption key
+                kem_ciphertext:
+                  type: string
+                  description: Base64-encoded KEM ciphertext
+                signature:
+                  type: string
+                  description: Base64-encoded signature
+                blob_size:
+                  type: integer
+                  description: Size of encrypted blob in bytes
+                blob_hash:
+                  type: string
+                  description: SHA-256 hash of encrypted blob (hex)
+                content_type:
+                  type: string
+                  default: application/octet-stream
+      responses:
+        '201':
+          description: File created with upload URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      file_id:
+                        type: string
+                        format: uuid
+                      upload_url:
+                        type: string
+                        format: uri
+
+  /api/files/{id}:
+    get:
+      tags: [Files]
+      summary: Get file details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: File details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+    put:
+      tags: [Files]
+      summary: Update file metadata
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                encrypted_metadata:
+                  type: string
+                status:
+                  type: string
+                  enum: [uploading, complete]
+      responses:
+        '200':
+          description: File updated
+    delete:
+      tags: [Files]
+      summary: Delete file
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: File deleted
+
+  /api/files/{id}/download-url:
+    get:
+      tags: [Files]
+      summary: Get download URL
+      description: Returns a presigned URL for downloading the encrypted blob
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      download_url:
+                        type: string
+                        format: uri
+
+  /api/files/{id}/move:
+    post:
+      tags: [Files]
+      summary: Move file to different folder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folder_id, wrapped_dek, kem_ciphertext, signature]
+              properties:
+                folder_id:
+                  type: string
+                  format: uuid
+                  description: Destination folder ID
+                wrapped_dek:
+                  type: string
+                  description: Re-wrapped DEK for new folder
+                kem_ciphertext:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        '200':
+          description: File moved
+
+  /api/shares/file:
+    post:
+      tags: [Sharing]
+      summary: Share a file
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantee_id, file_id, permission, wrapped_key, kem_ciphertext, signature]
+              properties:
+                grantee_id:
+                  type: string
+                  format: uuid
+                file_id:
+                  type: string
+                  format: uuid
+                permission:
+                  type: string
+                  enum: [read, write]
+                wrapped_key:
+                  type: string
+                kem_ciphertext:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResponse'
+        '403':
+          description: Cannot share across tenants
+
+  /api/shares/folder:
+    post:
+      tags: [Sharing]
+      summary: Share a folder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantee_id, folder_id, permission, wrapped_key, kem_ciphertext, signature]
+              properties:
+                grantee_id:
+                  type: string
+                  format: uuid
+                folder_id:
+                  type: string
+                  format: uuid
+                permission:
+                  type: string
+                  enum: [read, write]
+                recursive:
+                  type: boolean
+                  default: true
+                wrapped_key:
+                  type: string
+                kem_ciphertext:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        '201':
+          description: Share created
+
+  /api/shares/received:
+    get:
+      tags: [Sharing]
+      summary: List shares received by current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Received shares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Share'
+
+  /api/shares/created:
+    get:
+      tags: [Sharing]
+      summary: List shares created by current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Created shares
+
+  /api/shares/{id}:
+    get:
+      tags: [Sharing]
+      summary: Get share details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Share details
+    delete:
+      tags: [Sharing]
+      summary: Revoke share
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Share revoked
+
+  /api/recovery/setup:
+    post:
+      tags: [Recovery]
+      summary: Setup recovery configuration
+      description: Initialize social key recovery with threshold parameters
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threshold:
+                  type: integer
+                  minimum: 1
+                  default: 3
+                  description: Minimum shares needed for recovery
+                total_shares:
+                  type: integer
+                  minimum: 1
+                  default: 5
+                  description: Total shares to distribute
+      responses:
+        '201':
+          description: Recovery config created
+        '409':
+          description: Config already exists
+
+  /api/recovery/config:
+    get:
+      tags: [Recovery]
+      summary: Get recovery configuration
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recovery config
+        '404':
+          description: No recovery config
+
+  /api/recovery/shares:
+    post:
+      tags: [Recovery]
+      summary: Create recovery share for trustee
+      description: Distribute a share to a trustee
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config_id, trustee_id, share_index, encrypted_share, kem_ciphertext, signature]
+              properties:
+                config_id:
+                  type: string
+                  format: uuid
+                trustee_id:
+                  type: string
+                  format: uuid
+                share_index:
+                  type: integer
+                encrypted_share:
+                  type: string
+                kem_ciphertext:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        '201':
+          description: Share created
+
+  /api/recovery/shares/trustee:
+    get:
+      tags: [Recovery]
+      summary: List shares assigned to current user as trustee
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Trustee shares
+
+  /api/recovery/shares/{id}/accept:
+    post:
+      tags: [Recovery]
+      summary: Accept recovery share
+      description: Trustee accepts responsibility for a share
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Share accepted
+
+  /api/recovery/request:
+    post:
+      tags: [Recovery]
+      summary: Create recovery request
+      description: Initiate key recovery (when user loses access)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config_id, new_public_key, reason]
+              properties:
+                config_id:
+                  type: string
+                  format: uuid
+                new_public_key:
+                  type: string
+                  description: Base64-encoded new public key
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Request created
+
+  /api/recovery/requests:
+    get:
+      tags: [Recovery]
+      summary: List recovery requests
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recovery requests
+
+  /api/recovery/requests/{id}:
+    get:
+      tags: [Recovery]
+      summary: Get recovery request details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request details
+
+  /api/recovery/requests/{id}/approve:
+    post:
+      tags: [Recovery]
+      summary: Approve recovery request
+      description: Trustee provides their share for recovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [share_id, reencrypted_share, kem_ciphertext, signature]
+              properties:
+                share_id:
+                  type: string
+                  format: uuid
+                reencrypted_share:
+                  type: string
+                kem_ciphertext:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        '201':
+          description: Approval recorded
+
+  /api/recovery/requests/{id}/complete:
+    post:
+      tags: [Recovery]
+      summary: Complete recovery
+      description: Finalize recovery after threshold approvals
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [encrypted_private_keys, encrypted_master_key, key_derivation_salt]
+              properties:
+                encrypted_private_keys:
+                  type: string
+                encrypted_master_key:
+                  type: string
+                key_derivation_salt:
+                  type: string
+      responses:
+        '200':
+          description: Recovery completed
+        '412':
+          description: Threshold not reached
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /health/ready:
+    get:
+      tags: [System]
+      summary: Readiness check
+      description: Checks database connectivity
+      responses:
+        '200':
+          description: Service ready
+        '503':
+          description: Service not ready
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_in:
+              type: integer
+            token_type:
+              type: string
+              enum: [Bearer]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        tenant_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, suspended, pending]
+        recovery_setup_complete:
+          type: boolean
+        confirmed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    PublicUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+
+    UserResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+
+    KeyBundleResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            public_keys:
+              type: object
+            encrypted_private_keys:
+              type: string
+            encrypted_master_key:
+              type: string
+            key_derivation_salt:
+              type: string
+
+    Folder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        owner_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        is_root:
+          type: boolean
+        encrypted_metadata:
+          type: string
+        wrapped_kek:
+          type: string
+        kem_ciphertext:
+          type: string
+        owner_wrapped_kek:
+          type: string
+        owner_kem_ciphertext:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FolderResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Folder'
+
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        folder_id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [uploading, complete]
+        encrypted_metadata:
+          type: string
+        wrapped_dek:
+          type: string
+        kem_ciphertext:
+          type: string
+        signature:
+          type: string
+        blob_size:
+          type: integer
+        blob_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/File'
+
+    Share:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        grantor_id:
+          type: string
+          format: uuid
+        grantee_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+          enum: [file, folder]
+        resource_id:
+          type: string
+          format: uuid
+        permission:
+          type: string
+          enum: [read, write]
+        recursive:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ShareResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Share'
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    enum: [validation_error]
+                  message:
+                    type: string
+                  details:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string

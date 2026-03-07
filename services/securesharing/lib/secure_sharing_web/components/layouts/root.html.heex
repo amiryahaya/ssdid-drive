@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" - SecureSharing Admin">
+      {assigns[:page_title] || "Dashboard"}
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <!-- Tailwind CSS via CDN for admin portal -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Import maps for Phoenix LiveView -->
+    <script type="importmap">
+      {
+        "imports": {
+          "phoenix": "https://cdn.jsdelivr.net/npm/phoenix@1.8.1/priv/static/phoenix.mjs",
+          "phoenix_html": "https://cdn.jsdelivr.net/npm/phoenix_html@4.2.0/priv/static/phoenix_html.mjs",
+          "phoenix_live_view": "https://cdn.jsdelivr.net/npm/phoenix_live_view@1.1.20/priv/static/phoenix_live_view.esm.js"
+        }
+      }
+    </script>
+    <script defer phx-track-static type="module" src={~p"/assets/app.js"}>
+    </script>
+  </head>
+  <body class="h-full">
+    {@inner_content}
+  </body>
+</html>

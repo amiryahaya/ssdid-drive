@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme overlay for API 27+ dark mode with navigation bar support -->
+    <style name="Theme.SecureSharing" parent="android:Theme.Material.NoActionBar">
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/surface_dark</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
+
+        <!-- Window -->
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,5 @@
+framework module MlKemNative {
+    umbrella header "mlkem.h"
+    export *
+    module * { export * }
+}

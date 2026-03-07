@@ -1,0 +1,305 @@
+# SecureSharing (SSDID Edition) Development Environment
+#
+# Quick Start:
+#   docker-compose up -d                        # Start core services (postgres + garage)
+#   docker-compose --profile all up -d          # Start all services
+#   docker-compose down                         # Stop services
+#   docker-compose down -v                      # Stop and remove volumes (reset data)
+#
+# Available Profiles:
+#   - (default): PostgreSQL + Garage (S3 storage)
+#   - email: Add MailHog for email testing
+#   - distributed: Add Redis for caching/rate limiting
+#   - all: All services
+#
+# Environment Variables (create .env file or set in shell):
+#   POSTGRES_USER=securesharing
+#   POSTGRES_PASSWORD=securesharing_dev
+#   SSDID_IDENTITY_PASSWORD=your_server_identity_password
+#   SSDID_REGISTRY_URL=https://registry.ssdid.my
+#
+
+services:
+  # =============================================================================
+  # PostgreSQL 18 - Primary Database
+  # Using PostgreSQL 18 for built-in UUIDv7 support (uuidv7() function)
+  # UUIDv7 benefits: time-ordered, better index performance, sortable
+  # =============================================================================
+  postgres:
+    image: postgres:18-alpine
+    container_name: securesharing_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-securesharing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securesharing_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-securesharing_dev}
+      # Create additional databases for services
+      POSTGRES_MULTIPLE_DATABASES: pii_service_dev,pii_service_test
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/docker/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/01-init-multiple-dbs.sh:ro
+      - ./services/securesharing/priv/repo/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securesharing}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # Garage - S3-Compatible Object Storage
+  # Lightweight, Rust-based, self-hosted
+  # https://garagehq.deuxfleurs.fr/
+  # =============================================================================
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: securesharing_garage
+    environment:
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+      GARAGE_CONFIG_FILE: /etc/garage.toml
+    ports:
+      - "${GARAGE_S3_PORT:-3900}:3900"   # S3 API
+      - "${GARAGE_RPC_PORT:-3901}:3901"  # RPC (inter-node)
+      - "${GARAGE_WEB_PORT:-3902}:3902"  # Web UI
+      - "${GARAGE_ADMIN_PORT:-3903}:3903" # Admin API
+    volumes:
+      - garage_data:/var/lib/garage/data
+      - garage_meta:/var/lib/garage/meta
+      - ./config/garage.toml:/etc/garage.toml:ro
+    healthcheck:
+      test: ["CMD", "/garage", "stats"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # Garage Initialization - Creates buckets and keys on startup
+  # =============================================================================
+  garage-init:
+    image: curlimages/curl:latest
+    container_name: securesharing_garage_init
+    depends_on:
+      garage:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Initializing Garage..."
+
+        # Wait for admin API
+        sleep 2
+
+        # Get cluster status
+        curl -s -H "Authorization: Bearer securesharing-admin-token" \
+          http://garage:3903/v1/status || true
+
+        # Apply layout if needed (single node)
+        NODE_ID=$$(curl -s -H "Authorization: Bearer securesharing-admin-token" \
+          http://garage:3903/v1/status | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+        if [ -n "$$NODE_ID" ]; then
+          echo "Found node: $$NODE_ID"
+
+          # Assign capacity to node
+          curl -s -X POST -H "Authorization: Bearer securesharing-admin-token" \
+            -H "Content-Type: application/json" \
+            http://garage:3903/v1/layout \
+            -d "[{\"id\": \"$$NODE_ID\", \"zone\": \"dc1\", \"capacity\": 1073741824, \"tags\": []}]" || true
+
+          # Apply layout
+          curl -s -X POST -H "Authorization: Bearer securesharing-admin-token" \
+            http://garage:3903/v1/layout/apply \
+            -d '{"version": 1}' || true
+        fi
+
+        echo "Garage initialization complete!"
+    networks:
+      - securesharing
+    restart: "no"
+
+  # =============================================================================
+  # Ollama - Local LLM Server for PII Classification/Validation
+  # Supports GPU acceleration: NVIDIA (Linux), Metal (macOS via native install)
+  # Models: phi3:mini (classification), mistral:7b (validation)
+  # =============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: securesharing_ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=2
+      # Uncomment for NVIDIA GPU support on Linux:
+      # - NVIDIA_VISIBLE_DEVICES=all
+    # Uncomment for NVIDIA GPU support on Linux:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    profiles:
+      - pii
+      - all
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # Ollama Model Initialization
+  # Pulls required models on startup
+  # =============================================================================
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: securesharing_ollama_init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pulling classification model (phi3:mini)..."
+        OLLAMA_HOST=ollama:11434 ollama pull phi3:mini
+        echo "Pulling validation model (mistral:7b)..."
+        OLLAMA_HOST=ollama:11434 ollama pull mistral:7b
+        echo "Model initialization complete!"
+        echo ""
+        echo "Available models:"
+        OLLAMA_HOST=ollama:11434 ollama list
+    profiles:
+      - pii
+      - all
+    networks:
+      - securesharing
+    restart: "no"
+
+  # =============================================================================
+  # Presidio Analyzer - ML-based PII Detection
+  # Custom image with Malaysian NRIC, phone, bank, passport, tax recognizers
+  # =============================================================================
+  presidio-analyzer:
+    build:
+      context: ./services/pii_service/docker/presidio
+      dockerfile: Dockerfile
+    container_name: securesharing_presidio
+    ports:
+      - "${PRESIDIO_PORT:-5002}:3000"
+    environment:
+      - PRESIDIO_ANALYZER_MODEL=en_core_web_lg
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s  # spaCy model loading takes time
+      retries: 3
+    profiles:
+      - pii
+      - all
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # MailHog - Email Testing
+  # Web UI: http://localhost:8025
+  # SMTP: localhost:1025
+  # =============================================================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: securesharing_mailhog
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_WEB_PORT:-8025}:8025"
+    profiles:
+      - email
+      - all
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # Redis - Distributed Cache/Rate Limiting
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: securesharing_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - distributed
+      - all
+    networks:
+      - securesharing
+
+  # =============================================================================
+  # PII Service (Optional - for full stack development)
+  # Build and run the PII service in Docker
+  # =============================================================================
+  pii-service:
+    build:
+      context: ./services/pii_service
+      dockerfile: Dockerfile
+    container_name: securesharing_pii_service
+    ports:
+      - "${PII_SERVICE_PORT:-4001}:4001"
+    environment:
+      - MIX_ENV=prod
+      - PHX_HOST=localhost
+      - PORT=4001
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE:-your-secret-key-base-here-at-least-64-bytes-long-for-security}
+      - DATABASE_URL=ecto://securesharing:securesharing_dev@postgres:5432/pii_service_dev
+      - PRESIDIO_URL=http://presidio-analyzer:3000
+      - OLLAMA_URL=http://ollama:11434
+      - PII_LOCAL_SLM_ENABLED=true
+      - GARAGE_ENDPOINT=http://garage:3900
+      - GARAGE_ACCESS_KEY_ID=${GARAGE_ACCESS_KEY_ID:-}
+      - GARAGE_SECRET_ACCESS_KEY=${GARAGE_SECRET_ACCESS_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    profiles:
+      - pii-service
+      - all
+    networks:
+      - securesharing
+
+volumes:
+  postgres_data:
+  garage_data:
+  garage_meta:
+  redis_data:
+  ollama_data:
+
+networks:
+  securesharing:
+    name: securesharing_network

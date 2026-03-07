@@ -1,0 +1,82 @@
+<div class="min-h-full">
+  <!-- Navigation -->
+  <nav class="bg-gray-800">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="flex h-16 items-center justify-between">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <span class="text-white font-bold text-lg">SecureSharing Admin</span>
+          </div>
+          <div class="hidden md:block">
+            <div class="ml-10 flex items-baseline space-x-4">
+              <.link
+                navigate={~p"/admin"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Dashboard
+              </.link>
+              <.link
+                navigate={~p"/admin/tenants"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Tenants
+              </.link>
+              <.link
+                navigate={~p"/admin/users"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Users
+              </.link>
+              <.link
+                navigate={~p"/admin/invitations"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Invitations
+              </.link>
+              <.link
+                navigate={~p"/admin/notifications"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Notifications
+              </.link>
+              <.link
+                navigate={~p"/admin/audit"}
+                class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+              >
+                Audit Log
+              </.link>
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:block">
+          <div class="ml-4 flex items-center md:ml-6">
+            <span :if={assigns[:current_user]} class="text-gray-300 text-sm mr-4">
+              {assigns[:current_user].email}
+            </span>
+            <.link
+              href={~p"/admin/login"}
+              class="text-gray-300 hover:bg-gray-700 hover:text-white rounded-md px-3 py-2 text-sm font-medium"
+            >
+              Logout
+            </.link>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Header -->
+  <header :if={assigns[:page_title]} class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <h1 class="text-3xl font-bold tracking-tight text-gray-900">{@page_title}</h1>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <.flash_group flash={@flash} />
+      {@inner_content}
+    </div>
+  </main>
+</div>

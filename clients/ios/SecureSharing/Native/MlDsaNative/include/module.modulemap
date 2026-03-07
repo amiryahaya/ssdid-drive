@@ -1,0 +1,5 @@
+framework module MlDsaNative {
+    umbrella header "mldsa.h"
+    export *
+    module * { export * }
+}

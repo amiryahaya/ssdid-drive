@@ -1,0 +1,44 @@
+[Unit]
+Description=SecureSharing Post-Quantum Secure File Sharing Service
+Documentation=https://github.com/amiryahaya/secure-sharing
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=securesharing
+Group=securesharing
+WorkingDirectory=/opt/securesharing
+Environment=MIX_ENV=prod
+Environment=PHX_SERVER=true
+EnvironmentFile=/opt/securesharing/.env
+
+# Start the release
+ExecStart=/opt/securesharing/bin/secure_sharing start
+ExecStop=/opt/securesharing/bin/secure_sharing stop
+ExecReload=/opt/securesharing/bin/secure_sharing restart
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/securesharing/tmp /opt/securesharing/logs /var/lib/securesharing
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=securesharing
+
+[Install]
+WantedBy=multi-user.target

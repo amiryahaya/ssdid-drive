@@ -1,0 +1,173 @@
+# SecureSharing .gitignore
+
+# =============================================================================
+# Elixir/Phoenix Services
+# =============================================================================
+
+# The directory Mix will write compiled artifacts to.
+_build/
+services/*/_build/
+
+# If you run "mix test --cover", coverage assets end up here.
+services/*/cover/
+
+# The directory Mix downloads your dependencies sources to.
+services/*/deps/
+
+# Where 3rd-party dependencies like ExDoc output generated docs.
+services/*/doc/
+
+# Ignore .fetch files in case you like to edit your project deps locally.
+services/*/.fetch
+
+# If the VM crashes, it generates a dump, let's ignore it too.
+erl_crash.dump
+
+# Also ignore archive artifacts (built via "mix archive.build").
+*.ez
+
+# Ignore package tarball (built via "mix hex.build").
+secure_sharing-*.tar
+
+# Temporary files, for example, from tests.
+services/*/tmp/
+
+# =============================================================================
+# Phoenix
+# =============================================================================
+
+# Ignore assets that are produced by build tools.
+services/*/priv/static/assets/
+
+# Ignore digested assets cache.
+services/*/priv/static/cache_manifest.json
+
+# In case you use Node.js/Webpack for assets
+services/*/assets/node_modules/
+
+# =============================================================================
+# Rust (NIFs)
+# =============================================================================
+
+# Rust build artifacts
+services/*/native/*/target/
+*.rs.bk
+
+# NIF sub-project build artifacts
+services/*/native/*/_build/
+services/*/native/*/deps/
+services/*/native/*/priv/
+services/*/native/*/mix.lock
+services/*/native/*/c_src/*.o
+
+# =============================================================================
+# Environment
+# =============================================================================
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Keep the example
+!.env.example
+
+# =============================================================================
+# IDE/Editor
+# =============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# IntelliJ/WebStorm
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.#*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Test artifacts
+/test/support/fixtures/tmp/
+
+# =============================================================================
+# Releases
+# =============================================================================
+
+# Release artifacts
+services/*/_release/
+services/*/rel/artifacts/
+
+# =============================================================================
+# Misc
+# =============================================================================
+
+# Dialyzer PLT files
+services/*/priv/plts/
+*.plt
+*.plt.hash
+
+# Log files
+*.log
+/log/
+
+# Secrets (never commit these!)
+*.pem
+*.key
+secrets/
+
+# =============================================================================
+# Android
+# =============================================================================
+
+# Gradle
+clients/android/.gradle/
+clients/android/build/
+clients/android/app/build/
+clients/android/local.properties
+clients/android/captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore and signing (NEVER commit these!)
+clients/android/keystore.properties
+clients/android/*.jks
+clients/android/*.keystore
+clients/android/app/*.jks
+clients/android/app/*.keystore
+
+# Local configuration
+clients/android/google-services.json
+clients/android/app/google-services.json
+
+# Generated files
+clients/android/app/output-metadata.json
+
+# =============================================================================
+# Claude Code
+# =============================================================================
+.claude/
+
+# iOS
+clients/ios/SecureSharing/.build/
+clients/ios/SecureSharing.xcodeproj/
+clients/ios/SecureSharing/SecureSharing.xcodeproj/
+*.xcuserstate
+*.xcuserdatad
+DerivedData/

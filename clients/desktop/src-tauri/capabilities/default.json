@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schemas.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capabilities for SecureSharing desktop app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:default",
+    "notification:default",
+    "os:default",
+    "process:default",
+    "shell:default",
+    "clipboard-manager:default",
+    "deep-link:default"
+  ]
+}

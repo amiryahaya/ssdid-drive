@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   FileProvider paths configuration
+   Used for sharing downloaded files with other apps
+-->
+<paths>
+    <!-- Cache directory for temporary files -->
+    <cache-path name="cache" path="." />
+
+    <!-- External files directory for downloads -->
+    <external-files-path name="downloads" path="downloads/" />
+
+    <!-- External cache for temporary shares -->
+    <external-cache-path name="external_cache" path="." />
+</paths>

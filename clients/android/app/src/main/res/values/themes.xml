@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme for light mode -->
+    <style name="Theme.SecureSharing" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/primary</item>
+        <item name="android:navigationBarColor">@color/surface</item>
+
+        <!-- Window -->
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Splash screen theme -->
+    <style name="Theme.SecureSharing.Splash" parent="Theme.SecureSharing">
+        <item name="android:windowBackground">@color/primary</item>
+    </style>
+</resources>

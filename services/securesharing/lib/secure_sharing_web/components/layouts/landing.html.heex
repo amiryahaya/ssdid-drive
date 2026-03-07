@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title>
+      {assigns[:page_title] || "SecureSharing - Post-Quantum Secure File Sharing"}
+    </.live_title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "phoenix": "https://cdn.jsdelivr.net/npm/phoenix@1.8.1/priv/static/phoenix.mjs",
+          "phoenix_html": "https://cdn.jsdelivr.net/npm/phoenix_html@4.2.0/priv/static/phoenix_html.mjs",
+          "phoenix_live_view": "https://cdn.jsdelivr.net/npm/phoenix_live_view@1.1.20/priv/static/phoenix_live_view.esm.js"
+        }
+      }
+    </script>
+    <script defer type="module" src={~p"/assets/app.js"}></script>
+  </head>
+  <body>
+    {@inner_content}
+  </body>
+</html>

@@ -1,0 +1,4 @@
+module Argon2 {
+    umbrella header "/Users/amirrudinyahaya/Workspace/SecureSharing/clients/ios/SecureSharing/Packages/Argon2Swift/Sources/Argon2/include/Argon2.h"
+    export *
+}

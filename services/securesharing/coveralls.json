@@ -1,0 +1,14 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 35,
+    "treat_no_relevant_lines_as_covered": true
+  },
+  "skip_files": [
+    "lib/secure_sharing_web.ex",
+    "lib/secure_sharing_web/components/",
+    "lib/secure_sharing_web/endpoint.ex",
+    "lib/secure_sharing_web/telemetry.ex",
+    "lib/secure_sharing/release.ex",
+    "test/support/"
+  ]
+}

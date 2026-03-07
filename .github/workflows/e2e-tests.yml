@@ -1,0 +1,626 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'services/securesharing/**'
+      - 'services/pii_service/**'
+      - 'podman-compose.e2e.yml'
+      - 'scripts/e2e/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'services/securesharing/**'
+      - 'services/pii_service/**'
+      - 'podman-compose.e2e.yml'
+      - 'scripts/e2e/**'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch:
+    inputs:
+      test_category:
+        description: 'Test category to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - api
+          - pii
+          - auth
+          - files
+          - sharing
+          - invitations
+      skip_build:
+        description: 'Skip Docker image build'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  # Elixir/Erlang versions
+  ELIXIR_VERSION: '1.18.4'
+  OTP_VERSION: '27.3'
+  # Node.js version for Playwright
+  NODE_VERSION: '20'
+  # Test environment
+  MIX_ENV: test
+  # E2E credentials
+  E2E_ADMIN_EMAIL: admin@securesharing.test
+  E2E_ADMIN_PASSWORD: AdminTestPassword123!
+  E2E_TENANT_SLUG: e2e-test
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # Build Backend Image
+  # ============================================================================
+  build-backend:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_build }}
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export
+        uses: docker/build-push-action@v5
+        with:
+          context: services/securesharing
+          file: services/securesharing/test/e2e/Dockerfile.app
+          push: false
+          tags: securesharing-e2e:latest
+          outputs: type=docker,dest=/tmp/backend.tar
+          cache-from: type=gha,scope=backend-e2e
+          cache-to: type=gha,scope=backend-e2e,mode=max
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: /tmp/backend.tar
+          retention-days: 1
+
+  # ============================================================================
+  # Build PII Service Image
+  # ============================================================================
+  build-pii-service:
+    name: Build PII Service Image
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export
+        uses: docker/build-push-action@v5
+        with:
+          context: services/pii_service
+          push: false
+          tags: pii-service-e2e:latest
+          outputs: type=docker,dest=/tmp/pii-service.tar
+          cache-from: type=gha,scope=pii-service-e2e
+          cache-to: type=gha,scope=pii-service-e2e,mode=max
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pii-service-image
+          path: /tmp/pii-service.tar
+          retention-days: 1
+
+  # ============================================================================
+  # Backend E2E Tests
+  # ============================================================================
+  backend-e2e:
+    name: Backend E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-pii-service]
+    if: always() && (needs.build-backend.result == 'success' || inputs.skip_build)
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        volumes:
+          - /tmp/init-scripts:/docker-entrypoint-initdb.d
+
+      garage:
+        image: dxflrs/garage:v1.0.1
+        ports:
+          - 3900:3900
+          - 3901:3901
+        options: >-
+          --health-cmd "curl -sf http://localhost:3900/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup database initialization script
+        run: |
+          mkdir -p /tmp/init-scripts
+          cp scripts/docker/init-multiple-dbs.sh /tmp/init-scripts/
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Elixir deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/securesharing/deps
+            services/securesharing/_build
+          key: ${{ runner.os }}-mix-e2e-${{ hashFiles('services/securesharing/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-e2e-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('services/securesharing/test/e2e/package-lock.json') }}
+
+      - name: Install Elixir dependencies
+        working-directory: services/securesharing
+        run: mix deps.get
+
+      - name: Compile
+        working-directory: services/securesharing
+        run: mix compile
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U postgres && break || sleep 2
+          done
+
+      - name: Create databases
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE securesharing_test;" || true
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE pii_service_test;" || true
+
+      - name: Setup backend database
+        working-directory: services/securesharing
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/securesharing_test
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+          mix run priv/repo/seeds/e2e_seed.exs
+
+      - name: Start backend server
+        working-directory: services/securesharing
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/securesharing_test
+          SECRET_KEY_BASE: e2e-test-secret-key-base-that-is-at-least-64-characters-long-for-security
+          PHX_HOST: localhost
+          PORT: "4000"
+          S3_BUCKET: securesharing-test
+          S3_ENDPOINT: http://localhost:3900
+          S3_ACCESS_KEY_ID: test-key
+          S3_SECRET_ACCESS_KEY: test-secret
+          S3_REGION: garage
+          PII_SERVICE_URL: http://localhost:4001
+          RATE_LIMIT_ENABLED: "false"
+        run: |
+          mix phx.server &
+          echo $! > /tmp/backend.pid
+          # Wait for server to be ready
+          for i in {1..60}; do
+            curl -sf http://localhost:4000/health && break || sleep 2
+          done
+
+      - name: Install Playwright dependencies
+        working-directory: services/securesharing/test/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: services/securesharing/test/e2e
+        env:
+          BASE_URL: http://localhost:4000
+          BACKEND_URL: http://localhost:4000
+          PII_SERVICE_URL: http://localhost:4001
+          CI: "true"
+          ENABLE_FILE_UPLOAD_TESTS: "0"  # Disabled until Garage is configured
+          ENABLE_PII_SERVICE_TESTS: "0"  # Disabled until PII service is running
+        run: |
+          TEST_ARGS=""
+          if [ "${{ inputs.test_category }}" != "all" ] && [ -n "${{ inputs.test_category }}" ]; then
+            TEST_ARGS="tests/${{ inputs.test_category }}/"
+          fi
+          npx playwright test $TEST_ARGS --reporter=html,json,github
+
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f /tmp/backend.pid ]; then
+            kill $(cat /tmp/backend.pid) || true
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-e2e-results
+          path: |
+            services/securesharing/test/e2e/playwright-report/
+            services/securesharing/test/e2e/test-results/
+          retention-days: 7
+
+  # ============================================================================
+  # API Contract Tests
+  # ============================================================================
+  api-integration:
+    name: API Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build-backend]
+    if: always() && (needs.build-backend.result == 'success' || inputs.skip_build)
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: securesharing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Elixir deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/securesharing/deps
+            services/securesharing/_build
+          key: ${{ runner.os }}-mix-e2e-${{ hashFiles('services/securesharing/mix.lock') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('services/securesharing/test/e2e/package-lock.json') }}
+
+      - name: Install Elixir dependencies
+        working-directory: services/securesharing
+        run: mix deps.get
+
+      - name: Compile
+        working-directory: services/securesharing
+        run: mix compile
+
+      - name: Setup database
+        working-directory: services/securesharing
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/securesharing_test
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+          mix run priv/repo/seeds/e2e_seed.exs
+
+      - name: Start backend server
+        working-directory: services/securesharing
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/securesharing_test
+          SECRET_KEY_BASE: e2e-test-secret-key-base-that-is-at-least-64-characters-long-for-security
+          PHX_HOST: localhost
+          PORT: "4000"
+          RATE_LIMIT_ENABLED: "false"
+        run: |
+          mix phx.server &
+          echo $! > /tmp/backend.pid
+          for i in {1..60}; do
+            curl -sf http://localhost:4000/health && break || sleep 2
+          done
+
+      - name: Install Playwright
+        working-directory: services/securesharing/test/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run API contract tests
+        working-directory: services/securesharing/test/e2e
+        env:
+          BASE_URL: http://localhost:4000
+          BACKEND_URL: http://localhost:4000
+          CI: "true"
+        run: npx playwright test tests/api-contracts/ --reporter=html,json,github
+        continue-on-error: true  # API contract tests may not exist yet
+
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f /tmp/backend.pid ]; then
+            kill $(cat /tmp/backend.pid) || true
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-integration-results
+          path: |
+            services/securesharing/test/e2e/playwright-report/
+            services/securesharing/test/e2e/test-results/
+          retention-days: 7
+
+  # ============================================================================
+  # PII Service E2E Tests
+  # ============================================================================
+  pii-service-e2e:
+    name: PII Service E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build-pii-service]
+    if: always() && (needs.build-pii-service.result == 'success' || inputs.skip_build)
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pii_service_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Elixir deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/pii_service/deps
+            services/pii_service/_build
+          key: ${{ runner.os }}-mix-pii-e2e-${{ hashFiles('services/pii_service/mix.lock') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('services/securesharing/test/e2e/package-lock.json') }}
+
+      - name: Install PII service dependencies
+        working-directory: services/pii_service
+        run: mix deps.get
+
+      - name: Compile
+        working-directory: services/pii_service
+        run: mix compile
+
+      - name: Setup database
+        working-directory: services/pii_service
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/pii_service_test
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+          mix run priv/repo/seeds/e2e_pii_seed.exs || true
+
+      - name: Start PII service
+        working-directory: services/pii_service
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/pii_service_test
+          SECRET_KEY_BASE: pii-service-test-secret-key-base-that-is-at-least-64-characters-long
+          PHX_HOST: localhost
+          PORT: "4001"
+          LLM_PROVIDER: mock
+          RATE_LIMIT_ENABLED: "false"
+        run: |
+          mix phx.server &
+          echo $! > /tmp/pii.pid
+          for i in {1..60}; do
+            curl -sf http://localhost:4001/health && break || sleep 2
+          done
+
+      - name: Install Playwright
+        working-directory: services/securesharing/test/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run PII E2E tests
+        working-directory: services/securesharing/test/e2e
+        env:
+          PII_SERVICE_URL: http://localhost:4001
+          CI: "true"
+          ENABLE_PII_SERVICE_TESTS: "1"
+        run: npx playwright test tests/pii/ --reporter=html,json,github
+        continue-on-error: true  # PII tests may not exist yet
+
+      - name: Stop PII service
+        if: always()
+        run: |
+          if [ -f /tmp/pii.pid ]; then
+            kill $(cat /tmp/pii.pid) || true
+          fi
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pii-service-e2e-results
+          path: |
+            services/securesharing/test/e2e/playwright-report/
+            services/securesharing/test/e2e/test-results/
+          retention-days: 7
+
+  # ============================================================================
+  # iOS E2E Tests (XCUITest)
+  # ============================================================================
+  ios-e2e:
+    name: iOS E2E Tests
+    runs-on: macos-14
+    needs: [build-backend]
+    if: false  # Disabled until XCUITest target is created
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+
+      - name: Build and Test
+        working-directory: clients/ios/SecureSharing
+        run: |
+          xcodebuild test \
+            -scheme SecureSharingUITests \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+            -resultBundlePath TestResults \
+            | xcpretty
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-e2e-results
+          path: clients/ios/SecureSharing/TestResults
+          retention-days: 7
+
+  # ============================================================================
+  # Android E2E Tests (Espresso)
+  # ============================================================================
+  android-e2e:
+    name: Android E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build-backend]
+    if: false  # Disabled until Android E2E tests are expanded
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run E2E tests
+        working-directory: clients/android
+        run: |
+          ./gradlew connectedDebugAndroidTest \
+            -Pandroid.testInstrumentationRunnerArguments.e2e=true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-e2e-results
+          path: clients/android/app/build/reports/androidTests/connected/
+          retention-days: 7
+
+  # ============================================================================
+  # Summary Job
+  # ============================================================================
+  e2e-summary:
+    name: E2E Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-e2e, api-integration, pii-service-e2e]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate summary
+        run: |
+          echo "# E2E Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend E2E | ${{ needs.backend-e2e.result == 'success' && '✅ Passed' || needs.backend-e2e.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Integration | ${{ needs.api-integration.result == 'success' && '✅ Passed' || needs.api-integration.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PII Service E2E | ${{ needs.pii-service-e2e.result == 'success' && '✅ Passed' || needs.pii-service-e2e.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "Test reports are available in the workflow artifacts." >> $GITHUB_STEP_SUMMARY
+
+      - name: Check results
+        run: |
+          if [[ "${{ needs.backend-e2e.result }}" == "failure" ]]; then
+            echo "::error::Backend E2E tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.api-integration.result }}" == "failure" ]]; then
+            echo "::warning::API Integration tests failed"
+          fi
+          if [[ "${{ needs.pii-service-e2e.result }}" == "failure" ]]; then
+            echo "::warning::PII Service E2E tests failed"
+          fi
+          echo "E2E tests completed!"

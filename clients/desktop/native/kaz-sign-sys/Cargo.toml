@@ -1,0 +1,19 @@
+[package]
+name = "kaz-sign-sys"
+version = "2.1.0"
+edition = "2021"
+description = "FFI bindings for KAZ-SIGN post-quantum digital signature algorithm"
+license = "Proprietary"
+links = "kaz_sign"
+
+[build-dependencies]
+bindgen = "0.70"
+cc = "1.1"
+pkg-config = "0.3"
+
+[dependencies]
+libc = "0.2"
+
+[features]
+default = []
+generate-bindings = []

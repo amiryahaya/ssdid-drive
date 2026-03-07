@@ -1,0 +1,55 @@
+{
+  "name": "secure-sharing-e2e",
+  "version": "1.0.0",
+  "description": "End-to-end tests for SecureSharing",
+  "scripts": {
+    "test": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "codegen": "playwright codegen",
+
+    "test:auth": "playwright test --project=auth",
+    "test:files": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=files",
+    "test:sharing": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=sharing",
+    "test:invitations": "playwright test --project=invitations",
+    "test:api-contracts": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=api-contracts",
+    "test:pii": "ENABLE_PII_SERVICE_TESTS=1 playwright test --project=pii",
+    "test:admin": "playwright test --project=admin-chromium",
+    "test:admin:all": "playwright test --project=admin-chromium --project=admin-firefox --project=admin-webkit",
+    "test:recovery": "playwright test --project=recovery",
+    "test:devices": "playwright test --project=devices",
+    "test:websocket": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=websocket",
+    "test:security": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=security",
+    "test:full-flow": "ENABLE_PII_SERVICE_TESTS=1 playwright test --project=full-flow",
+
+    "test:p0": "playwright test --grep @P0",
+    "test:p1": "playwright test --grep @P1",
+    "test:p2": "playwright test --grep @P2",
+    "test:critical": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --project=auth --project=files --project=sharing --project=api-contracts --project=recovery",
+
+    "test:ci": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --reporter=github,junit",
+    "test:ci:p0": "ENABLE_FILE_UPLOAD_TESTS=1 playwright test --grep @P0 --reporter=github,junit",
+
+    "test:podman": "podman-compose -f ../../../../podman-compose.e2e.yml up --build --abort-on-container-exit playwright",
+    "test:podman:up": "podman-compose -f ../../../../podman-compose.e2e.yml up -d",
+    "test:podman:down": "podman-compose -f ../../../../podman-compose.e2e.yml down -v",
+    "test:podman:logs": "podman-compose -f ../../../../podman-compose.e2e.yml logs -f",
+
+    "test:docker": "docker-compose -f docker-compose.full-stack.yml up --build --abort-on-container-exit",
+    "test:docker:down": "docker-compose -f docker-compose.full-stack.yml down -v",
+    "test:docker:logs": "docker-compose -f docker-compose.full-stack.yml logs -f",
+
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf playwright-report test-results"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}

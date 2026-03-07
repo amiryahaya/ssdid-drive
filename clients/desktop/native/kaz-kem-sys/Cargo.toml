@@ -1,0 +1,20 @@
+[package]
+name = "kaz-kem-sys"
+version = "2.1.0"
+edition = "2021"
+description = "FFI bindings for KAZ-KEM post-quantum key encapsulation mechanism"
+license = "Proprietary"
+links = "kaz_kem"
+
+[build-dependencies]
+bindgen = "0.70"
+cc = "1.1"
+pkg-config = "0.3"
+
+[dependencies]
+libc = "0.2"
+
+[features]
+default = []
+# Enable to regenerate bindings (requires libclang)
+generate-bindings = []

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SecureSharing",
+  "identifier": "com.securesharing.desktop",
+  "version": "1.0.0",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.securesharing.com wss://api.securesharing.com",
+      "dangerousDisableAssetCspModification": false,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/*", "$DOWNLOAD/*"]
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "SecureSharing",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/tray-icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false,
+      "title": "SecureSharing"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Secure file sharing with post-quantum cryptography",
+    "longDescription": "SecureSharing is an enterprise-grade secure file sharing platform with zero-trust, zero-knowledge architecture and post-quantum cryptographic protection.",
+    "copyright": "Copyright (c) 2026 SecureSharing",
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "deb": {
+        "depends": ["libssl3", "libwebkit2gtk-4.1-0"]
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [],
+      "desktop": {
+        "schemes": ["securesharing"]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://releases.securesharing.app/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "pubkey": ""
+    }
+  }
+}

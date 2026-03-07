@@ -1,0 +1,359 @@
+name: iOS CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'clients/ios/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'clients/ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+env:
+  IOS_DEPLOYMENT_TARGET: '16.0'
+  SCHEME: 'SecureSharing'
+  PROJECT_PATH: 'clients/ios/SecureSharing/SecureSharing.xcodeproj'
+
+jobs:
+  # ==============================================================================
+  # Lint with SwiftLint
+  # ==============================================================================
+  lint:
+    name: Lint
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: clients/ios/SecureSharing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: |
+          if [ -f ".swiftlint.yml" ]; then
+            swiftlint lint --reporter github-actions-logging --strict || echo "SwiftLint found issues (see above)"
+          else
+            swiftlint lint --reporter github-actions-logging || echo "SwiftLint found issues (see above)"
+          fi
+        continue-on-error: true
+
+  # ==============================================================================
+  # Unit Tests
+  # ==============================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: clients/ios/SecureSharing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show Xcode and simulator info
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes iOS
+
+      - name: Cache Swift Package Manager
+        uses: actions/cache@v4
+        with:
+          path: |
+            clients/ios/SecureSharing/.build
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios/SecureSharing/SecureSharing.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project SecureSharing.xcodeproj \
+            -scheme ${{ env.SCHEME }}
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project SecureSharing.xcodeproj \
+            -scheme ${{ env.SCHEME }} \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -only-testing:SecureSharingTests \
+            -resultBundlePath TestResults.xcresult \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" | xcpretty --report junit
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            clients/ios/SecureSharing/TestResults.xcresult
+            clients/ios/SecureSharing/build/reports/
+
+  # ==============================================================================
+  # Build Debug
+  # ==============================================================================
+  build-debug:
+    name: Build Debug
+    runs-on: macos-latest
+    needs: [unit-tests]
+    defaults:
+      run:
+        working-directory: clients/ios/SecureSharing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Swift Package Manager
+        uses: actions/cache@v4
+        with:
+          path: |
+            clients/ios/SecureSharing/.build
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios/SecureSharing/SecureSharing.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project SecureSharing.xcodeproj \
+            -scheme ${{ env.SCHEME }}
+
+      - name: Build debug
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project SecureSharing.xcodeproj \
+            -scheme ${{ env.SCHEME }} \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" | xcpretty
+
+      - name: Archive debug app
+        run: |
+          cd build/DerivedData/Build/Products/Debug-iphonesimulator
+          zip -r SecureSharing-Debug.zip SecureSharing.app
+
+      - name: Upload debug build
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: clients/ios/SecureSharing/build/DerivedData/Build/Products/Debug-iphonesimulator/SecureSharing-Debug.zip
+
+  # ==============================================================================
+  # Build Release (on main branch)
+  # ==============================================================================
+  build-release:
+    name: Build Release
+    runs-on: macos-latest
+    needs: [unit-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: clients/ios/SecureSharing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Swift Package Manager
+        uses: actions/cache@v4
+        with:
+          path: |
+            clients/ios/SecureSharing/.build
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios/SecureSharing/SecureSharing.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Install Apple certificate and provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        if: env.BUILD_CERTIFICATE_BASE64 != ''
+        run: |
+          # Create variables
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          # Import certificate and provisioning profile from secrets
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate to keychain
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Apply provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project SecureSharing.xcodeproj \
+            -scheme ${{ env.SCHEME }}
+
+      - name: Build release archive
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+        run: |
+          set -o pipefail
+          if [ -n "$BUILD_CERTIFICATE_BASE64" ]; then
+            # Signed build
+            xcodebuild archive \
+              -project SecureSharing.xcodeproj \
+              -scheme ${{ env.SCHEME }} \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -archivePath build/SecureSharing.xcarchive \
+              DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" | xcpretty
+          else
+            # Unsigned build for CI verification
+            xcodebuild build \
+              -project SecureSharing.xcodeproj \
+              -scheme ${{ env.SCHEME }} \
+              -configuration Release \
+              -sdk iphonesimulator \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" | xcpretty
+          fi
+
+      - name: Export IPA
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+        if: env.BUILD_CERTIFICATE_BASE64 != ''
+        run: |
+          # Create export options plist
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath build/SecureSharing.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/Export
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: app-release
+          path: |
+            clients/ios/SecureSharing/build/SecureSharing.xcarchive
+            clients/ios/SecureSharing/build/Export/*.ipa
+
+      - name: Upload unsigned release build
+        uses: actions/upload-artifact@v4
+        if: success() && env.BUILD_CERTIFICATE_BASE64 == ''
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
+        with:
+          name: app-release-unsigned
+          path: clients/ios/SecureSharing/build/DerivedData/Build/Products/Release-iphonesimulator/
+
+      - name: Clean up keychain and provisioning profile
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/build_pp.mobileprovision || true
+
+  # ==============================================================================
+  # Upload to TestFlight (on main branch with secrets configured)
+  # ==============================================================================
+  upload-testflight:
+    name: Upload to TestFlight
+    runs-on: macos-latest
+    needs: [build-release]
+    # Only run on main branch pushes
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: clients/ios/SecureSharing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check if signing secrets are configured
+        id: check-secrets
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          if [ -n "$APP_STORE_CONNECT_API_KEY_ID" ]; then
+            echo "secrets_configured=true" >> $GITHUB_OUTPUT
+          else
+            echo "secrets_configured=false" >> $GITHUB_OUTPUT
+            echo "::notice::Skipping TestFlight upload - App Store Connect secrets not configured"
+          fi
+
+      - name: Download release artifact
+        if: steps.check-secrets.outputs.secrets_configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release
+          path: clients/ios/SecureSharing/build
+
+      - name: Upload to TestFlight
+        if: steps.check-secrets.outputs.secrets_configured == 'true'
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          # Create API key file
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_API_KEY_ID.p8
+
+          # Find the IPA file
+          IPA_PATH=$(find build -name "*.ipa" | head -1)
+
+          if [ -n "$IPA_PATH" ]; then
+            xcrun altool --upload-app \
+              --type ios \
+              --file "$IPA_PATH" \
+              --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+              --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+          else
+            echo "No IPA file found"
+            exit 1
+          fi

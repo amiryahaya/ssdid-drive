@@ -1,0 +1,222 @@
+# Full Stack E2E Test Environment
+#
+# This docker-compose file sets up the complete environment for E2E testing:
+# - PostgreSQL database
+# - Garage (S3-compatible storage)
+# - SecureSharing Backend
+# - PII Service
+# - Playwright test runner
+#
+# Usage:
+#   # Run all tests
+#   docker-compose -f docker-compose.full-stack.yml up --build --abort-on-container-exit
+#
+#   # Run specific test file
+#   docker-compose -f docker-compose.full-stack.yml run --rm playwright npx playwright test full-flow-pii-redaction.spec.ts
+#
+#   # Interactive mode (for debugging)
+#   docker-compose -f docker-compose.full-stack.yml run --rm playwright bash
+
+services:
+  # ============================================================================
+  # Database
+  # ============================================================================
+  postgres:
+    image: postgres:18-alpine
+    container_name: e2e_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../../priv/repo/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - e2e_network
+
+  # ============================================================================
+  # Object Storage (S3-compatible)
+  # ============================================================================
+  garage:
+    image: dxflrs/garage:v1.0.0
+    container_name: e2e_garage
+    command: server
+    environment:
+      GARAGE_ALLOW_WORLD_READABLE_SECRETS: "true"
+    volumes:
+      - garage_data:/var/lib/garage/data
+      - garage_meta:/var/lib/garage/meta
+      - ./fixtures/garage.toml:/etc/garage.toml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3900/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - e2e_network
+
+  # ============================================================================
+  # SecureSharing Backend
+  # ============================================================================
+  backend:
+    build:
+      context: ../../..
+      dockerfile: test/e2e/Dockerfile.app
+    container_name: e2e_backend
+    environment:
+      MIX_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/securesharing_test
+      SECRET_KEY_BASE: e2e-test-secret-key-base-that-is-at-least-64-characters-long-for-security
+      PHX_HOST: localhost
+      PORT: "4000"
+      # Storage configuration
+      S3_BUCKET: securesharing-test
+      S3_ENDPOINT: http://garage:3900
+      S3_ACCESS_KEY_ID: GK31c2f218a2e44f485b94239e
+      S3_SECRET_ACCESS_KEY: b892c0665f0ada8a4755dae98baa3b133590e11dae3bcc1f9d769d67f16c3835
+      S3_REGION: garage
+      # Test admin user
+      E2E_ADMIN_EMAIL: admin@securesharing.test
+      E2E_ADMIN_PASSWORD: AdminTestPassword123!
+      # Disable rate limiting for tests
+      RATE_LIMIT_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    networks:
+      - e2e_network
+
+  # ============================================================================
+  # PII Service
+  # ============================================================================
+  pii-service:
+    build:
+      context: ../../../../pii_service
+      dockerfile: Dockerfile
+    container_name: e2e_pii_service
+    environment:
+      MIX_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/pii_service_test
+      SECRET_KEY_BASE: pii-service-test-secret-key-base-that-is-at-least-64-characters-long
+      PHX_HOST: localhost
+      PORT: "4001"
+      # Use mock LLM provider for tests
+      LLM_PROVIDER: mock
+      # Disable rate limiting for tests
+      RATE_LIMIT_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    networks:
+      - e2e_network
+
+  # ============================================================================
+  # Database Setup (runs migrations)
+  # ============================================================================
+  db-setup:
+    build:
+      context: ../../..
+      dockerfile: test/e2e/Dockerfile.app
+    container_name: e2e_db_setup
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        echo 'Running backend migrations...' &&
+        mix ecto.create &&
+        mix ecto.migrate &&
+        echo 'Seeding admin user...' &&
+        mix run priv/repo/seeds/e2e_admin_seed.exs &&
+        echo 'Database setup complete!'
+      "
+    environment:
+      MIX_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/securesharing_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - e2e_network
+
+  pii-db-setup:
+    build:
+      context: ../../../../pii_service
+      dockerfile: Dockerfile
+    container_name: e2e_pii_db_setup
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        echo 'Running PII service migrations...' &&
+        mix ecto.create &&
+        mix ecto.migrate &&
+        echo 'PII service database setup complete!'
+      "
+    environment:
+      MIX_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/pii_service_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - e2e_network
+
+  # ============================================================================
+  # Playwright Test Runner
+  # ============================================================================
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: e2e_playwright
+    environment:
+      CI: "true"
+      BASE_URL: http://backend:4000
+      BACKEND_URL: http://backend:4000
+      PII_SERVICE_URL: http://pii-service:4001
+      E2E_ADMIN_EMAIL: admin@securesharing.test
+      E2E_ADMIN_PASSWORD: AdminTestPassword123!
+      # Enable all test features
+      ENABLE_FILE_UPLOAD_TESTS: "1"
+      ENABLE_PII_SERVICE_TESTS: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+      pii-service:
+        condition: service_healthy
+      db-setup:
+        condition: service_completed_successfully
+      pii-db-setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+    networks:
+      - e2e_network
+    command: npx playwright test
+
+volumes:
+  postgres_data:
+  garage_data:
+  garage_meta:
+
+networks:
+  e2e_network:
+    driver: bridge

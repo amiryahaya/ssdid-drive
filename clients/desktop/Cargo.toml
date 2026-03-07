@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "src-tauri",
+    "native/kaz-kem-sys",
+    "native/kaz-sign-sys",
+    "native/securesharing-crypto",
+]
+resolver = "2"
