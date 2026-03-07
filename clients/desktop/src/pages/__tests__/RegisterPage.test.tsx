@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { render } from '../../test/utils';
 import { RegisterPage } from '../RegisterPage';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,6 +14,20 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+// Mock QrChallenge component so tests don't depend on SSE / qrcode.react
+vi.mock('@/components/auth/QrChallenge', () => ({
+  QrChallenge: ({ action, onAuthenticated }: { action: string; onAuthenticated: (token: string) => void }) => (
+    <div data-testid="qr-challenge" data-action={action}>
+      <button
+        data-testid="mock-authenticate"
+        onClick={() => onAuthenticated('mock-session-token')}
+      >
+        Simulate Wallet Scan
+      </button>
+    </div>
+  ),
+}));
+
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -26,122 +40,86 @@ describe('RegisterPage', () => {
     });
   });
 
-  it('should render all form fields', () => {
+  it('should render the SSDID Drive heading', () => {
     render(<RegisterPage />);
 
-    expect(screen.getByPlaceholderText('John Doe')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Minimum 8 characters')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Re-enter your password')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter your invitation token')).toBeInTheDocument();
+    expect(screen.getByText('SSDID Drive')).toBeInTheDocument();
   });
 
-  it('should render create account button', () => {
+  it('should render the registration prompt', () => {
     render(<RegisterPage />);
 
-    expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
+    expect(screen.getByText('Scan to register with SSDID Drive')).toBeInTheDocument();
   });
 
-  it('should show error for password mismatch', async () => {
-    const { user } = render(<RegisterPage />);
+  it('should render the QrChallenge component with register action', () => {
+    render(<RegisterPage />);
 
-    await user.type(screen.getByPlaceholderText('John Doe'), 'Test User');
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-    await user.type(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'different');
-    await user.type(screen.getByPlaceholderText('Enter your invitation token'), 'token');
-
-    await user.click(screen.getByRole('button', { name: /create account/i }));
-
-    expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+    const qrChallenge = screen.getByTestId('qr-challenge');
+    expect(qrChallenge).toBeInTheDocument();
+    expect(qrChallenge).toHaveAttribute('data-action', 'register');
   });
 
-  it('should show error for password too short', async () => {
-    const { user } = render(<RegisterPage />);
+  it('should not render old form fields', () => {
+    render(<RegisterPage />);
 
-    await user.type(screen.getByPlaceholderText('John Doe'), 'Test User');
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-    await user.type(screen.getByPlaceholderText('Minimum 8 characters'), 'short');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'short');
-    await user.type(screen.getByPlaceholderText('Enter your invitation token'), 'token');
-
-    await user.click(screen.getByRole('button', { name: /create account/i }));
-
-    expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('John Doe')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('you@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Minimum 8 characters')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Re-enter your password')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Enter your invitation token')).not.toBeInTheDocument();
   });
 
-  it('should show/hide password on toggle', async () => {
-    const { user } = render(<RegisterPage />);
-
-    const passwordInput = screen.getByPlaceholderText('Minimum 8 characters');
-    expect(passwordInput).toHaveAttribute('type', 'password');
-
-    // Find the toggle button
-    const toggleButton = passwordInput.parentElement?.querySelector('button');
-    expect(toggleButton).toBeInTheDocument();
-
-    await user.click(toggleButton!);
-    expect(passwordInput).toHaveAttribute('type', 'text');
-  });
-
-  it('should disable submit button while loading', () => {
-    useAuthStore.setState({ isLoading: true });
+  it('should show error message when registration fails', () => {
+    useAuthStore.setState({ error: 'Registration failed' });
 
     render(<RegisterPage />);
 
-    const submitButton = screen.getByRole('button', { name: /creating account/i });
-    expect(submitButton).toBeDisabled();
+    expect(screen.getByText('Registration failed')).toBeInTheDocument();
   });
 
-  it('should show API error message', () => {
-    useAuthStore.setState({ error: 'Invalid invitation token' });
-
-    render(<RegisterPage />);
-
-    expect(screen.getByText('Invalid invitation token')).toBeInTheDocument();
-  });
-
-  it('should call register with form data on submit', async () => {
-    const registerSpy = vi.fn().mockResolvedValue(undefined);
-    useAuthStore.setState({ register: registerSpy });
+  it('should clear error when dismiss is clicked', async () => {
+    useAuthStore.setState({ error: 'Registration failed' });
 
     const { user } = render(<RegisterPage />);
 
-    await user.type(screen.getByPlaceholderText('John Doe'), 'Test User');
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-    await user.type(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'password123');
-    await user.type(screen.getByPlaceholderText('Enter your invitation token'), 'invite-token');
+    const dismissButton = screen.getByText('Dismiss');
+    await user.click(dismissButton);
 
-    await user.click(screen.getByRole('button', { name: /create account/i }));
+    expect(useAuthStore.getState().error).toBeNull();
+  });
 
-    await waitFor(() => {
-      expect(registerSpy).toHaveBeenCalledWith(
-        'test@example.com',
-        'password123',
-        'Test User',
-        'invite-token'
-      );
-    });
+  it('should call loginWithSession when QrChallenge fires onAuthenticated', async () => {
+    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
+
+    const { user } = render(<RegisterPage />);
+
+    await user.click(screen.getByTestId('mock-authenticate'));
+
+    expect(loginWithSessionSpy).toHaveBeenCalledWith('mock-session-token');
   });
 
   it('should navigate to /onboarding on successful registration', async () => {
-    const registerSpy = vi.fn().mockResolvedValue(undefined);
-    useAuthStore.setState({ register: registerSpy });
+    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
 
     const { user } = render(<RegisterPage />);
 
-    await user.type(screen.getByPlaceholderText('John Doe'), 'Test User');
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-    await user.type(screen.getByPlaceholderText('Minimum 8 characters'), 'password123');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'password123');
-    await user.type(screen.getByPlaceholderText('Enter your invitation token'), 'invite-token');
+    await user.click(screen.getByTestId('mock-authenticate'));
 
-    await user.click(screen.getByRole('button', { name: /create account/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/onboarding');
+  });
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/onboarding');
-    });
+  it('should not navigate when loginWithSession throws', async () => {
+    const loginWithSessionSpy = vi.fn().mockRejectedValue(new Error('Failed'));
+    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
+
+    const { user } = render(<RegisterPage />);
+
+    await user.click(screen.getByTestId('mock-authenticate'));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('should show link to login page', () => {
@@ -152,22 +130,9 @@ describe('RegisterPage', () => {
     expect(loginLink).toHaveAttribute('href', '/login');
   });
 
-  it('should clear validation error on dismiss', async () => {
-    const { user } = render(<RegisterPage />);
+  it('should show post-quantum cryptography message', () => {
+    render(<RegisterPage />);
 
-    // Trigger validation error
-    await user.type(screen.getByPlaceholderText('John Doe'), 'Test');
-    await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-    await user.type(screen.getByPlaceholderText('Minimum 8 characters'), 'pass');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'pass');
-    await user.type(screen.getByPlaceholderText('Enter your invitation token'), 'token');
-    await user.click(screen.getByRole('button', { name: /create account/i }));
-
-    expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-
-    // Dismiss error
-    await user.click(screen.getByText('Dismiss'));
-
-    expect(screen.queryByText('Password must be at least 8 characters')).not.toBeInTheDocument();
+    expect(screen.getByText('Protected with post-quantum cryptography')).toBeInTheDocument();
   });
 });

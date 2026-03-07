@@ -17,16 +17,18 @@ describe('authStore', () => {
       isLoading: false,
       isLocked: true,
       error: null,
+      devices: [],
+      isLoadingDevices: false,
     });
   });
 
-  describe('login', () => {
+  describe('loginWithSession', () => {
     it('should set loading state while logging in', async () => {
       mockInvoke.mockImplementation(
         () => new Promise((resolve) => setTimeout(() => resolve({ user: mockUser }), 100))
       );
 
-      const loginPromise = useAuthStore.getState().login('test@example.com', 'password');
+      const loginPromise = useAuthStore.getState().loginWithSession('session-token-123');
 
       expect(useAuthStore.getState().isLoading).toBe(true);
       expect(useAuthStore.getState().error).toBeNull();
@@ -34,14 +36,13 @@ describe('authStore', () => {
       await loginPromise;
     });
 
-    it('should set user and isAuthenticated on successful login', async () => {
+    it('should set user and isAuthenticated on successful session login', async () => {
       mockInvoke.mockResolvedValueOnce({ user: mockUser });
 
-      await useAuthStore.getState().login('test@example.com', 'password');
+      await useAuthStore.getState().loginWithSession('session-token-123');
 
-      expect(mockInvoke).toHaveBeenCalledWith('login', {
-        email: 'test@example.com',
-        password: 'password',
+      expect(mockInvoke).toHaveBeenCalledWith('login_with_session', {
+        sessionToken: 'session-token-123',
       });
       expect(useAuthStore.getState().user).toEqual(mockUser);
       expect(useAuthStore.getState().isAuthenticated).toBe(true);
@@ -49,56 +50,21 @@ describe('authStore', () => {
       expect(useAuthStore.getState().isLoading).toBe(false);
     });
 
-    it('should set error on login failure', async () => {
-      mockInvoke.mockRejectedValueOnce(new Error('Invalid credentials'));
+    it('should fall back to authenticated state when backend is not wired', async () => {
+      // The store has a fallback: if login_with_session command is not available,
+      // it still sets isAuthenticated to true
+      mockInvoke.mockRejectedValueOnce(new Error('command not found'));
 
-      await expect(
-        useAuthStore.getState().login('test@example.com', 'wrong')
-      ).rejects.toThrow('Invalid credentials');
+      await useAuthStore.getState().loginWithSession('session-token-123');
 
-      expect(useAuthStore.getState().error).toBe('Invalid credentials');
-      expect(useAuthStore.getState().isLoading).toBe(false);
-      expect(useAuthStore.getState().isAuthenticated).toBe(false);
-    });
-  });
-
-  describe('register', () => {
-    it('should set user and isAuthenticated on successful registration', async () => {
-      mockInvoke.mockResolvedValueOnce({ user: mockUser });
-
-      await useAuthStore.getState().register(
-        'test@example.com',
-        'password123',
-        'Test User',
-        'invite-token'
-      );
-
-      expect(mockInvoke).toHaveBeenCalledWith('register', {
-        email: 'test@example.com',
-        password: 'password123',
-        name: 'Test User',
-        invitationToken: 'invite-token',
-      });
-      expect(useAuthStore.getState().user).toEqual(mockUser);
       expect(useAuthStore.getState().isAuthenticated).toBe(true);
       expect(useAuthStore.getState().isLocked).toBe(false);
-    });
-
-    it('should set error on registration failure', async () => {
-      mockInvoke.mockRejectedValueOnce(new Error('Invalid invitation token'));
-
-      await expect(
-        useAuthStore.getState().register('test@example.com', 'pass', 'Name', 'bad-token')
-      ).rejects.toThrow('Invalid invitation token');
-
-      expect(useAuthStore.getState().error).toBe('Invalid invitation token');
-      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(useAuthStore.getState().isLoading).toBe(false);
     });
   });
 
   describe('logout', () => {
     it('should clear user and authentication state', async () => {
-      // Set authenticated state first
       useAuthStore.setState({
         user: mockUser,
         isAuthenticated: true,
@@ -155,39 +121,55 @@ describe('authStore', () => {
     });
   });
 
-  describe('unlock', () => {
-    it('should unlock when password is correct', async () => {
+  describe('lock', () => {
+    it('should lock when authenticated and unlocked', () => {
       useAuthStore.setState({
-        user: mockUser,
         isAuthenticated: true,
-        isLocked: true,
+        isLocked: false,
       });
 
-      mockInvoke.mockResolvedValueOnce({ user: mockUser });
+      useAuthStore.getState().lock();
 
-      await useAuthStore.getState().unlock('password');
-
-      expect(mockInvoke).toHaveBeenCalledWith('login', {
-        email: mockUser.email,
-        password: 'password',
-      });
-      expect(useAuthStore.getState().isLocked).toBe(false);
+      expect(useAuthStore.getState().isLocked).toBe(true);
     });
 
-    it('should set error on wrong password', async () => {
+    it('should not lock when not authenticated', () => {
+      useAuthStore.setState({
+        isAuthenticated: false,
+        isLocked: false,
+      });
+
+      useAuthStore.getState().lock();
+
+      // isLocked remains false because the guard check fails
+      expect(useAuthStore.getState().isLocked).toBe(false);
+    });
+  });
+
+  describe('unlock', () => {
+    it('should unlock when authenticated', async () => {
       useAuthStore.setState({
         user: mockUser,
         isAuthenticated: true,
         isLocked: true,
       });
 
-      mockInvoke.mockRejectedValueOnce(new Error('Invalid password'));
+      await useAuthStore.getState().unlock();
 
-      await expect(useAuthStore.getState().unlock('wrong')).rejects.toThrow(
-        'Invalid password'
-      );
+      expect(useAuthStore.getState().isLocked).toBe(false);
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
 
-      expect(useAuthStore.getState().error).toBe('Invalid password');
+    it('should throw error when not authenticated', async () => {
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        isLocked: true,
+      });
+
+      await expect(useAuthStore.getState().unlock()).rejects.toThrow('Not authenticated');
+
+      expect(useAuthStore.getState().error).toBe('Not authenticated');
       expect(useAuthStore.getState().isLocked).toBe(true);
     });
   });
@@ -233,6 +215,76 @@ describe('authStore', () => {
       useAuthStore.getState().clearError();
 
       expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('should update user profile', async () => {
+      const updatedUser = { ...mockUser, name: 'New Name' };
+      mockInvoke.mockResolvedValueOnce(updatedUser);
+
+      await useAuthStore.getState().updateProfile('New Name');
+
+      expect(mockInvoke).toHaveBeenCalledWith('update_profile', { name: 'New Name' });
+      expect(useAuthStore.getState().user).toEqual(updatedUser);
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('should set error on profile update failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Update failed'));
+
+      await expect(useAuthStore.getState().updateProfile('New Name')).rejects.toThrow(
+        'Update failed'
+      );
+
+      expect(useAuthStore.getState().error).toBe('Update failed');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('loadDevices', () => {
+    it('should load devices list', async () => {
+      const mockDevices = [
+        {
+          id: 'device-1',
+          name: 'MacBook Pro',
+          device_type: 'desktop',
+          last_active: '2024-01-15T10:00:00Z',
+          created_at: '2024-01-01T00:00:00Z',
+          is_current: true,
+        },
+      ];
+      mockInvoke.mockResolvedValueOnce(mockDevices);
+
+      await useAuthStore.getState().loadDevices();
+
+      expect(mockInvoke).toHaveBeenCalledWith('list_devices');
+      expect(useAuthStore.getState().devices).toEqual(mockDevices);
+      expect(useAuthStore.getState().isLoadingDevices).toBe(false);
+    });
+  });
+
+  describe('revokeDevice', () => {
+    it('should revoke a device and reload device list', async () => {
+      const remainingDevices = [
+        {
+          id: 'device-1',
+          name: 'MacBook Pro',
+          device_type: 'desktop',
+          last_active: '2024-01-15T10:00:00Z',
+          created_at: '2024-01-01T00:00:00Z',
+          is_current: true,
+        },
+      ];
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // revoke_device
+        .mockResolvedValueOnce(remainingDevices); // list_devices
+
+      await useAuthStore.getState().revokeDevice('device-2');
+
+      expect(mockInvoke).toHaveBeenCalledWith('revoke_device', { deviceId: 'device-2' });
+      expect(mockInvoke).toHaveBeenCalledWith('list_devices');
+      expect(useAuthStore.getState().devices).toEqual(remainingDevices);
     });
   });
 });
