@@ -8,9 +8,8 @@ import javax.inject.Inject
 /**
  * OkHttp Interceptor that adds the Authorization header to requests.
  *
- * SECURITY: Uses synchronous storage access to avoid blocking OkHttp's
- * dispatcher threads with runBlocking. The sync methods internally use
- * runBlocking on IO dispatcher to prevent main thread blocking.
+ * Uses session token from SSDID Wallet authentication.
+ * Skips unauthenticated endpoints (server-info, invite).
  */
 class AuthInterceptor @Inject constructor(
     private val secureStorage: SecureStorage
@@ -19,16 +18,16 @@ class AuthInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
-        // Skip auth for login/register endpoints
-        if (isAuthEndpoint(originalRequest.url.encodedPath)) {
+        // Skip auth for unauthenticated endpoints
+        if (isUnauthenticatedEndpoint(originalRequest.url.encodedPath)) {
             return chain.proceed(originalRequest)
         }
 
-        // Get access token using sync method (avoids runBlocking on OkHttp thread)
-        val accessToken = secureStorage.getAccessTokenSync()
+        // Get session token
+        val sessionToken = secureStorage.getStringSync("session_token")
 
         // If no token, proceed without auth
-        if (accessToken.isNullOrEmpty()) {
+        if (sessionToken.isNullOrEmpty()) {
             return chain.proceed(originalRequest)
         }
 
@@ -36,7 +35,7 @@ class AuthInterceptor @Inject constructor(
         val tenantId = secureStorage.getTenantIdSync()
 
         val authenticatedRequest = originalRequest.newBuilder()
-            .header("Authorization", "Bearer $accessToken")
+            .header("Authorization", "Bearer $sessionToken")
             .header("Content-Type", "application/json")
             .apply {
                 if (!tenantId.isNullOrEmpty()) {
@@ -48,13 +47,8 @@ class AuthInterceptor @Inject constructor(
         return chain.proceed(authenticatedRequest)
     }
 
-    private fun isAuthEndpoint(path: String): Boolean {
-        return path.contains("auth/login") ||
-               path.contains("auth/register") ||
-               path.contains("auth/refresh") ||
-               path.contains("auth/webauthn/register/") ||
-               path.contains("auth/webauthn/login/") ||
-               path.contains("auth/oidc/") ||
-               path.contains("auth/providers")
+    private fun isUnauthenticatedEndpoint(path: String): Boolean {
+        return path.contains("auth/ssdid/server-info") ||
+               path.contains("invite/")
     }
 }

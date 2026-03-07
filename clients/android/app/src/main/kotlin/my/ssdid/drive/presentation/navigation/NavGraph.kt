@@ -7,9 +7,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.ui.platform.LocalContext
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -90,16 +87,14 @@ fun NavGraph(
 
         // Auth screens
         composable(Screen.Login.route) {
-            val context = LocalContext.current
             LoginScreen(
                 onLoginSuccess = {
                     navController.navigate(Screen.Files.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                onOidcBrowserOpen = { url ->
-                    val customTabsIntent = CustomTabsIntent.Builder().build()
-                    customTabsIntent.launchUrl(context, Uri.parse(url))
+                onNavigateToRegister = {
+                    navController.navigate(Screen.Register.route)
                 }
             )
         }

@@ -2,9 +2,7 @@ package my.ssdid.drive.presentation.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import my.ssdid.drive.crypto.SecureMemory
 import my.ssdid.drive.domain.repository.AuthRepository
-import my.ssdid.drive.util.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,13 +11,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * UI state for register screen with SSDID Wallet authentication.
+ */
 data class RegisterUiState(
-    val email: String = "",
-    val password: String = "",
-    val confirmPassword: String = "",
-    val tenantSlug: String = "",
     val isLoading: Boolean = false,
-    val isGeneratingKeys: Boolean = false,
+    val isWaitingForWallet: Boolean = false,
     val isRegistered: Boolean = false,
     val error: String? = null
 )
@@ -32,97 +29,48 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
-    fun updateEmail(email: String) {
-        _uiState.update { it.copy(email = email, error = null) }
-    }
-
-    fun updatePassword(password: String) {
-        _uiState.update { it.copy(password = password, error = null) }
-    }
-
-    fun updateConfirmPassword(confirmPassword: String) {
-        _uiState.update { it.copy(confirmPassword = confirmPassword, error = null) }
-    }
-
-    fun updateTenantSlug(tenantSlug: String) {
-        _uiState.update { it.copy(tenantSlug = tenantSlug, error = null) }
-    }
-
-    fun register() {
-        val state = _uiState.value
-
-        // Validate inputs
-        if (state.tenantSlug.isBlank()) {
-            _uiState.update { it.copy(error = "Organization is required") }
-            return
-        }
-        if (state.email.isBlank()) {
-            _uiState.update { it.copy(error = "Email is required") }
-            return
-        }
-        if (!isValidEmail(state.email)) {
-            _uiState.update { it.copy(error = "Invalid email format") }
-            return
-        }
-        if (state.password.isBlank()) {
-            _uiState.update { it.copy(error = "Password is required") }
-            return
-        }
-        if (state.password.length < 8) {
-            _uiState.update { it.copy(error = "Password must be at least 8 characters") }
-            return
-        }
-        if (state.password != state.confirmPassword) {
-            _uiState.update { it.copy(error = "Passwords do not match") }
-            return
-        }
-
+    /**
+     * Initiate registration with SSDID Wallet.
+     *
+     * Creates a challenge on the server with action "register",
+     * then launches the wallet app via deep link. The wallet handles
+     * DID creation and service registration, then calls back with
+     * a session token.
+     */
+    fun registerWithWallet() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, isGeneratingKeys = true, error = null) }
-
-            // SECURITY: Convert password to CharArray for secure handling
-            val passwordChars = state.password.toCharArray()
-
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                when (val result = authRepository.register(state.email, passwordChars, state.tenantSlug)) {
-                    is Result.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                isGeneratingKeys = false,
-                                isRegistered = true,
-                                password = "",
-                                confirmPassword = ""
-                            )
-                        }
-                    }
-                    is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                isGeneratingKeys = false,
-                                error = result.exception.message
-                            )
-                        }
-                    }
-                }
-            } finally {
-                // SECURITY: Zeroize password CharArray after use
-                SecureMemory.zeroize(passwordChars)
+                // 1. Get server info and create challenge for registration
+                val challenge = authRepository.createChallenge("register")
+
+                // 2. Launch deep link to wallet
+                authRepository.launchWalletAuth(challenge)
+
+                // 3. Update state to show waiting UI
+                _uiState.update { it.copy(isLoading = false, isWaitingForWallet = true) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
     }
 
-    private fun isValidEmail(email: String): Boolean {
-        return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-    }
-
     /**
-     * Clear sensitive data when ViewModel is cleared.
+     * Handle the callback from SSDID Wallet with the session token.
+     *
+     * Called when the wallet redirects back to the app via deep link:
+     * ssdiddrive://auth/callback?session_token=...
+     *
+     * @param sessionToken The session token from the wallet
      */
-    override fun onCleared() {
-        super.onCleared()
-        // Clear passwords from UI state
-        _uiState.update { it.copy(password = "", confirmPassword = "") }
+    fun handleWalletCallback(sessionToken: String) {
+        viewModelScope.launch {
+            try {
+                authRepository.saveSession(sessionToken)
+                _uiState.update { it.copy(isWaitingForWallet = false, isRegistered = true) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isWaitingForWallet = false, error = e.message) }
+            }
+        }
     }
 }

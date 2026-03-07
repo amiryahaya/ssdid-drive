@@ -73,14 +73,13 @@ class DeepLinkHandler @Inject constructor() {
                 val token = pathSegments.firstOrNull() ?: uri.lastPathSegment
                 token?.let { DeepLinkAction.AcceptInvitation(it) }
             }
-            "oidc" -> {
-                // ssdiddrive://oidc/callback?code=X&state=Y
+            "auth" -> {
+                // ssdiddrive://auth/callback?session_token=...
                 val segment = pathSegments.firstOrNull()
                 if (segment == "callback") {
-                    val code = uri.getQueryParameter("code")
-                    val state = uri.getQueryParameter("state")
-                    if (code != null && state != null) {
-                        DeepLinkAction.OidcCallback(code, state)
+                    val sessionToken = uri.getQueryParameter("session_token")
+                    if (sessionToken != null) {
+                        DeepLinkAction.WalletAuthCallback(sessionToken)
                     } else null
                 } else null
             }
@@ -186,8 +185,8 @@ sealed class DeepLinkAction {
     data class AcceptInvitation(val token: String) : DeepLinkAction()
 
     /**
-     * Handle OIDC callback from browser redirect.
-     * Contains the authorization code and state for token exchange.
+     * Handle SSDID Wallet authentication callback.
+     * Contains the session token from the wallet after successful authentication.
      */
-    data class OidcCallback(val code: String, val state: String) : DeepLinkAction()
+    data class WalletAuthCallback(val sessionToken: String) : DeepLinkAction()
 }

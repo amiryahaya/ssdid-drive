@@ -3,7 +3,6 @@ package my.ssdid.drive.presentation.auth
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import my.ssdid.drive.crypto.SecureMemory
 import my.ssdid.drive.domain.repository.AuthRepository
 import my.ssdid.drive.util.BiometricAuthManager
 import my.ssdid.drive.util.BiometricAvailability
@@ -19,7 +18,6 @@ import javax.inject.Inject
 
 data class LockUiState(
     val isUnlocking: Boolean = false,
-    val showPasswordInput: Boolean = false,
     val error: String? = null,
     val isUnlocked: Boolean = false,
     val biometricAvailable: Boolean = true
@@ -28,7 +26,8 @@ data class LockUiState(
 /**
  * ViewModel for the Lock screen.
  *
- * Handles biometric and password-based unlocking of the app.
+ * Handles biometric-based unlocking of the app.
+ * Password-based unlock is not supported with SSDID Wallet authentication.
  */
 @HiltViewModel
 class LockViewModel @Inject constructor(
@@ -73,33 +72,22 @@ class LockViewModel @Inject constructor(
                 }
                 is BiometricResult.Cancelled -> {
                     _uiState.update {
-                        it.copy(
-                            isUnlocking = false,
-                            showPasswordInput = true
-                        )
+                        it.copy(isUnlocking = false)
                     }
                 }
                 is BiometricResult.Lockout -> {
                     val message = if (result.temporary) {
-                        "Too many attempts. Please try again later or use your password."
+                        "Too many attempts. Please try again later."
                     } else {
-                        "Biometric locked. Please use your password."
+                        "Biometric locked. Please try again later."
                     }
                     _uiState.update {
-                        it.copy(
-                            isUnlocking = false,
-                            error = message,
-                            showPasswordInput = true
-                        )
+                        it.copy(isUnlocking = false, error = message)
                     }
                 }
                 is BiometricResult.Error -> {
                     _uiState.update {
-                        it.copy(
-                            isUnlocking = false,
-                            error = result.message,
-                            showPasswordInput = true
-                        )
+                        it.copy(isUnlocking = false, error = result.message)
                     }
                 }
             }
@@ -110,71 +98,15 @@ class LockViewModel @Inject constructor(
         when (val result = authRepository.unlockWithBiometric()) {
             is Result.Success -> {
                 _uiState.update {
-                    it.copy(
-                        isUnlocking = false,
-                        isUnlocked = true
-                    )
+                    it.copy(isUnlocking = false, isUnlocked = true)
                 }
             }
             is Result.Error -> {
                 _uiState.update {
-                    it.copy(
-                        isUnlocking = false,
-                        error = result.exception.message,
-                        showPasswordInput = true
-                    )
+                    it.copy(isUnlocking = false, error = result.exception.message)
                 }
             }
         }
-    }
-
-    /**
-     * Unlock using password.
-     * Used as fallback when biometric fails or is unavailable.
-     */
-    fun unlockWithPassword(password: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isUnlocking = true, error = null) }
-
-            val passwordChars = password.toCharArray()
-
-            try {
-                when (val result = authRepository.unlockKeys(passwordChars)) {
-                    is Result.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isUnlocking = false,
-                                isUnlocked = true
-                            )
-                        }
-                    }
-                    is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isUnlocking = false,
-                                error = result.exception.message
-                            )
-                        }
-                    }
-                }
-            } finally {
-                SecureMemory.zeroize(passwordChars)
-            }
-        }
-    }
-
-    /**
-     * Show password input instead of biometric.
-     */
-    fun showPasswordInput() {
-        _uiState.update { it.copy(showPasswordInput = true, error = null) }
-    }
-
-    /**
-     * Hide password input and try biometric again.
-     */
-    fun hidePasswordInput() {
-        _uiState.update { it.copy(showPasswordInput = false, error = null) }
     }
 
     /**

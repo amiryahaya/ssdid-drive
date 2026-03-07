@@ -3,7 +3,6 @@ package my.ssdid.drive.presentation.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import my.ssdid.drive.crypto.KeyManager
-import my.ssdid.drive.crypto.SecureMemory
 import my.ssdid.drive.data.local.AutoLockTimeout
 import my.ssdid.drive.data.local.PreferencesManager
 import my.ssdid.drive.data.local.ThemeMode
@@ -237,51 +236,8 @@ class SettingsViewModel @Inject constructor(
 
     // ==================== Security Actions ====================
 
-    /**
-     * Change the user's password.
-     *
-     * SECURITY: Passwords are converted to CharArray and zeroized after use.
-     */
-    fun changePassword(currentPassword: String, newPassword: String) {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isChangingPassword = true,
-                    changePasswordError = null,
-                    changePasswordSuccess = false
-                )
-            }
-
-            // SECURITY: Convert passwords to CharArray for secure handling
-            val currentPasswordChars = currentPassword.toCharArray()
-            val newPasswordChars = newPassword.toCharArray()
-
-            try {
-                when (val result = authRepository.changePassword(currentPasswordChars, newPasswordChars)) {
-                    is Result.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isChangingPassword = false,
-                                changePasswordSuccess = true
-                            )
-                        }
-                    }
-                    is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isChangingPassword = false,
-                                changePasswordError = result.exception.message
-                            )
-                        }
-                    }
-                }
-            } finally {
-                // SECURITY: Zeroize password CharArrays after use
-                SecureMemory.zeroize(currentPasswordChars)
-                SecureMemory.zeroize(newPasswordChars)
-            }
-        }
-    }
+    // Password change is not supported with SSDID Wallet authentication.
+    // Authentication is managed by the SSDID Wallet app.
 
     /**
      * Called when user toggles biometric switch.
@@ -290,8 +246,8 @@ class SettingsViewModel @Inject constructor(
      */
     fun setBiometricEnabled(enabled: Boolean) {
         if (enabled) {
-            // Show password dialog to verify identity before enabling
-            _uiState.update { it.copy(showBiometricPasswordDialog = true) }
+            // Enable biometric directly (no password needed with SSDID Wallet auth)
+            enableBiometric()
         } else {
             // Disable biometric unlock
             viewModelScope.launch {
@@ -309,9 +265,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Called when user enters password in the biometric enable dialog.
+     * Enable biometric unlock.
+     * No password required with SSDID Wallet authentication - keys are already unlocked.
      */
-    fun enableBiometricWithPassword(password: String) {
+    fun enableBiometric() {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -321,30 +278,24 @@ class SettingsViewModel @Inject constructor(
                 )
             }
 
-            val passwordChars = password.toCharArray()
-
-            try {
-                when (val result = authRepository.enableBiometricUnlock(passwordChars)) {
-                    is Result.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isEnablingBiometric = false,
-                                biometricEnabled = true
-                            )
-                        }
-                        preferencesManager.setBiometricEnabled(true)
+            when (val result = authRepository.enableBiometricUnlock()) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isEnablingBiometric = false,
+                            biometricEnabled = true
+                        )
                     }
-                    is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isEnablingBiometric = false,
-                                biometricSetupError = result.exception.message
-                            )
-                        }
+                    preferencesManager.setBiometricEnabled(true)
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isEnablingBiometric = false,
+                            biometricSetupError = result.exception.message
+                        )
                     }
                 }
-            } finally {
-                SecureMemory.zeroize(passwordChars)
             }
         }
     }

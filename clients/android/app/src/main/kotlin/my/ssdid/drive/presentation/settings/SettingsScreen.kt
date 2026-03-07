@@ -129,8 +129,8 @@ fun SettingsScreen(
                         onBiometricChange = { viewModel.setBiometricEnabled(it) },
                         onAutoLockChange = { viewModel.setAutoLockEnabled(it) },
                         onAutoLockTimeoutChange = { viewModel.setAutoLockTimeout(it) },
-                        onChangePassword = { current, new ->
-                            viewModel.changePassword(current, new)
+                        onChangePassword = { _, _ ->
+                            // Password change not supported with SSDID Wallet auth
                         },
                         onNavigateToRecoverySetup = onNavigateToRecoverySetup,
                         onNavigateToTrusteeDashboard = onNavigateToTrusteeDashboard,

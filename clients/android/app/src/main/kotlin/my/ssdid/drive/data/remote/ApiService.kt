@@ -1,14 +1,11 @@
 package my.ssdid.drive.data.remote
 
+import com.google.gson.annotations.SerializedName
 import my.ssdid.drive.data.remote.AcceptInviteRequest
-import my.ssdid.drive.data.remote.AuthProvidersResponse
 import my.ssdid.drive.data.remote.AcceptInviteResponse
 import my.ssdid.drive.data.remote.ApproveRecoveryRequest
-import my.ssdid.drive.data.remote.AuthResponse
 import my.ssdid.drive.data.remote.CompleteRecoveryRequest
 import my.ssdid.drive.data.remote.CreateFolderRequest
-import my.ssdid.drive.data.remote.CredentialDto
-import my.ssdid.drive.data.remote.CredentialsResponse
 import my.ssdid.drive.data.remote.CreateRecoveryRequestRequest
 import my.ssdid.drive.data.remote.CreateRecoveryShareRequest
 import my.ssdid.drive.data.remote.DeviceEnrollmentResponse
@@ -24,16 +21,9 @@ import my.ssdid.drive.data.remote.InvitationCreatedResponse
 import my.ssdid.drive.data.remote.InvitationsResponse
 import my.ssdid.drive.data.remote.InviteInfoResponse
 import my.ssdid.drive.data.remote.InviteMemberRequest
-import my.ssdid.drive.data.remote.LoginRequest
 import my.ssdid.drive.data.remote.MemberResponse
 import my.ssdid.drive.data.remote.MembersResponse
 import my.ssdid.drive.data.remote.MoveFileRequest
-import my.ssdid.drive.data.remote.OidcAuthorizeRequest
-import my.ssdid.drive.data.remote.OidcAuthorizeResponse
-import my.ssdid.drive.data.remote.OidcCallbackRequest
-import my.ssdid.drive.data.remote.OidcCallbackResponse
-import my.ssdid.drive.data.remote.OidcRegisterRequest
-import my.ssdid.drive.data.remote.OidcRegisterResponse
 import my.ssdid.drive.data.remote.MoveFolderRequest
 import my.ssdid.drive.data.remote.PublicKeyResponse
 import my.ssdid.drive.data.remote.RecoveryApprovalResponse
@@ -43,10 +33,7 @@ import my.ssdid.drive.data.remote.RecoveryRequestResponse
 import my.ssdid.drive.data.remote.RecoveryRequestsResponse
 import my.ssdid.drive.data.remote.RecoveryShareResponse
 import my.ssdid.drive.data.remote.RecoverySharesResponse
-import my.ssdid.drive.data.remote.RefreshTokenRequest
 import my.ssdid.drive.data.remote.RegisterPushRequest
-import my.ssdid.drive.data.remote.RegisterRequest
-import my.ssdid.drive.data.remote.RenameCredentialRequest
 import my.ssdid.drive.data.remote.SetExpiryRequest
 import my.ssdid.drive.data.remote.SetupRecoveryRequest
 import my.ssdid.drive.data.remote.ShareFileRequest
@@ -60,7 +47,6 @@ import my.ssdid.drive.data.remote.TenantSwitchResponse
 import my.ssdid.drive.data.remote.UpdateDeviceRequest
 import my.ssdid.drive.data.remote.UpdateFileRequest
 import my.ssdid.drive.data.remote.UpdateFolderRequest
-import my.ssdid.drive.data.remote.UpdateKeyMaterialRequest
 import my.ssdid.drive.data.remote.UpdateMemberRoleRequest
 import my.ssdid.drive.data.remote.UpdateProfileRequest
 import my.ssdid.drive.data.remote.UpdatePermissionRequest
@@ -68,10 +54,6 @@ import my.ssdid.drive.data.remote.UploadUrlRequest
 import my.ssdid.drive.data.remote.UploadUrlResponse
 import my.ssdid.drive.data.remote.UserResponse
 import my.ssdid.drive.data.remote.UsersResponse
-import my.ssdid.drive.data.remote.WebAuthnBeginResponse
-import my.ssdid.drive.data.remote.WebAuthnLoginBeginRequest
-import my.ssdid.drive.data.remote.WebAuthnLoginCompleteRequest
-import my.ssdid.drive.data.remote.WebAuthnLoginResponse
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -191,16 +173,15 @@ interface ApiService {
         @Body request: AcceptInviteRequest
     ): Response<AcceptInviteResponse>
 
-    // ==================== Authentication ====================
+    // ==================== SSDID Authentication ====================
 
-    @POST("auth/register")
-    suspend fun register(@Body request: RegisterRequest): Response<AuthResponse>
-
-    @POST("auth/login")
-    suspend fun login(@Body request: LoginRequest): Response<AuthResponse>
-
-    @POST("auth/refresh")
-    suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<AuthResponse>
+    /**
+     * Get server info for SSDID Wallet authentication.
+     * Returns server DID, challenge ID, and other info needed to build the wallet deep link.
+     * This is an unauthenticated endpoint.
+     */
+    @GET("auth/ssdid/server-info")
+    suspend fun getServerInfo(): ServerInfoResponse
 
     @POST("auth/logout")
     suspend fun logout(): Response<Unit>
@@ -215,13 +196,6 @@ interface ApiService {
      */
     @PUT("me")
     suspend fun updateProfile(@Body request: UpdateProfileRequest): Response<UserResponse>
-
-    /**
-     * Update current user's key material.
-     * Used after password change to sync new encrypted master key with server.
-     */
-    @PUT("me/keys")
-    suspend fun updateKeyMaterial(@Body request: UpdateKeyMaterialRequest): Response<UserResponse>
 
     @GET("users")
     suspend fun searchUsers(@Query("query") query: String): Response<UsersResponse>
@@ -396,56 +370,6 @@ interface ApiService {
     @DELETE("recovery/requests/{id}")
     suspend fun cancelRecoveryRequest(@Path("id") requestId: String): Response<Unit>
 
-    // ==================== WebAuthn ====================
-
-    @POST("auth/webauthn/login/begin")
-    suspend fun webauthnLoginBegin(@Body request: WebAuthnLoginBeginRequest): Response<WebAuthnBeginResponse>
-
-    @POST("auth/webauthn/login/complete")
-    suspend fun webauthnLoginComplete(@Body request: WebAuthnLoginCompleteRequest): Response<WebAuthnLoginResponse>
-
-    @POST("auth/webauthn/register/begin")
-    suspend fun webauthnRegisterBegin(@Body request: WebAuthnLoginBeginRequest): Response<WebAuthnBeginResponse>
-
-    @POST("auth/webauthn/register/complete")
-    suspend fun webauthnRegisterComplete(@Body request: com.google.gson.JsonObject): Response<WebAuthnLoginResponse>
-
-    @POST("auth/webauthn/credentials/begin")
-    suspend fun webauthnCredentialBegin(): Response<WebAuthnBeginResponse>
-
-    @POST("auth/webauthn/credentials/complete")
-    suspend fun webauthnCredentialComplete(@Body request: com.google.gson.JsonObject): Response<CredentialDto>
-
-    // ==================== OIDC ====================
-
-    @POST("auth/oidc/authorize")
-    suspend fun oidcAuthorize(@Body request: OidcAuthorizeRequest): Response<OidcAuthorizeResponse>
-
-    @POST("auth/oidc/callback")
-    suspend fun oidcCallback(@Body request: OidcCallbackRequest): Response<OidcCallbackResponse>
-
-    @POST("auth/oidc/register")
-    suspend fun oidcRegister(@Body request: OidcRegisterRequest): Response<OidcRegisterResponse>
-
-    // ==================== Auth Providers ====================
-
-    @GET("auth/providers")
-    suspend fun getAuthProviders(@Query("tenant_slug") tenantSlug: String): Response<AuthProvidersResponse>
-
-    // ==================== Credential Management ====================
-
-    @GET("auth/credentials")
-    suspend fun getCredentials(): Response<CredentialsResponse>
-
-    @PUT("auth/credentials/{id}")
-    suspend fun renameCredential(
-        @Path("id") credentialId: String,
-        @Body request: RenameCredentialRequest
-    ): Response<CredentialDto>
-
-    @DELETE("auth/credentials/{id}")
-    suspend fun deleteCredential(@Path("id") credentialId: String): Response<Unit>
-
     // ==================== Device Enrollment ====================
 
     /**
@@ -498,3 +422,16 @@ interface ApiService {
     @DELETE("devices/{id}/push")
     suspend fun unregisterPush(@Path("id") enrollmentId: String): Response<DeviceEnrollmentResponse>
 }
+
+/**
+ * Server info response for SSDID Wallet authentication.
+ * Returned by GET /auth/ssdid/server-info.
+ */
+data class ServerInfoResponse(
+    @SerializedName("server_url") val serverUrl: String,
+    @SerializedName("server_did") val serverDid: String,
+    @SerializedName("server_key_id") val serverKeyId: String,
+    @SerializedName("challenge_id") val challengeId: String,
+    @SerializedName("service_name") val serviceName: String,
+    @SerializedName("registry_url") val registryUrl: String
+)

@@ -7,7 +7,6 @@ import my.ssdid.drive.data.remote.ApiService
 import my.ssdid.drive.data.remote.PiiApiService
 import my.ssdid.drive.data.remote.AuthInterceptor
 import my.ssdid.drive.data.remote.DeviceSignatureInterceptor
-import my.ssdid.drive.data.remote.TokenRefreshAuthenticator
 import my.ssdid.drive.crypto.DeviceManager
 import my.ssdid.drive.data.local.SecureStorage
 import dagger.Module
@@ -114,15 +113,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideTokenRefreshAuthenticator(
-        secureStorage: SecureStorage,
-        gson: Gson
-    ): TokenRefreshAuthenticator {
-        return TokenRefreshAuthenticator(secureStorage, gson)
-    }
-
-    @Provides
-    @Singleton
     fun provideDeviceSignatureInterceptor(
         secureStorage: SecureStorage,
         deviceManager: DeviceManager
@@ -159,7 +149,6 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor,
         authInterceptor: AuthInterceptor,
         deviceSignatureInterceptor: DeviceSignatureInterceptor,
-        tokenRefreshAuthenticator: TokenRefreshAuthenticator,
         certificatePinner: CertificatePinner
     ): OkHttpClient {
         return OkHttpClient.Builder()
@@ -169,7 +158,6 @@ object NetworkModule {
             .addInterceptor(authInterceptor)
             .addInterceptor(deviceSignatureInterceptor)
             .addInterceptor(loggingInterceptor)
-            .authenticator(tokenRefreshAuthenticator)
             // SECURITY: Certificate pinning to prevent MITM attacks
             // Disabled for debug builds to allow local development with self-signed certs
             .apply {

@@ -28,8 +28,8 @@ import my.ssdid.drive.presentation.navigation.NavigationViewModel
 import my.ssdid.drive.presentation.navigation.Screen
 import my.ssdid.drive.util.DeepLinkAction
 import my.ssdid.drive.util.DeepLinkHandler
-import my.ssdid.drive.util.OidcCallbackHolder
 import my.ssdid.drive.util.ShareIntentManager
+import my.ssdid.drive.util.WalletCallbackHolder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -265,9 +265,9 @@ private fun handleDeepLink(navController: NavHostController, action: DeepLinkAct
                 popUpTo(0) { inclusive = true }
             }
         }
-        is DeepLinkAction.OidcCallback -> {
-            // Store callback data for LoginScreen's OidcLoginViewModel to consume
-            OidcCallbackHolder.set(action.code, action.state)
+        is DeepLinkAction.WalletAuthCallback -> {
+            // Store session token for LoginViewModel to consume
+            WalletCallbackHolder.set(action.sessionToken)
             navController.navigate(Screen.Login.route) {
                 launchSingleTop = true
             }

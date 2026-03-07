@@ -7,56 +7,48 @@ import my.ssdid.drive.util.Result
 /**
  * Repository interface for authentication operations.
  *
- * SECURITY: Password parameters use CharArray instead of String.
- * CharArray can be explicitly zeroized after use, while String is immutable
- * and remains in memory until garbage collected.
- *
- * Callers MUST zeroize password CharArrays after calling these methods.
+ * Authentication is handled via SSDID Wallet deep links.
+ * The flow is:
+ * 1. App requests server info (challenge)
+ * 2. App launches SSDID Wallet via deep link with challenge
+ * 3. Wallet authenticates user and calls back with session token
+ * 4. App saves session token for API access
  */
 interface AuthRepository {
 
     /**
-     * Check if user is authenticated (has valid tokens).
+     * Check if user is authenticated (has valid session token).
      */
     suspend fun isAuthenticated(): Boolean
 
     /**
-     * Login with email and password.
-     * Returns the authenticated user on success.
+     * Create a challenge for SSDID Wallet authentication.
      *
-     * With multi-tenant support, the tenant_slug is optional. If not provided,
-     * the user will be logged into their first available tenant. The response
-     * includes all tenants the user belongs to.
-     *
-     * SECURITY: Caller must zeroize the password CharArray after this call.
-     *
-     * @param email User's email address
-     * @param password User's password as CharArray (will be used then should be zeroized by caller)
-     * @param tenantSlug Optional tenant slug to login to a specific tenant
-     * @return Result containing the authenticated User or an error
+     * @param action The action type ("authenticate" or "register")
+     * @return ChallengeInfo containing the deep link URL for the wallet
      */
-    suspend fun login(
-        email: String,
-        password: CharArray,
-        tenantSlug: String? = null
-    ): Result<User>
+    suspend fun createChallenge(action: String): ChallengeInfo
 
     /**
-     * Register a new user.
-     * Generates key pairs and encrypts them with the password.
+     * Launch the SSDID Wallet app via deep link for authentication.
      *
-     * SECURITY: Caller must zeroize the password CharArray after this call.
-     *
-     * @param email User's email address
-     * @param password User's password as CharArray (will be used then should be zeroized by caller)
-     * @param tenantSlug Tenant slug to register under
-     * @return Result containing the new User or an error
+     * @param challenge The challenge info containing the wallet deep link URL
      */
-    suspend fun register(
-        email: String,
-        password: CharArray,
-        tenantSlug: String
-    ): Result<User>
+    suspend fun launchWalletAuth(challenge: ChallengeInfo)
+
+    /**
+     * Save the session token received from the wallet callback.
+     *
+     * @param sessionToken The session token from the wallet
+     */
+    suspend fun saveSession(sessionToken: String)
+
+    /**
+     * Get the current session token.
+     *
+     * @return The session token, or null if not authenticated
+     */
+    suspend fun getSession(): String?
 
     /**
      * Logout the current user.
@@ -78,50 +70,18 @@ interface AuthRepository {
     suspend fun updateProfile(displayName: String?): Result<User>
 
     /**
-     * Refresh the access token using the refresh token.
-     */
-    suspend fun refreshToken(): Result<Unit>
-
-    /**
-     * Unlock the user's keys with their password.
-     * Must be called after login to access encrypted content.
-     *
-     * SECURITY: Caller must zeroize the password CharArray after this call.
-     *
-     * @param password User's password as CharArray
-     * @return Result indicating success or failure
-     */
-    suspend fun unlockKeys(password: CharArray): Result<Unit>
-
-    /**
      * Check if keys are unlocked.
      */
     suspend fun areKeysUnlocked(): Boolean
-
-    /**
-     * Change the user's password.
-     * Re-encrypts the master key and private keys with the new password.
-     *
-     * SECURITY: Caller must zeroize both password CharArrays after this call.
-     *
-     * @param currentPassword Current password as CharArray
-     * @param newPassword New password as CharArray
-     * @return Result indicating success or failure
-     */
-    suspend fun changePassword(currentPassword: CharArray, newPassword: CharArray): Result<Unit>
 
     // ==================== Biometric Unlock ====================
 
     /**
      * Enable biometric unlock by storing the master key in biometric-protected storage.
-     * Requires password verification before enabling.
      *
-     * SECURITY: Caller must zeroize the password CharArray after this call.
-     *
-     * @param password User's password to verify and decrypt master key
      * @return Result indicating success or failure
      */
-    suspend fun enableBiometricUnlock(password: CharArray): Result<Unit>
+    suspend fun enableBiometricUnlock(): Result<Unit>
 
     /**
      * Disable biometric unlock by clearing the biometric-protected master key.
@@ -162,22 +122,14 @@ interface AuthRepository {
      * @return Result containing TokenInvitation or an error
      */
     suspend fun getInvitationInfo(token: String): Result<TokenInvitation>
-
-    /**
-     * Accept an invitation and register a new account.
-     * Generates key pairs and encrypts them with the password.
-     * No authentication required - this creates the account.
-     *
-     * SECURITY: Caller must zeroize the password CharArray after this call.
-     *
-     * @param token The invitation token
-     * @param displayName User's display name
-     * @param password User's password as CharArray
-     * @return Result containing the new User or an error
-     */
-    suspend fun acceptInvitation(
-        token: String,
-        displayName: String,
-        password: CharArray
-    ): Result<User>
 }
+
+/**
+ * Information about a challenge for SSDID Wallet authentication.
+ */
+data class ChallengeInfo(
+    val serverUrl: String,
+    val serverDid: String,
+    val challengeId: String,
+    val walletDeepLink: String
+)

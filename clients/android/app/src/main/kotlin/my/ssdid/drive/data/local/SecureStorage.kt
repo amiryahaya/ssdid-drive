@@ -83,6 +83,33 @@ class SecureStorage @Inject constructor(
         )
     }
 
+    // ==================== Generic String Storage ====================
+
+    /**
+     * Save a string value securely.
+     */
+    suspend fun saveString(key: String, value: String) {
+        withContext(Dispatchers.IO) {
+            encryptedPrefs.edit()
+                .putString(key, value)
+                .apply()
+        }
+    }
+
+    /**
+     * Get a string value from secure storage.
+     */
+    suspend fun getString(key: String): String? = withContext(Dispatchers.IO) {
+        encryptedPrefs.getString(key, null)
+    }
+
+    /**
+     * Synchronous version of getString for use in interceptors.
+     */
+    fun getStringSync(key: String): String? = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+        encryptedPrefs.getString(key, null)
+    }
+
     // ==================== Token Management ====================
 
     suspend fun saveTokens(accessToken: String, refreshToken: String) {
@@ -236,7 +263,7 @@ class SecureStorage @Inject constructor(
     }
 
     /**
-     * Synchronous version of getRefreshToken for use in TokenRefreshAuthenticator.
+     * Synchronous version of getRefreshToken for use in interceptors.
      *
      * SECURITY: Uses runBlocking on IO dispatcher to prevent blocking main thread.
      */

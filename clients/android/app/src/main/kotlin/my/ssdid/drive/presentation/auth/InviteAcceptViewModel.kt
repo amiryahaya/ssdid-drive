@@ -3,7 +3,6 @@ package my.ssdid.drive.presentation.auth
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import my.ssdid.drive.crypto.SecureMemory
 import my.ssdid.drive.domain.model.TokenInvitation
 import my.ssdid.drive.domain.model.TokenInvitationError
 import my.ssdid.drive.domain.repository.AuthRepository
@@ -26,20 +25,22 @@ data class InviteAcceptUiState(
     val isLoadingInvitation: Boolean = true,
     val invitationError: String? = null,
 
-    // Registration form
-    val displayName: String = "",
-    val password: String = "",
-    val confirmPassword: String = "",
-
-    // Registration state
-    val isRegistering: Boolean = false,
-    val isGeneratingKeys: Boolean = false,
+    // Registration state (via SSDID Wallet)
+    val isLoading: Boolean = false,
+    val isWaitingForWallet: Boolean = false,
     val isRegistered: Boolean = false,
     val registrationError: String? = null
 )
 
 /**
- * ViewModel for handling invitation acceptance and registration.
+ * ViewModel for handling invitation acceptance via SSDID Wallet.
+ *
+ * The flow is:
+ * 1. Load invitation info from token
+ * 2. User taps "Accept with SSDID Wallet"
+ * 3. App creates a challenge and launches wallet via deep link
+ * 4. Wallet handles DID creation and service registration
+ * 5. Wallet calls back with session token
  */
 @HiltViewModel
 class InviteAcceptViewModel @Inject constructor(
@@ -85,7 +86,6 @@ class InviteAcceptViewModel @Inject constructor(
                             )
                         }
                     } else {
-                        // Invitation is invalid
                         val errorMessage = when (invitation.errorReason) {
                             TokenInvitationError.EXPIRED -> "This invitation has expired"
                             TokenInvitationError.REVOKED -> "This invitation has been revoked"
@@ -124,98 +124,42 @@ class InviteAcceptViewModel @Inject constructor(
         }
     }
 
-    fun updateDisplayName(name: String) {
-        _uiState.update { it.copy(displayName = name, registrationError = null) }
-    }
-
-    fun updatePassword(password: String) {
-        _uiState.update { it.copy(password = password, registrationError = null) }
-    }
-
-    fun updateConfirmPassword(confirmPassword: String) {
-        _uiState.update { it.copy(confirmPassword = confirmPassword, registrationError = null) }
-    }
-
     /**
-     * Accept the invitation and register the account.
+     * Accept the invitation via SSDID Wallet.
+     * Launches the wallet with a "register" action and the invitation token.
      */
-    fun acceptInvitation() {
-        val state = _uiState.value
-
-        // Validate inputs
-        if (state.displayName.isBlank()) {
-            _uiState.update { it.copy(registrationError = "Name is required") }
-            return
-        }
-        if (state.displayName.length > 100) {
-            _uiState.update { it.copy(registrationError = "Name is too long") }
-            return
-        }
-        if (state.password.isBlank()) {
-            _uiState.update { it.copy(registrationError = "Password is required") }
-            return
-        }
-        if (state.password.length < 8) {
-            _uiState.update { it.copy(registrationError = "Password must be at least 8 characters") }
-            return
-        }
-        if (state.password != state.confirmPassword) {
-            _uiState.update { it.copy(registrationError = "Passwords do not match") }
-            return
-        }
-
+    fun acceptWithWallet() {
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isRegistering = true,
-                    isGeneratingKeys = true,
-                    registrationError = null
-                )
-            }
-
-            // SECURITY: Convert password to CharArray for secure handling
-            val passwordChars = state.password.toCharArray()
-
+            _uiState.update { it.copy(isLoading = true, registrationError = null) }
             try {
-                when (val result = authRepository.acceptInvitation(
-                    token = state.token,
-                    displayName = state.displayName,
-                    password = passwordChars
-                )) {
-                    is Result.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isRegistering = false,
-                                isGeneratingKeys = false,
-                                isRegistered = true,
-                                password = "",
-                                confirmPassword = ""
-                            )
-                        }
-                    }
-                    is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isRegistering = false,
-                                isGeneratingKeys = false,
-                                registrationError = result.exception.message ?: "Registration failed"
-                            )
-                        }
-                    }
+                // Create a challenge for registration (includes invitation context)
+                val challenge = authRepository.createChallenge("register")
+
+                // Launch wallet
+                authRepository.launchWalletAuth(challenge)
+
+                _uiState.update { it.copy(isLoading = false, isWaitingForWallet = true) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, registrationError = e.message)
                 }
-            } finally {
-                // SECURITY: Zeroize password CharArray after use
-                SecureMemory.zeroize(passwordChars)
             }
         }
     }
 
     /**
-     * Clear sensitive data when ViewModel is cleared.
+     * Handle the callback from SSDID Wallet with the session token.
      */
-    override fun onCleared() {
-        super.onCleared()
-        // Clear passwords from UI state
-        _uiState.update { it.copy(password = "", confirmPassword = "") }
+    fun handleWalletCallback(sessionToken: String) {
+        viewModelScope.launch {
+            try {
+                authRepository.saveSession(sessionToken)
+                _uiState.update { it.copy(isWaitingForWallet = false, isRegistered = true) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isWaitingForWallet = false, registrationError = e.message)
+                }
+            }
+        }
     }
 }
