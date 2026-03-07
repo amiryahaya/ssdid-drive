@@ -81,6 +81,11 @@ public class SessionStore : IHostedService
             Interlocked.Decrement(ref _sessionCount);
     }
 
+    internal void CreateSessionDirect(string did, string token)
+    {
+        _sessions[token] = new SessionEntry(did, DateTimeOffset.UtcNow);
+    }
+
     // ── SSE completion waiters ──
 
     public Task<string> WaitForCompletion(string challengeId, CancellationToken ct)
