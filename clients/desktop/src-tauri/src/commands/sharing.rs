@@ -48,13 +48,10 @@ pub async fn create_share(
         message,
     };
 
-    // Get signing keys from session for share signature
-    let signing_keys = state.auth_service().get_signing_keys().ok();
-    let signing_keys_ref = signing_keys
-        .as_ref()
-        .map(|(ml_dsa, kaz_sign)| (ml_dsa.as_str(), kaz_sign.as_str()));
-
-    state.sharing_service().create_share(request, signing_keys_ref).await
+    // In the SSDID model, signing is handled by the wallet.
+    // Pass None for signing keys; share signing will be handled
+    // via wallet-based signatures in a future update.
+    state.sharing_service().create_share(request, None).await
 }
 
 /// Revoke an existing share

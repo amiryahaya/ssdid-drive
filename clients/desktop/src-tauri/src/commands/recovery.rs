@@ -86,12 +86,12 @@ pub async fn approve_recovery_request(
 
     tracing::info!("Approving recovery request: {}", recovery_id);
 
-    // Get the trustee's KEM private keys from the session
-    let (ml_kem_sk, kaz_kem_sk) = state.auth_service().get_kem_keys()?;
-
+    // In the SSDID model, KEM operations are handled by the wallet.
+    // Pass empty strings as placeholders; the recovery service will
+    // need to be updated to use wallet-based decapsulation.
     state
         .recovery_service()
-        .approve_recovery_request(&recovery_id, &ml_kem_sk, &kaz_kem_sk)
+        .approve_recovery_request(&recovery_id, "", "")
         .await
 }
 

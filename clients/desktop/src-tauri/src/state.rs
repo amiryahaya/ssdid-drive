@@ -2,7 +2,7 @@
 
 use crate::error::{AppError, AppResult};
 use crate::models::User;
-use crate::services::{ApiClient, AuthService, BiometricService, CryptoService, FileService, NotificationService, OidcService, PiiServiceClient, RecoveryService, SharingService, SyncService, TenantService, WebAuthnService};
+use crate::services::{ApiClient, AuthService, BiometricService, CryptoService, FileService, NotificationService, PiiServiceClient, RecoveryService, SharingService, SyncService, TenantService};
 use crate::storage::{Database, KeyringStore};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ pub struct AppState {
     /// API client for backend communication
     api_client: Arc<ApiClient>,
 
-    /// Authentication service
+    /// Authentication service (SSDID session management)
     auth_service: Arc<AuthService>,
 
     /// Cryptographic service
@@ -38,12 +38,6 @@ pub struct AppState {
 
     /// Biometric service
     biometric_service: Arc<BiometricService>,
-
-    /// OIDC authentication service
-    oidc_service: Arc<OidcService>,
-
-    /// WebAuthn authentication service
-    webauthn_service: Arc<WebAuthnService>,
 
     /// PII service client
     pii_service: Arc<PiiServiceClient>,
@@ -78,11 +72,10 @@ impl AppState {
         // Initialize crypto service
         let crypto_service = Arc::new(CryptoService::new()?);
 
-        // Initialize auth service
+        // Initialize auth service (simplified for SSDID)
         let auth_service = Arc::new(AuthService::new(
             api_client.clone(),
             keyring.clone(),
-            crypto_service.clone(),
         ));
 
         // Initialize file service
@@ -118,18 +111,6 @@ impl AppState {
         // Initialize biometric service (loads saved preference from database)
         let biometric_service = Arc::new(BiometricService::new(database.clone()));
 
-        // Initialize OIDC service
-        let oidc_service = Arc::new(OidcService::new(
-            api_client.clone(),
-            crypto_service.clone(),
-        ));
-
-        // Initialize WebAuthn service
-        let webauthn_service = Arc::new(WebAuthnService::new(
-            api_client.clone(),
-            crypto_service.clone(),
-        ));
-
         // Initialize PII service client
         let pii_service = Arc::new(PiiServiceClient::new()?);
 
@@ -137,7 +118,6 @@ impl AppState {
         let sync_service = Arc::new(SyncService::new(database.clone()));
 
         // Set up token refresh callback
-        // Capture the keyring and base URL for token refresh
         let keyring_for_refresh = keyring.clone();
         let base_url_for_refresh = api_client.base_url().to_string();
         let refresh_callback: crate::services::RefreshCallback = Arc::new(move || {
@@ -187,6 +167,9 @@ impl AppState {
 
         api_client.set_refresh_callback(refresh_callback);
 
+        // Attempt to restore session from keyring
+        let has_session = auth_service.restore_session();
+
         Ok(Self {
             current_user: RwLock::new(None),
             api_client,
@@ -198,13 +181,11 @@ impl AppState {
             notification_service,
             tenant_service,
             biometric_service,
-            oidc_service,
-            webauthn_service,
             pii_service,
             sync_service,
             database,
             keyring,
-            is_locked: RwLock::new(true),
+            is_locked: RwLock::new(!has_session),
         })
     }
 
@@ -283,16 +264,6 @@ impl AppState {
     /// Get the biometric service
     pub fn biometric_service(&self) -> &Arc<BiometricService> {
         &self.biometric_service
-    }
-
-    /// Get the OIDC service
-    pub fn oidc_service(&self) -> &Arc<OidcService> {
-        &self.oidc_service
-    }
-
-    /// Get the WebAuthn service
-    pub fn webauthn_service(&self) -> &Arc<WebAuthnService> {
-        &self.webauthn_service
     }
 
     /// Get the PII service client

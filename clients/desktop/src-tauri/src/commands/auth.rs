@@ -1,85 +1,35 @@
-//! Authentication commands
+//! Authentication commands (SSDID session model)
+//!
+//! The SSDID Wallet handles identity and signing. These commands
+//! manage the session token and user state on the desktop side.
 
 use crate::error::AppResult;
-use crate::models::{
-    AuthStatus, ChangePasswordRequest, Device, LoginCredentials, LoginResponse,
-    RegistrationInfo, RegistrationResponse, UpdateProfileRequest, User,
-};
+use crate::models::{AuthStatus, User};
 use crate::state::AppState;
 use tauri::State;
 
-/// Login with email and password
+/// Save a session token after successful SSDID wallet authentication
 #[tauri::command]
-pub async fn login(
-    email: String,
-    password: String,
+pub async fn save_session(
+    token: String,
     state: State<'_, AppState>,
-) -> AppResult<LoginResponse> {
-    tracing::info!("Login attempt for: {}", email);
-
-    let credentials = LoginCredentials {
-        email,
-        password,
-        device_id: None,
-    };
-
-    let response = state.auth_service().login(credentials).await?;
-
-    // Update app state
-    state.set_current_user(Some(response.user.clone()));
+) -> AppResult<()> {
+    tracing::info!("Saving session token from SSDID wallet auth");
+    state.auth_service().save_session(&token)?;
     state.unlock();
 
-    tracing::info!("Login successful for user: {}", response.user.id);
-    Ok(response)
-}
-
-/// Register a new user
-#[tauri::command]
-pub async fn register(
-    email: String,
-    password: String,
-    name: String,
-    invitation_token: String,
-    state: State<'_, AppState>,
-) -> AppResult<RegistrationResponse> {
-    tracing::info!("Registration attempt for: {}", email);
-
-    let info = RegistrationInfo {
-        email,
-        password,
-        name,
-        invitation_token,
-    };
-
-    let response = state.auth_service().register(info).await?;
-
-    // Update app state
-    state.set_current_user(Some(response.user.clone()));
-    state.unlock();
-
-    tracing::info!("Registration successful for user: {}", response.user.id);
-    Ok(response)
-}
-
-/// Logout the current user
-#[tauri::command]
-pub async fn logout(state: State<'_, AppState>) -> AppResult<()> {
-    let user_id = state.current_user().map(|u| u.id.clone());
-    tracing::info!("Logout for user: {:?}", user_id);
-
-    state.auth_service().logout().await?;
-
-    // Clear app state
-    state.set_current_user(None);
-    state.lock();
+    // Fetch and cache the current user
+    match state.auth_service().get_current_user().await {
+        Ok(user) => {
+            tracing::info!("Session saved for user: {}", user.id);
+            state.set_current_user(Some(user));
+        }
+        Err(e) => {
+            tracing::warn!("Session saved but failed to fetch user: {}", e);
+        }
+    }
 
     Ok(())
-}
-
-/// Get the current authenticated user
-#[tauri::command]
-pub async fn get_current_user(state: State<'_, AppState>) -> AppResult<Option<User>> {
-    Ok(state.current_user())
 }
 
 /// Check the current authentication status
@@ -95,59 +45,40 @@ pub async fn check_auth_status(state: State<'_, AppState>) -> AppResult<AuthStat
     })
 }
 
-/// Change the user's password
+/// Get the current authenticated user
 #[tauri::command]
-pub async fn change_password(
-    current_password: String,
-    new_password: String,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
-    state.require_auth()?;
-    tracing::info!("Password change requested");
+pub async fn get_current_user(state: State<'_, AppState>) -> AppResult<Option<User>> {
+    // If we have a cached user, return it
+    if let Some(user) = state.current_user() {
+        return Ok(Some(user));
+    }
 
-    let request = ChangePasswordRequest {
-        current_password,
-        new_password,
-    };
-
-    state.auth_service().change_password(request).await
+    // If we have a session but no cached user, try to fetch
+    if state.auth_service().is_authenticated() {
+        match state.auth_service().get_current_user().await {
+            Ok(user) => {
+                state.set_current_user(Some(user.clone()));
+                state.unlock();
+                Ok(Some(user))
+            }
+            Err(_) => Ok(None),
+        }
+    } else {
+        Ok(None)
+    }
 }
 
-/// Update user profile
+/// Logout the current user
 #[tauri::command]
-pub async fn update_profile(
-    name: Option<String>,
-    state: State<'_, AppState>,
-) -> AppResult<User> {
-    state.require_auth()?;
-    tracing::info!("Profile update requested");
+pub async fn logout(state: State<'_, AppState>) -> AppResult<()> {
+    let user_id = state.current_user().map(|u| u.id.clone());
+    tracing::info!("Logout for user: {:?}", user_id);
 
-    let request = UpdateProfileRequest { name };
-    let user = state.auth_service().update_profile(request).await?;
+    state.auth_service().logout().await?;
 
-    // Update app state with new user info
-    state.set_current_user(Some(user.clone()));
+    // Clear app state
+    state.set_current_user(None);
+    state.lock();
 
-    Ok(user)
-}
-
-/// List all devices/sessions for the current user
-#[tauri::command]
-pub async fn list_devices(state: State<'_, AppState>) -> AppResult<Vec<Device>> {
-    state.require_auth()?;
-    tracing::debug!("Listing devices");
-
-    state.auth_service().list_devices().await
-}
-
-/// Revoke a device/session
-#[tauri::command]
-pub async fn revoke_device(
-    device_id: String,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
-    state.require_auth()?;
-    tracing::info!("Revoking device: {}", device_id);
-
-    state.auth_service().revoke_device(&device_id).await
+    Ok(())
 }

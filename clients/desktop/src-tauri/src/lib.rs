@@ -95,50 +95,15 @@ pub fn run() {
                 tracing::error!("Failed to setup system tray: {}", e);
             }
 
-            // Register deep-link handler for OIDC callbacks
-            let handle = app.handle().clone();
-            app.listen("deep-link://new-url", move |event| {
-                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
-                    if let Some(urls) = payload.get("urls").and_then(|u| u.as_array()) {
-                        for url_val in urls {
-                            if let Some(url) = url_val.as_str() {
-                                // Check for OIDC callback URLs
-                                if url.starts_with("ssdid-drive://oidc/callback") {
-                                    tracing::info!("OIDC callback deep-link received");
-                                    // Parse code and state from URL
-                                    if let Ok(parsed) = url::Url::parse(url) {
-                                        let params: std::collections::HashMap<_, _> =
-                                            parsed.query_pairs().collect();
-                                        if let (Some(code), Some(state)) =
-                                            (params.get("code"), params.get("state"))
-                                        {
-                                            let _ = handle.emit("oidc-callback", serde_json::json!({
-                                                "code": code.as_ref(),
-                                                "state": state.as_ref(),
-                                            }));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
             tracing::info!("Application setup complete");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // Auth commands
-            commands::auth::login,
-            commands::auth::register,
-            commands::auth::logout,
-            commands::auth::get_current_user,
+            // Auth commands (SSDID session model)
+            commands::auth::save_session,
             commands::auth::check_auth_status,
-            commands::auth::change_password,
-            commands::auth::update_profile,
-            commands::auth::list_devices,
-            commands::auth::revoke_device,
+            commands::auth::get_current_user,
+            commands::auth::logout,
             // File commands
             commands::files::list_files,
             commands::files::upload_file,
@@ -218,22 +183,6 @@ pub fn run() {
             commands::sync::get_pending_sync_count,
             commands::sync::trigger_sync,
             commands::sync::clear_sync_queue,
-            // OIDC commands
-            commands::oidc::oidc_get_providers,
-            commands::oidc::oidc_begin_login,
-            commands::oidc::oidc_handle_callback,
-            commands::oidc::oidc_complete_registration,
-            // WebAuthn commands
-            commands::webauthn::webauthn_login_begin,
-            commands::webauthn::webauthn_login_complete,
-            commands::webauthn::webauthn_register_begin,
-            commands::webauthn::webauthn_register_complete,
-            commands::webauthn::webauthn_add_credential_begin,
-            commands::webauthn::webauthn_add_credential_complete,
-            // Credential management commands
-            commands::credentials::list_credentials,
-            commands::credentials::rename_credential,
-            commands::credentials::delete_credential,
             // File Provider commands (macOS Finder integration)
             commands::file_provider::register_file_provider_domain,
             commands::file_provider::unregister_file_provider_domain,

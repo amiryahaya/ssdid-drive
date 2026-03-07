@@ -104,15 +104,9 @@ pub async fn sign_data(data: String, state: State<'_, AppState>) -> AppResult<Si
 
     tracing::debug!("Signing {} bytes of data", data.len());
 
-    // Get signing keys from session
-    let (ml_dsa_sk, kaz_sign_sk) = state.auth_service().get_signing_keys()?;
-
-    // Sign using the session keys
-    let result = state.crypto_service().sign_with_key(
-        data.as_bytes(),
-        &ml_dsa_sk,
-        &kaz_sign_sk,
-    )?;
+    // In the SSDID model, signing is handled by the wallet.
+    // The desktop app no longer holds private signing keys.
+    let result = state.crypto_service().sign_data(data.as_bytes())?;
 
     Ok(result)
 }
