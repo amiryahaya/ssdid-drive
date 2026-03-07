@@ -1,9 +1,0 @@
-#!/bin/sh
-# Script to start the Phoenix server
-# This is a convenience wrapper that sets PHX_SERVER=true
-
-set -e
-
-cd -P -- "$(dirname -- "$0")/.."
-
-PHX_SERVER=true exec ./bin/secure_sharing start
