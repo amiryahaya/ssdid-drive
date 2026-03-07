@@ -117,6 +117,7 @@ app.UseWhen(
         if (path.StartsWithSegments("/api/auth/ssdid/server-info")) return false;
         if (path.StartsWithSegments("/api/auth/ssdid/register")) return false;
         if (path.StartsWithSegments("/api/auth/ssdid/authenticate")) return false;
+        if (path.StartsWithSegments("/api/auth/ssdid/events")) return false;
 
         return true;
     },
