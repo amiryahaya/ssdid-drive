@@ -34,11 +34,19 @@ public static class UploadFile
             return AppError.NotFound("Folder not found").ToProblemResult();
 
         // Check ownership or share access with write permission
-        var hasAccess = folder.OwnerId == user.Id
-            || await db.Shares.AnyAsync(s =>
-                s.ResourceId == folderId && s.ResourceType == "folder" && s.SharedWithId == user.Id
-                && s.Permission == "write"
-                && (s.ExpiresAt == null || s.ExpiresAt > DateTimeOffset.UtcNow), ct);
+        var now = DateTimeOffset.UtcNow;
+        var hasWriteShare = false;
+        if (folder.OwnerId != user.Id)
+        {
+            // Materialize first, then filter expiry client-side (InMemory/SQLite compatibility)
+            hasWriteShare = (await db.Shares
+                .Where(s => s.ResourceId == folderId && s.ResourceType == "folder"
+                    && s.SharedWithId == user.Id && s.Permission == "write")
+                .Select(s => new { s.ExpiresAt })
+                .ToListAsync(ct))
+                .Any(s => s.ExpiresAt == null || s.ExpiresAt > now);
+        }
+        var hasAccess = folder.OwnerId == user.Id || hasWriteShare;
 
         if (!hasAccess)
             return AppError.Forbidden("You do not have write access to this folder").ToProblemResult();
