@@ -120,11 +120,37 @@ pub struct FilePreview {
     pub can_preview: bool,
 }
 
-/// Create folder request
+/// Create folder request (internal, before encryption)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateFolderRequest {
     pub name: String,
     pub parent_id: Option<String>,
+}
+
+/// Create folder API request (with encrypted folder key)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateFolderApiRequest {
+    pub name: String,
+    pub parent_id: Option<String>,
+    /// KEM-encapsulated folder key ciphertext (base64)
+    pub encrypted_folder_key: String,
+    /// The folder key encrypted with the KEM shared secret (base64, nonce || ciphertext)
+    pub wrapped_folder_key: String,
+    /// KEM algorithm used
+    pub kem_algorithm: String,
+}
+
+/// Folder key info returned by API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FolderKeyInfo {
+    /// KEM ciphertext for key decapsulation (base64)
+    pub encrypted_folder_key: String,
+    /// The folder key encrypted with the KEM shared secret (base64, nonce || ciphertext)
+    pub wrapped_folder_key: String,
+    /// KEM algorithm used
+    pub kem_algorithm: String,
+    /// Folder ID
+    pub folder_id: String,
 }
 
 /// Rename item request

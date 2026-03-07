@@ -138,6 +138,34 @@ impl Database {
         f(&conn).map_err(|e| AppError::Database(e.to_string()))
     }
 
+    /// Get a single setting value by key
+    pub fn get_setting(&self, key: &str) -> AppResult<Option<String>> {
+        let key = key.to_string();
+        self.with_connection(|conn| {
+            let result: Option<String> = conn
+                .query_row(
+                    "SELECT value FROM settings WHERE key = ?1",
+                    params![key],
+                    |row| row.get(0),
+                )
+                .ok();
+            Ok(result)
+        })
+    }
+
+    /// Set a single setting value by key
+    pub fn set_setting(&self, key: &str, value: &str) -> AppResult<()> {
+        let key = key.to_string();
+        let value = value.to_string();
+        self.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                params![key, value],
+            )?;
+            Ok(())
+        })
+    }
+
     /// Get application settings
     pub async fn get_settings(&self) -> AppResult<AppSettings> {
         self.with_connection(|conn| {

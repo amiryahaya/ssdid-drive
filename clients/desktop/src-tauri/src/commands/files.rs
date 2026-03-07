@@ -81,11 +81,13 @@ pub async fn download_file(
     Ok(result_path)
 }
 
-/// Create a new folder
+/// Create a new folder with KEM-encapsulated folder key
 #[tauri::command]
 pub async fn create_folder(
     name: String,
     parent_id: Option<String>,
+    ml_kem_pk: String,
+    kaz_kem_pk: String,
     state: State<'_, AppState>,
 ) -> AppResult<FileItem> {
     state.require_auth()?;
@@ -95,9 +97,12 @@ pub async fn create_folder(
 
     let request = CreateFolderRequest { name, parent_id };
 
-    let folder = state.file_service().create_folder(request).await?;
+    let folder = state
+        .file_service()
+        .create_folder(request, &ml_kem_pk, &kaz_kem_pk)
+        .await?;
 
-    tracing::info!("Folder created successfully: {}", folder.id);
+    tracing::info!("Folder created successfully with KEM key: {}", folder.id);
     Ok(folder)
 }
 

@@ -111,6 +111,40 @@ pub async fn sign_data(data: String, state: State<'_, AppState>) -> AppResult<Si
     Ok(result)
 }
 
+/// User's KEM public keys response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserKemPublicKeys {
+    pub ml_kem_pk: String,
+    pub kaz_kem_pk: String,
+}
+
+/// Get the current user's KEM public keys (for folder key encapsulation)
+#[tauri::command]
+pub async fn get_user_kem_public_keys(
+    state: State<'_, AppState>,
+) -> AppResult<UserKemPublicKeys> {
+    state.require_auth()?;
+    state.require_unlocked()?;
+
+    tracing::debug!("Getting user KEM public keys");
+
+    // Fetch public keys from local database settings
+    let ml_kem_pk = state
+        .database()
+        .get_setting("ml_kem_pk")?
+        .ok_or_else(|| crate::error::AppError::Crypto("ML-KEM public key not found".to_string()))?;
+
+    let kaz_kem_pk = state
+        .database()
+        .get_setting("kaz_kem_pk")?
+        .ok_or_else(|| crate::error::AppError::Crypto("KAZ-KEM public key not found".to_string()))?;
+
+    Ok(UserKemPublicKeys {
+        ml_kem_pk,
+        kaz_kem_pk,
+    })
+}
+
 /// Verify a combined signature (ML-DSA-65 + KAZ-SIGN-256)
 #[tauri::command]
 pub async fn verify_signature(

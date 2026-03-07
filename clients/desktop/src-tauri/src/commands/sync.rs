@@ -131,11 +131,26 @@ pub async fn trigger_sync(state: State<'_, AppState>) -> Result<(), String> {
                     .map(|_| ())
             }
             OfflineOperation::CreateFolder { name, parent_id } => {
+                // Fetch user's KEM public keys for folder key encapsulation
+                let ml_kem_pk = state
+                    .database()
+                    .get_setting("ml_kem_pk")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                let kaz_kem_pk = state
+                    .database()
+                    .get_setting("kaz_kem_pk")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+
                 file_service
-                    .create_folder(CreateFolderRequest {
-                        name,
-                        parent_id,
-                    })
+                    .create_folder(
+                        CreateFolderRequest { name, parent_id },
+                        &ml_kem_pk,
+                        &kaz_kem_pk,
+                    )
                     .await
                     .map(|_| ())
             }

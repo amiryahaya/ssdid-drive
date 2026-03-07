@@ -407,6 +407,122 @@ impl CryptoService {
         Ok(ml_dsa_valid && kaz_sign_valid)
     }
 
+    // ==================== Folder Key Management ====================
+
+    /// Generate a random 256-bit folder key
+    pub fn generate_folder_key(&self) -> AppResult<Vec<u8>> {
+        Ok(generate_key())
+    }
+
+    /// Generate a random 256-bit file key
+    pub fn generate_file_key(&self) -> AppResult<Vec<u8>> {
+        Ok(generate_key())
+    }
+
+    /// Encrypt a file's content with AES-256-GCM using a file key.
+    /// Returns (nonce || ciphertext_with_tag).
+    pub fn encrypt_file_content(&self, plaintext: &[u8], key: &[u8]) -> AppResult<Vec<u8>> {
+        encrypt_aes_gcm(plaintext, key)
+            .map_err(|e| AppError::Crypto(format!("File encryption failed: {}", e)))
+    }
+
+    /// Decrypt a file's content with AES-256-GCM using a file key.
+    /// Expects (nonce || ciphertext_with_tag).
+    pub fn decrypt_file_content(&self, ciphertext: &[u8], key: &[u8]) -> AppResult<Vec<u8>> {
+        decrypt_aes_gcm(ciphertext, key)
+            .map_err(|e| AppError::Crypto(format!("File decryption failed: {}", e)))
+    }
+
+    /// Wrap a key (e.g., file key) with a wrapping key (e.g., folder key) using AES-256-GCM.
+    /// Returns base64-encoded (nonce || ciphertext_with_tag).
+    pub fn wrap_key(&self, key_to_wrap: &[u8], wrapping_key: &[u8]) -> AppResult<String> {
+        let wrapped = encrypt_aes_gcm(key_to_wrap, wrapping_key)
+            .map_err(|e| AppError::Crypto(format!("Key wrapping failed: {}", e)))?;
+        Ok(BASE64.encode(&wrapped))
+    }
+
+    /// Unwrap a key using AES-256-GCM.
+    /// Input is base64-encoded (nonce || ciphertext_with_tag).
+    pub fn unwrap_key(&self, wrapped_key_b64: &str, wrapping_key: &[u8]) -> AppResult<Vec<u8>> {
+        let wrapped = BASE64
+            .decode(wrapped_key_b64)
+            .map_err(|e| AppError::Crypto(format!("Invalid wrapped key: {}", e)))?;
+        decrypt_aes_gcm(&wrapped, wrapping_key)
+            .map_err(|e| AppError::Crypto(format!("Key unwrapping failed: {}", e)))
+    }
+
+    /// Encapsulate a folder key for storage: KEM-encapsulate to get shared secret,
+    /// then AES-wrap the folder key with that shared secret.
+    /// Returns (kem_ciphertext_b64, wrapped_folder_key_b64, algorithm).
+    pub fn encapsulate_folder_key(
+        &self,
+        folder_key: &[u8],
+        ml_kem_pk_b64: &str,
+        kaz_kem_pk_b64: &str,
+    ) -> AppResult<(String, String, String)> {
+        let (kem_ct_b64, mut shared_secret) = self.encapsulate(ml_kem_pk_b64, kaz_kem_pk_b64)?;
+
+        // AES-wrap the folder key with the KEM shared secret
+        let wrapped_folder_key_b64 = self.wrap_key(folder_key, &shared_secret)?;
+
+        // Zeroize shared secret
+        shared_secret.zeroize();
+
+        Ok((kem_ct_b64, wrapped_folder_key_b64, "ML-KEM-768+KAZ-KEM-256".to_string()))
+    }
+
+    /// Decapsulate and unwrap a folder key.
+    /// Returns the plaintext folder key.
+    pub fn decapsulate_folder_key(
+        &self,
+        kem_ct_b64: &str,
+        wrapped_folder_key_b64: &str,
+        ml_kem_sk_b64: &str,
+        kaz_kem_sk_b64: &str,
+    ) -> AppResult<Vec<u8>> {
+        let mut shared_secret = self.decapsulate(kem_ct_b64, ml_kem_sk_b64, kaz_kem_sk_b64)?;
+
+        // Unwrap the folder key
+        let folder_key = self.unwrap_key(wrapped_folder_key_b64, &shared_secret)?;
+
+        // Zeroize shared secret
+        shared_secret.zeroize();
+
+        Ok(folder_key)
+    }
+
+    /// Re-encapsulate a folder key for a new recipient (used in sharing).
+    /// Decapsulates with owner's keys, then encapsulates with recipient's keys.
+    pub fn re_encapsulate_folder_key(
+        &self,
+        kem_ct_b64: &str,
+        wrapped_folder_key_b64: &str,
+        owner_ml_kem_sk_b64: &str,
+        owner_kaz_kem_sk_b64: &str,
+        recipient_ml_kem_pk_b64: &str,
+        recipient_kaz_kem_pk_b64: &str,
+    ) -> AppResult<(String, String, String)> {
+        // Decrypt folder key with owner's private keys
+        let mut folder_key = self.decapsulate_folder_key(
+            kem_ct_b64,
+            wrapped_folder_key_b64,
+            owner_ml_kem_sk_b64,
+            owner_kaz_kem_sk_b64,
+        )?;
+
+        // Re-encapsulate for recipient
+        let result = self.encapsulate_folder_key(
+            &folder_key,
+            recipient_ml_kem_pk_b64,
+            recipient_kaz_kem_pk_b64,
+        );
+
+        // Zeroize folder key
+        folder_key.zeroize();
+
+        result
+    }
+
     // ==================== Key Encapsulation ====================
 
     /// Encapsulate a shared secret for a recipient

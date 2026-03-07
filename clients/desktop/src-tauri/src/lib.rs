@@ -141,6 +141,7 @@ pub fn run() {
             commands::crypto::decrypt_data,
             commands::crypto::sign_data,
             commands::crypto::verify_signature,
+            commands::crypto::get_user_kem_public_keys,
             // Notification commands
             commands::notifications::get_notifications,
             commands::notifications::mark_notification_read,

@@ -268,9 +268,14 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   createFolder: async (name, parentId) => {
     try {
+      // Fetch user's KEM public keys for folder key encapsulation
+      const keys = await invoke<{ ml_kem_pk: string; kaz_kem_pk: string }>('get_user_kem_public_keys');
+
       await invoke('create_folder', {
         name,
         parentId: parentId ?? null,
+        mlKemPk: keys.ml_kem_pk,
+        kazKemPk: keys.kaz_kem_pk,
       });
       await get().loadFiles(get().currentFolder?.id ?? null);
     } catch (error) {

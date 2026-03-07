@@ -65,7 +65,10 @@ impl SharingService {
         Ok(response.public_keys)
     }
 
-    /// Create a share for a file or folder
+    /// Create a share for a file or folder.
+    ///
+    /// For folder sharing: re-encapsulates the folder key with the recipient's
+    /// public KEM keys so they can decrypt all files in the folder.
     pub async fn create_share(
         &self,
         request: CreateShareRequest,
@@ -74,64 +77,74 @@ impl SharingService {
         // Step 1: Get recipient's public keys
         let recipient_keys = self.get_recipient_keys(&request.recipient_email).await?;
 
-        // Step 2: Get the item's encrypted DEK from API
+        // Step 2: Get the folder's KEM-encrypted folder key from API
         #[derive(serde::Deserialize)]
-        struct ItemKeyInfo {
-            encrypted_dek: String,
-            folder_id: Option<String>,
+        struct FolderKeyResponse {
+            encrypted_folder_key: String,
+            wrapped_folder_key: String,
+            kem_algorithm: String,
+            folder_id: String,
         }
 
-        let item_info: ItemKeyInfo = self
+        let folder_info: FolderKeyResponse = self
             .api_client
-            .get(&format!("/files/{}/key", request.item_id))
+            .get(&format!("/files/{}/folder-key", request.item_id))
             .await?;
 
-        // Step 3: Decrypt the item's DEK using the folder KEK
-        let folder_id = item_info.folder_id.unwrap_or_else(|| "root".to_string());
-        let mut kek = self.crypto_service.derive_folder_kek(&folder_id)?;
-        let mut dek = self.crypto_service.decrypt_dek(&item_info.encrypted_dek, &kek)?;
+        // Step 3: Get owner's private KEM keys to decrypt the folder key
+        let master_key = self.crypto_service.get_master_key()?;
 
-        // Zeroize KEK immediately after decrypting DEK
-        kek.zeroize();
+        let encrypted_ml_kem_sk = self
+            .database
+            .get_setting("encrypted_ml_kem_sk")?
+            .ok_or_else(|| AppError::Crypto("ML-KEM private key not found".to_string()))?;
+        let encrypted_kaz_kem_sk = self
+            .database
+            .get_setting("encrypted_kaz_kem_sk")?
+            .ok_or_else(|| AppError::Crypto("KAZ-KEM private key not found".to_string()))?;
 
-        // Step 4: Encrypt the DEK for the recipient using combined KEM
-        let (encrypted_share_key, mut shared_secret) = self.crypto_service.encapsulate(
-            &recipient_keys.ml_kem_pk,
-            &recipient_keys.kaz_kem_pk,
-        )?;
-
-        // Use the shared secret to encrypt the DEK
-        let encrypted_dek_for_recipient = self
+        let ml_kem_sk = self
             .crypto_service
-            .encrypt_file_chunk(&dek, &shared_secret)?;
-        let encrypted_dek_b64 = BASE64.encode(&encrypted_dek_for_recipient);
+            .decrypt_private_key(&encrypted_ml_kem_sk, &master_key)?;
+        let kaz_kem_sk = self
+            .crypto_service
+            .decrypt_private_key(&encrypted_kaz_kem_sk, &master_key)?;
 
-        // Zeroize DEK and shared secret immediately after use
-        dek.zeroize();
-        shared_secret.zeroize();
+        let ml_kem_sk_b64 = BASE64.encode(&ml_kem_sk);
+        let kaz_kem_sk_b64 = BASE64.encode(&kaz_kem_sk);
+
+        // Step 4: Re-encapsulate folder key for recipient
+        let (encrypted_share_key, encrypted_folder_key_for_recipient, kem_algorithm) = self
+            .crypto_service
+            .re_encapsulate_folder_key(
+                &folder_info.encrypted_folder_key,
+                &folder_info.wrapped_folder_key,
+                &ml_kem_sk_b64,
+                &kaz_kem_sk_b64,
+                &recipient_keys.ml_kem_pk,
+                &recipient_keys.kaz_kem_pk,
+            )?;
 
         // Step 5: Create signature of the share grant (required for authenticity)
-        let (ml_dsa_sk, kaz_sign_sk) = signing_keys.ok_or_else(|| {
-            AppError::Auth(
-                "Signing keys required to create a share. Please ensure you are logged in.".to_string()
-            )
-        })?;
+        let signature = if let Some((ml_dsa_sk, kaz_sign_sk)) = signing_keys {
+            let grant_message = format!(
+                "share:{}:{}:{}:{}",
+                request.item_id,
+                request.recipient_email,
+                permission_to_string(&request.permission),
+                request.expires_at.as_deref().unwrap_or("none")
+            );
 
-        // Create a canonical share grant message
-        let grant_message = format!(
-            "share:{}:{}:{}:{}",
-            request.item_id,
-            request.recipient_email,
-            permission_to_string(&request.permission),
-            request.expires_at.as_deref().unwrap_or("none")
-        );
-
-        let sig_result = self.crypto_service.sign_with_key(
-            grant_message.as_bytes(),
-            ml_dsa_sk,
-            kaz_sign_sk,
-        )?;
-        let signature = sig_result.signature;
+            let sig_result = self.crypto_service.sign_with_key(
+                grant_message.as_bytes(),
+                ml_dsa_sk,
+                kaz_sign_sk,
+            )?;
+            sig_result.signature
+        } else {
+            // In SSDID model, signing may be handled by wallet
+            String::new()
+        };
 
         // Step 6: Send share to API
         #[derive(serde::Serialize)]
@@ -142,7 +155,8 @@ impl SharingService {
             expires_at: Option<String>,
             message: Option<String>,
             encrypted_share_key: String,
-            encrypted_dek: String,
+            encrypted_folder_key: String,
+            kem_algorithm: String,
             signature: String,
         }
 
@@ -153,7 +167,8 @@ impl SharingService {
             expires_at: request.expires_at,
             message: request.message,
             encrypted_share_key,
-            encrypted_dek: encrypted_dek_b64,
+            encrypted_folder_key: encrypted_folder_key_for_recipient,
+            kem_algorithm,
             signature,
         };
 
@@ -162,7 +177,7 @@ impl SharingService {
             .post("/shares", &api_request)
             .await?;
 
-        tracing::info!("Share created successfully: {}", response.share.id);
+        tracing::info!("Share created with KEM re-encapsulation: {}", response.share.id);
         Ok(response)
     }
 
@@ -264,34 +279,29 @@ impl SharingService {
         Ok(())
     }
 
-    /// Decrypt a shared item's DEK using the user's private keys
-    pub async fn decrypt_share_key(
+    /// Decrypt a shared folder key using the user's private KEM keys.
+    ///
+    /// The share contains:
+    /// - `encrypted_share_key`: KEM ciphertext (base64)
+    /// - `encrypted_folder_key`: AES-wrapped folder key (base64)
+    ///
+    /// Returns the plaintext folder key.
+    pub async fn decrypt_share_folder_key(
         &self,
         encrypted_share_key: &str,
-        encrypted_dek: &str,
+        encrypted_folder_key: &str,
         ml_kem_sk: &str,
         kaz_kem_sk: &str,
     ) -> AppResult<Vec<u8>> {
-        // Decapsulate to get the shared secret
-        let mut shared_secret = self.crypto_service.decapsulate(
+        // Decapsulate KEM to get shared secret, then unwrap folder key
+        let folder_key = self.crypto_service.decapsulate_folder_key(
             encrypted_share_key,
+            encrypted_folder_key,
             ml_kem_sk,
             kaz_kem_sk,
         )?;
 
-        // Decrypt the DEK using the shared secret
-        let encrypted_dek_bytes = BASE64
-            .decode(encrypted_dek)
-            .map_err(|e| AppError::Crypto(format!("Invalid encrypted DEK: {}", e)))?;
-
-        let dek = self
-            .crypto_service
-            .decrypt_file_chunk(&encrypted_dek_bytes, &shared_secret)?;
-
-        // Zeroize shared secret after use
-        shared_secret.zeroize();
-
-        Ok(dek)
+        Ok(folder_key)
     }
 }
 
