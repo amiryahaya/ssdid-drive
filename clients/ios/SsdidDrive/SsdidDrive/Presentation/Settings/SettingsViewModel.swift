@@ -231,7 +231,7 @@ final class SettingsViewModel: BaseViewModel {
         case .organization:
             return [.tenant]
         case .security:
-            var items: [SettingsItem] = [.credentials]
+            var items: [SettingsItem] = []
             if biometricType != .none {
                 items.append(.biometric)
             }

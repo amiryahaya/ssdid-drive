@@ -6,13 +6,18 @@ protocol AuthCoordinatorDelegate: AnyObject {
     func authDidRequestLogout()
 }
 
-/// Coordinator for authentication flow (login, register, invitation)
+/// Coordinator for SSDID wallet authentication flow.
+/// Displays a QR code for wallet scanning (iPad/Mac cross-device) and
+/// an "Open SSDID Wallet" button for same-device iPhone flow.
 final class AuthCoordinator: BaseCoordinator {
 
     // MARK: - Properties
 
     weak var delegate: AuthCoordinatorDelegate?
-    private var pendingInviteToken: String?
+
+    /// Reference to the current login view model so the SceneDelegate can
+    /// deliver auth callback tokens to it.
+    private(set) var loginViewModel: LoginViewModel?
 
     // MARK: - Start
 
@@ -23,118 +28,27 @@ final class AuthCoordinator: BaseCoordinator {
     // MARK: - Navigation
 
     func showLogin() {
-        let viewModel = LoginViewModel(authRepository: container.authRepository)
+        let viewModel = LoginViewModel(keychainManager: container.keychainManager)
         viewModel.coordinatorDelegate = self
+        self.loginViewModel = viewModel
 
-        let oidcViewModel = OidcLoginViewModel(oidcRepository: container.oidcRepository)
-        oidcViewModel.delegate = self
-
-        let passkeyViewModel = PasskeyLoginViewModel(webAuthnRepository: container.webAuthnRepository)
-        passkeyViewModel.delegate = self
-
-        let loginVC = LoginViewController(
-            viewModel: viewModel,
-            oidcViewModel: oidcViewModel,
-            passkeyViewModel: passkeyViewModel
-        )
+        let loginVC = LoginViewController(viewModel: viewModel)
         navigationController.setViewControllers([loginVC], animated: true)
     }
 
-    func showRegister() {
-        let viewModel = RegisterViewModel(authRepository: container.authRepository)
-        viewModel.coordinatorDelegate = self
-
-        let registerVC = RegisterViewController(viewModel: viewModel)
-        navigationController.pushViewController(registerVC, animated: true)
-    }
-
-    func showInviteAccept(token: String) {
-        let viewModel = InviteAcceptViewModel(authRepository: container.authRepository, token: token)
-        viewModel.coordinatorDelegate = self
-
-        let inviteVC = InviteAcceptViewController(viewModel: viewModel)
-        navigationController.setViewControllers([inviteVC], animated: true)
-    }
-
-    func showOidcRegister(keyMaterial: String, keySalt: String) {
-        let viewModel = OidcRegisterViewModel(
-            oidcRepository: container.oidcRepository,
-            keyManager: container.keyManager,
-            keyMaterial: keyMaterial,
-            keySalt: keySalt
-        )
-        viewModel.coordinatorDelegate = self
-
-        let oidcRegisterVC = OidcRegisterViewController(viewModel: viewModel)
-        navigationController.pushViewController(oidcRegisterVC, animated: true)
-    }
-
-    /// Handle invitation deep link
+    /// Handle invitation deep link (kept for compatibility)
     func handleInvitation(token: String) {
-        showInviteAccept(token: token)
+        // Invitations now go through the wallet flow as well.
+        // Show the standard QR login screen; the invitation will be
+        // processed after authentication completes.
+        showLogin()
     }
 }
 
 // MARK: - LoginViewModelCoordinatorDelegate
 
 extension AuthCoordinator: LoginViewModelCoordinatorDelegate {
-    func loginViewModelDidRequestRegister() {
-        showRegister()
-    }
-
     func loginViewModelDidLogin() {
         delegate?.authDidComplete()
-    }
-}
-
-// MARK: - RegisterViewModelCoordinatorDelegate
-
-extension AuthCoordinator: RegisterViewModelCoordinatorDelegate {
-    func registerViewModelDidRequestLogin() {
-        navigationController.popViewController(animated: true)
-    }
-
-    func registerViewModelDidRegister() {
-        delegate?.authDidComplete()
-    }
-}
-
-// MARK: - OidcLoginViewModelDelegate
-
-extension AuthCoordinator: OidcLoginViewModelDelegate {
-    func oidcLoginDidComplete() {
-        delegate?.authDidComplete()
-    }
-
-    func oidcLoginDidRequireRegistration(keyMaterial: String, keySalt: String) {
-        showOidcRegister(keyMaterial: keyMaterial, keySalt: keySalt)
-    }
-}
-
-// MARK: - PasskeyLoginViewModelDelegate
-
-extension AuthCoordinator: PasskeyLoginViewModelDelegate {
-    func passkeyLoginDidComplete() {
-        delegate?.authDidComplete()
-    }
-}
-
-// MARK: - OidcRegisterViewModelCoordinatorDelegate
-
-extension AuthCoordinator: OidcRegisterViewModelCoordinatorDelegate {
-    func oidcRegisterViewModelDidComplete() {
-        delegate?.authDidComplete()
-    }
-}
-
-// MARK: - InviteAcceptViewModelCoordinatorDelegate
-
-extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
-    func inviteAcceptViewModelDidRegister() {
-        delegate?.authDidComplete()
-    }
-
-    func inviteAcceptViewModelDidRequestLogin() {
-        showLogin()
     }
 }

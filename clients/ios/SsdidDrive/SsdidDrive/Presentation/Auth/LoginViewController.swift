@@ -1,14 +1,15 @@
 import UIKit
 import Combine
+import CoreImage.CIFilterBuiltins
 
-/// Login view controller
+/// Login view controller displaying a QR code for SSDID Wallet authentication.
+/// On iPad/Mac the user scans the QR with their phone wallet.
+/// On iPhone an "Open SSDID Wallet" button launches the wallet app via deep link.
 final class LoginViewController: BaseViewController {
 
     // MARK: - Properties
 
     private let viewModel: LoginViewModel
-    private let oidcViewModel: OidcLoginViewModel?
-    private let passkeyViewModel: PasskeyLoginViewModel?
 
     // MARK: - UI Components
 
@@ -32,14 +33,14 @@ final class LoginViewController: BaseViewController {
         imageView.tintColor = .systemBlue
         imageView.contentMode = .scaleAspectFit
         imageView.accessibilityIdentifier = "loginLogoImageView"
-        imageView.accessibilityLabel = "SsdidDrive logo"
+        imageView.accessibilityLabel = "SSDID Drive logo"
         return imageView
     }()
 
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "SsdidDrive"
+        label.text = "SSDID Drive"
         label.font = .systemFont(ofSize: 32, weight: .bold)
         label.textAlignment = .center
         label.accessibilityIdentifier = "loginTitleLabel"
@@ -49,50 +50,28 @@ final class LoginViewController: BaseViewController {
     private lazy var subtitleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Sign in to access your secure files"
+        label.text = "Scan with SSDID Wallet to sign in"
         label.font = .systemFont(ofSize: 15)
         label.textColor = .secondaryLabel
         label.textAlignment = .center
         return label
     }()
 
-    private lazy var emailTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Email"
-        textField.keyboardType = .emailAddress
-        textField.autocapitalizationType = .none
-        textField.autocorrectionType = .no
-        textField.textContentType = .emailAddress
-        textField.accessibilityIdentifier = "loginEmailTextField"
-        textField.accessibilityLabel = "Email address"
-        textField.applySsdidDriveStyle()
-        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        return textField
+    private lazy var qrImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFit
+        imageView.accessibilityIdentifier = "qrCodeImageView"
+        imageView.accessibilityLabel = "QR code for SSDID Wallet authentication"
+        imageView.layer.magnificationFilter = .nearest
+        return imageView
     }()
 
-    private lazy var passwordTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Password"
-        textField.isSecureTextEntry = true
-        textField.textContentType = .password
-        textField.accessibilityIdentifier = "loginPasswordTextField"
-        textField.accessibilityLabel = "Password"
-        textField.applySsdidDriveStyle()
-        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        return textField
-    }()
-
-    private lazy var showPasswordButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.setImage(UIImage(systemName: "eye"), for: .normal)
-        button.tintColor = .secondaryLabel
-        button.accessibilityIdentifier = "showPasswordButton"
-        button.accessibilityLabel = "Show password"
-        button.addTarget(self, action: #selector(togglePasswordVisibility), for: .touchUpInside)
-        return button
+    private lazy var activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.hidesWhenStopped = true
+        return indicator
     }()
 
     private lazy var errorLabel: UILabel = {
@@ -107,110 +86,40 @@ final class LoginViewController: BaseViewController {
         return label
     }()
 
-    private lazy var loginButton: UIButton = {
+    private lazy var refreshButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("Sign In", for: .normal)
-        button.accessibilityIdentifier = "loginButton"
-        button.accessibilityLabel = "Sign in"
-        button.accessibilityHint = "Double tap to sign in with email and password"
+        button.setTitle("Refresh", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        button.accessibilityIdentifier = "refreshButton"
+        button.accessibilityLabel = "Refresh QR code"
         button.applyPrimaryStyle()
-        button.addTarget(self, action: #selector(loginTapped), for: .touchUpInside)
-        button.isEnabled = false
-        button.alpha = 0.5
+        button.addTarget(self, action: #selector(refreshTapped), for: .touchUpInside)
+        button.isHidden = true
         return button
     }()
 
-    private lazy var dividerStack: UIStackView = {
-        let leftLine = UIView()
-        leftLine.translatesAutoresizingMaskIntoConstraints = false
-        leftLine.backgroundColor = .separator
-        leftLine.heightAnchor.constraint(equalToConstant: 1).isActive = true
-
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "OR"
-        label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        label.setContentHuggingPriority(.required, for: .horizontal)
-
-        let rightLine = UIView()
-        rightLine.translatesAutoresizingMaskIntoConstraints = false
-        rightLine.backgroundColor = .separator
-        rightLine.heightAnchor.constraint(equalToConstant: 1).isActive = true
-
-        let stack = UIStackView(arrangedSubviews: [leftLine, label, rightLine])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 12
-        stack.distribution = .fill
-        return stack
-    }()
-
-    private lazy var passkeyButton: UIButton = {
+    private lazy var openWalletButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
         let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
-        let icon = UIImage(systemName: "person.badge.key.fill", withConfiguration: config)
+        let icon = UIImage(systemName: "arrow.up.forward.app.fill", withConfiguration: config)
         button.setImage(icon, for: .normal)
-        button.setTitle("  Sign in with Passkey", for: .normal)
+        button.setTitle("  Open SSDID Wallet", for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-        button.accessibilityIdentifier = "passkeyButton"
-        button.accessibilityLabel = "Sign in with Passkey"
+        button.accessibilityIdentifier = "openWalletButton"
+        button.accessibilityLabel = "Open SSDID Wallet"
+        button.accessibilityHint = "Double tap to open the SSDID Wallet app for authentication"
         button.applySecondaryStyle()
-        button.addTarget(self, action: #selector(passkeyTapped), for: .touchUpInside)
+        button.addTarget(self, action: #selector(openWalletTapped), for: .touchUpInside)
+        button.isHidden = true
         return button
-    }()
-
-    private lazy var oidcButtonsStack: UIStackView = {
-        let stack = UIStackView()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .vertical
-        stack.spacing = 8
-        return stack
-    }()
-
-    private lazy var noAccountLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Don't have an account?"
-        label.font = .systemFont(ofSize: 15)
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        return label
-    }()
-
-    private lazy var contactAdminLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Contact your administrator to receive an invitation."
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .tertiaryLabel
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        return label
-    }()
-
-    private lazy var activityIndicator: UIActivityIndicatorView = {
-        let indicator = UIActivityIndicatorView(style: .medium)
-        indicator.translatesAutoresizingMaskIntoConstraints = false
-        indicator.hidesWhenStopped = true
-        indicator.color = .white
-        return indicator
     }()
 
     // MARK: - Initialization
 
-    init(
-        viewModel: LoginViewModel,
-        oidcViewModel: OidcLoginViewModel? = nil,
-        passkeyViewModel: PasskeyLoginViewModel? = nil
-    ) {
+    init(viewModel: LoginViewModel) {
         self.viewModel = viewModel
-        self.oidcViewModel = oidcViewModel
-        self.passkeyViewModel = passkeyViewModel
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -221,27 +130,17 @@ final class LoginViewController: BaseViewController {
     // MARK: - Setup
 
     override func setupUI() {
-        setupKeyboardDismissOnTap()
-
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
 
         contentView.addSubview(logoImageView)
         contentView.addSubview(titleLabel)
         contentView.addSubview(subtitleLabel)
-        contentView.addSubview(emailTextField)
-        contentView.addSubview(passwordTextField)
-        contentView.addSubview(showPasswordButton)
+        contentView.addSubview(qrImageView)
+        contentView.addSubview(activityIndicator)
         contentView.addSubview(errorLabel)
-        contentView.addSubview(loginButton)
-        contentView.addSubview(noAccountLabel)
-        contentView.addSubview(contactAdminLabel)
-
-        loginButton.addSubview(activityIndicator)
-
-        contentView.addSubview(dividerStack)
-        contentView.addSubview(passkeyButton)
-        contentView.addSubview(oidcButtonsStack)
+        contentView.addSubview(refreshButton)
+        contentView.addSubview(openWalletButton)
 
         NSLayoutConstraint.activate([
             // Scroll view
@@ -273,77 +172,60 @@ final class LoginViewController: BaseViewController {
             subtitleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            // Email
-            emailTextField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 48),
-            emailTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            emailTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            emailTextField.heightAnchor.constraint(equalToConstant: 52),
+            // QR code
+            qrImageView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 32),
+            qrImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            qrImageView.widthAnchor.constraint(equalToConstant: 250),
+            qrImageView.heightAnchor.constraint(equalToConstant: 250),
 
-            // Password
-            passwordTextField.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 16),
-            passwordTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            passwordTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            passwordTextField.heightAnchor.constraint(equalToConstant: 52),
-
-            // Show password button
-            showPasswordButton.centerYAnchor.constraint(equalTo: passwordTextField.centerYAnchor),
-            showPasswordButton.trailingAnchor.constraint(equalTo: passwordTextField.trailingAnchor, constant: -12),
-            showPasswordButton.widthAnchor.constraint(equalToConstant: 44),
-            showPasswordButton.heightAnchor.constraint(equalToConstant: 44),
+            // Activity indicator (centered on QR area)
+            activityIndicator.centerXAnchor.constraint(equalTo: qrImageView.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: qrImageView.centerYAnchor),
 
             // Error label
-            errorLabel.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 16),
+            errorLabel.topAnchor.constraint(equalTo: qrImageView.bottomAnchor, constant: 16),
             errorLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             errorLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            // Login button
-            loginButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 24),
-            loginButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            loginButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            loginButton.heightAnchor.constraint(equalToConstant: 52),
+            // Refresh button
+            refreshButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 16),
+            refreshButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            refreshButton.widthAnchor.constraint(equalToConstant: 160),
+            refreshButton.heightAnchor.constraint(equalToConstant: 44),
 
-            // Activity indicator
-            activityIndicator.centerXAnchor.constraint(equalTo: loginButton.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: loginButton.centerYAnchor),
-
-            // Divider
-            dividerStack.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 24),
-            dividerStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            dividerStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            // Passkey button
-            passkeyButton.topAnchor.constraint(equalTo: dividerStack.bottomAnchor, constant: 24),
-            passkeyButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            passkeyButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            passkeyButton.heightAnchor.constraint(equalToConstant: 52),
-
-            // OIDC buttons stack
-            oidcButtonsStack.topAnchor.constraint(equalTo: passkeyButton.bottomAnchor, constant: 8),
-            oidcButtonsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            oidcButtonsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            // No account label
-            noAccountLabel.topAnchor.constraint(equalTo: oidcButtonsStack.bottomAnchor, constant: 32),
-            noAccountLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            noAccountLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            // Contact admin label
-            contactAdminLabel.topAnchor.constraint(equalTo: noAccountLabel.bottomAnchor, constant: 4),
-            contactAdminLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            contactAdminLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            contactAdminLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+            // Open Wallet button
+            openWalletButton.topAnchor.constraint(equalTo: refreshButton.bottomAnchor, constant: 24),
+            openWalletButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            openWalletButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            openWalletButton.heightAnchor.constraint(equalToConstant: 52),
+            openWalletButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
         ])
-
-        // Load OIDC providers
-        loadOidcProviders()
     }
 
     override func setupBindings() {
+        // QR payload
+        viewModel.$qrPayload
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                if let payload = payload {
+                    self?.qrImageView.image = self?.generateQRCode(from: payload)
+                    self?.qrImageView.isHidden = false
+                } else {
+                    self?.qrImageView.isHidden = true
+                }
+            }
+            .store(in: &cancellables)
+
         // Loading state
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isLoading in
-                self?.updateLoadingState(isLoading)
+                if isLoading {
+                    self?.activityIndicator.startAnimating()
+                    self?.qrImageView.isHidden = true
+                } else {
+                    self?.activityIndicator.stopAnimating()
+                }
             }
             .store(in: &cancellables)
 
@@ -356,139 +238,61 @@ final class LoginViewController: BaseViewController {
             }
             .store(in: &cancellables)
 
-        // OIDC loading state
-        oidcViewModel?.$isLoading
+        // Expired state
+        viewModel.$isExpired
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                self?.oidcButtonsStack.isUserInteractionEnabled = !isLoading
-                self?.oidcButtonsStack.alpha = isLoading ? 0.5 : 1.0
-            }
-            .store(in: &cancellables)
-
-        // OIDC error
-        oidcViewModel?.$errorMessage
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                if let message = message {
-                    self?.errorLabel.text = message
-                    self?.errorLabel.isHidden = false
+            .sink { [weak self] isExpired in
+                self?.refreshButton.isHidden = !isExpired
+                if isExpired {
+                    self?.subtitleLabel.text = "QR code expired"
+                } else {
+                    self?.subtitleLabel.text = "Scan with SSDID Wallet to sign in"
                 }
             }
             .store(in: &cancellables)
 
-        // Passkey loading state
-        passkeyViewModel?.$isLoading
+        // Wallet deep link availability
+        viewModel.$walletDeepLink
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                self?.passkeyButton.isEnabled = !isLoading
-                self?.passkeyButton.alpha = isLoading ? 0.5 : 1.0
+            .sink { [weak self] url in
+                self?.openWalletButton.isHidden = (url == nil)
             }
             .store(in: &cancellables)
+    }
 
-        // Passkey error
-        passkeyViewModel?.$errorMessage
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                if let message = message {
-                    self?.errorLabel.text = message
-                    self?.errorLabel.isHidden = false
-                }
-            }
-            .store(in: &cancellables)
-
-        // OIDC providers
-        oidcViewModel?.$providers
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] providers in
-                self?.updateOidcButtons(providers: providers)
-            }
-            .store(in: &cancellables)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        viewModel.createChallenge()
     }
 
     // MARK: - Actions
 
-    @objc private func textFieldDidChange() {
-        let email = emailTextField.text ?? ""
-        let password = passwordTextField.text ?? ""
-
-        let isValid = email.contains("@") && password.count >= 8
-        loginButton.isEnabled = isValid
-        loginButton.alpha = isValid ? 1.0 : 0.5
-    }
-
-    @objc private func togglePasswordVisibility() {
-        passwordTextField.isSecureTextEntry.toggle()
-        let imageName = passwordTextField.isSecureTextEntry ? "eye" : "eye.slash"
-        showPasswordButton.setImage(UIImage(systemName: imageName), for: .normal)
-        showPasswordButton.accessibilityLabel = passwordTextField.isSecureTextEntry ? "Show password" : "Hide password"
-    }
-
-    @objc private func loginTapped() {
+    @objc private func refreshTapped() {
         triggerHapticFeedback()
-
-        let email = emailTextField.text ?? ""
-        let password = passwordTextField.text ?? ""
-
-        viewModel.login(email: email, password: password)
+        viewModel.createChallenge()
     }
 
-    @objc private func passkeyTapped() {
+    @objc private func openWalletTapped() {
         triggerHapticFeedback()
-
-        let email = emailTextField.text?.isEmpty == false ? emailTextField.text : nil
-        passkeyViewModel?.beginLogin(email: email, presentationAnchor: view.window!)
+        viewModel.openWallet()
     }
 
-    @objc private func oidcProviderTapped(_ sender: UIButton) {
-        triggerHapticFeedback()
+    // MARK: - QR Code Generation
 
-        guard let providers = oidcViewModel?.providers,
-              sender.tag < providers.count else { return }
-        let provider = providers[sender.tag]
-        oidcViewModel?.beginLogin(providerId: provider.id, presentationAnchor: view.window!)
-    }
-
-    // MARK: - OIDC Provider Loading
-
-    private func loadOidcProviders() {
-        oidcViewModel?.loadProviders(tenantSlug: "default")
-    }
-
-    private func updateOidcButtons(providers: [AuthProvider]) {
-        // Remove existing buttons
-        oidcButtonsStack.arrangedSubviews.forEach {
-            oidcButtonsStack.removeArrangedSubview($0)
-            $0.removeFromSuperview()
+    private func generateQRCode(from string: String) -> UIImage {
+        let data = Data(string.utf8)
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else {
+            return UIImage(systemName: "xmark.circle") ?? UIImage()
         }
-
-        // Add a button for each provider
-        for (index, provider) in providers.enumerated() {
-            let button = UIButton(type: .system)
-            button.translatesAutoresizingMaskIntoConstraints = false
-            let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
-            let icon = UIImage(systemName: "globe", withConfiguration: config)
-            button.setImage(icon, for: .normal)
-            button.setTitle("  Sign in with \(provider.name)", for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-            button.applySecondaryStyle()
-            button.tag = index
-            button.addTarget(self, action: #selector(oidcProviderTapped(_:)), for: .touchUpInside)
-            button.heightAnchor.constraint(equalToConstant: 52).isActive = true
-            oidcButtonsStack.addArrangedSubview(button)
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        let transform = CGAffineTransform(scaleX: 10, y: 10)
+        if let output = filter.outputImage?.transformed(by: transform) {
+            let context = CIContext()
+            if let cgImage = context.createCGImage(output, from: output.extent) {
+                return UIImage(cgImage: cgImage)
+            }
         }
-    }
-
-    // MARK: - Helpers
-
-    private func updateLoadingState(_ isLoading: Bool) {
-        if isLoading {
-            loginButton.setTitle("", for: .normal)
-            activityIndicator.startAnimating()
-            loginButton.isEnabled = false
-        } else {
-            loginButton.setTitle("Sign In", for: .normal)
-            activityIndicator.stopAnimating()
-            textFieldDidChange() // Re-validate
-        }
+        return UIImage(systemName: "xmark.circle") ?? UIImage()
     }
 }

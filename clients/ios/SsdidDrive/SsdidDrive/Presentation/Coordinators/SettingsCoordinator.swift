@@ -100,10 +100,8 @@ final class SettingsCoordinator: BaseCoordinator {
     }
 
     func showCredentials() {
-        let viewModel = CredentialManagerViewModel(webAuthnRepository: container.webAuthnRepository)
-
-        let credentialsVC = CredentialManagerViewController(viewModel: viewModel)
-        navigationController.pushViewController(credentialsVC, animated: true)
+        // Credential management (WebAuthn/OIDC) has been removed.
+        // Authentication is now handled via SSDID wallet.
     }
 }
 

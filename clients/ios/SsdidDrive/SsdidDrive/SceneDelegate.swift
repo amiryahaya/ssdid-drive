@@ -199,7 +199,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
             return
         }
+        // Handle SSDID auth callback: ssdid-drive://auth/callback?session_token=...
+        if let action = DeepLinkParser.parse(url), case .authCallback(let sessionToken) = action {
+            handleAuthCallback(sessionToken: sessionToken)
+            return
+        }
+
         appCoordinator?.handleDeepLink(url)
+    }
+
+    /// Deliver auth callback token to the active LoginViewModel via the AuthCoordinator
+    private func handleAuthCallback(sessionToken: String) {
+        guard let coordinator = appCoordinator else { return }
+        // Find the AuthCoordinator in the child hierarchy
+        if let authCoordinator = coordinator.childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+            authCoordinator.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+        }
     }
 
     // MARK: - Push Notifications

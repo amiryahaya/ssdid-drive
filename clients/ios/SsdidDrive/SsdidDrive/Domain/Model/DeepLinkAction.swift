@@ -18,14 +18,17 @@ enum DeepLinkAction: Equatable, Codable {
     /// Upload files from Share Extension
     case importFiles(manifest: ImportManifest)
 
+    /// SSDID wallet auth callback with session token
+    case authCallback(sessionToken: String)
+
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case type, shareId, fileId, folderId, token, manifest
+        case type, shareId, fileId, folderId, token, manifest, sessionToken
     }
 
     private enum ActionType: String, Codable {
-        case openShare, openFile, openFolder, acceptInvitation, importFiles
+        case openShare, openFile, openFolder, acceptInvitation, importFiles, authCallback
     }
 
     init(from decoder: Decoder) throws {
@@ -48,6 +51,9 @@ enum DeepLinkAction: Equatable, Codable {
         case .importFiles:
             let manifest = try container.decode(ImportManifest.self, forKey: .manifest)
             self = .importFiles(manifest: manifest)
+        case .authCallback:
+            let sessionToken = try container.decode(String.self, forKey: .sessionToken)
+            self = .authCallback(sessionToken: sessionToken)
         }
     }
 
@@ -70,6 +76,9 @@ enum DeepLinkAction: Equatable, Codable {
         case .importFiles(let manifest):
             try container.encode(ActionType.importFiles, forKey: .type)
             try container.encode(manifest, forKey: .manifest)
+        case .authCallback(let sessionToken):
+            try container.encode(ActionType.authCallback, forKey: .type)
+            try container.encode(sessionToken, forKey: .sessionToken)
         }
     }
 }

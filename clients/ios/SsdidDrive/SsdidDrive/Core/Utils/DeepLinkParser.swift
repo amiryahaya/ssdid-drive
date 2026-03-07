@@ -66,6 +66,17 @@ final class DeepLinkParser {
         }
 
         switch host {
+        case "auth":
+            // Handle SSDID wallet auth callback: ssdid-drive://auth/callback?session_token=...
+            if pathComponents.first == "callback" || pathComponents.contains("callback") {
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                   let token = components.queryItems?.first(where: { $0.name == "session_token" })?.value,
+                   !token.isEmpty {
+                    return .authCallback(sessionToken: token)
+                }
+            }
+            return nil
+
         case "share":
             let shareId = extractResourceId(from: url, pathComponents: pathComponents)
             if let shareId = shareId, isValidResourceId(shareId) {

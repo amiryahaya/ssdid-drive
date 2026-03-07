@@ -216,6 +216,12 @@ final class AppCoordinator: BaseCoordinator {
             if let mainCoordinator = childCoordinators.first(where: { $0 is MainCoordinator }) as? MainCoordinator {
                 mainCoordinator.showImportFlow(manifest: manifest)
             }
+
+        case .authCallback(let sessionToken):
+            // Deliver to the active AuthCoordinator's login view model
+            if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                authCoordinator.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+            }
         }
     }
 

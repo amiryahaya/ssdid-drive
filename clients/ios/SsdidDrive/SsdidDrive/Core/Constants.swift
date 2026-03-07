@@ -70,22 +70,9 @@ enum Constants {
             static let approveRecovery = "/recovery/requests/{id}/approve"
             static let rejectRecovery = "/recovery/requests/{id}/reject"
 
-            // WebAuthn
-            static let webauthnRegisterBegin = "/auth/webauthn/register/begin"
-            static let webauthnRegisterComplete = "/auth/webauthn/register/complete"
-            static let webauthnLoginBegin = "/auth/webauthn/login/begin"
-            static let webauthnLoginComplete = "/auth/webauthn/login/complete"
-            static let webauthnCredentialBegin = "/auth/webauthn/credentials/begin"
-            static let webauthnCredentialComplete = "/auth/webauthn/credentials/complete"
-
-            // OIDC
-            static let oidcAuthorize = "/auth/oidc/authorize"
-            static let oidcCallback = "/auth/oidc/callback"
-            static let oidcRegister = "/auth/oidc/register"
-
-            // Providers & Credentials
-            static let authProviders = "/auth/providers"
-            static let authCredentials = "/auth/credentials"
+            // SSDID Wallet Auth
+            static let ssdidServerInfo = "/auth/ssdid/server-info"
+            static let ssdidEvents = "/auth/ssdid/events"
 
             // Users
             static let searchUsers = "/users/search"
