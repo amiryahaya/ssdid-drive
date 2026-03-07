@@ -54,11 +54,16 @@ public static class CreateShare
 
         if (!isOwner)
         {
-            // Check if the user has a write share (can re-share)
-            var hasWriteShare = await db.Shares.AnyAsync(s =>
-                s.ResourceId == req.ResourceId && s.ResourceType == req.ResourceType
-                && s.SharedWithId == user.Id && s.Permission == "write"
-                && (s.ExpiresAt == null || s.ExpiresAt > DateTimeOffset.UtcNow), ct);
+            // Check if the user has a write share (can re-share).
+            // Evaluate expiry client-side for cross-database compatibility
+            // (SQLite cannot compare DateTimeOffset in LINQ).
+            var now = DateTimeOffset.UtcNow;
+            var hasWriteShare = (await db.Shares
+                .Where(s => s.ResourceId == req.ResourceId && s.ResourceType == req.ResourceType
+                    && s.SharedWithId == user.Id && s.Permission == "write")
+                .Select(s => s.ExpiresAt)
+                .ToListAsync(ct))
+                .Any(e => e == null || e > now);
 
             if (!hasWriteShare)
                 return AppError.Forbidden("You do not have permission to share this resource").ToProblemResult();

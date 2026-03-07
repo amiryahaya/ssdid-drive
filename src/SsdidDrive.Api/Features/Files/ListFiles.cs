@@ -22,11 +22,16 @@ public static class ListFiles
         if (folder is null)
             return AppError.NotFound("Folder not found").ToProblemResult();
 
-        // Check ownership or share access
+        // Check ownership or share access.
+        // Evaluate expiry client-side for cross-database compatibility
+        // (SQLite cannot compare DateTimeOffset in LINQ).
+        var now = DateTimeOffset.UtcNow;
         var hasAccess = folder.OwnerId == user.Id
-            || await db.Shares.AnyAsync(s =>
-                s.ResourceId == folderId && s.ResourceType == "folder" && s.SharedWithId == user.Id
-                && (s.ExpiresAt == null || s.ExpiresAt > DateTimeOffset.UtcNow), ct);
+            || (await db.Shares
+                .Where(s => s.ResourceId == folderId && s.ResourceType == "folder" && s.SharedWithId == user.Id)
+                .Select(s => s.ExpiresAt)
+                .ToListAsync(ct))
+                .Any(e => e == null || e > now);
 
         if (!hasAccess)
             return AppError.Forbidden("You do not have access to this folder").ToProblemResult();

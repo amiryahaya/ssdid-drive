@@ -24,14 +24,19 @@ public static class DownloadFile
         if (user.TenantId is null || file.Folder.TenantId != user.TenantId)
             return AppError.Forbidden("You do not have access to this file").ToProblemResult();
 
-        // Check ownership or share access (file-level or folder-level)
+        // Check ownership or share access (file-level or folder-level).
+        // Evaluate expiry client-side for cross-database compatibility
+        // (SQLite cannot compare DateTimeOffset in LINQ).
+        var now = DateTimeOffset.UtcNow;
         var hasAccess = file.UploadedById == user.Id
             || file.Folder.OwnerId == user.Id
-            || await db.Shares.AnyAsync(s =>
-                ((s.ResourceId == id && s.ResourceType == "file")
-                 || (s.ResourceId == file.FolderId && s.ResourceType == "folder"))
-                && s.SharedWithId == user.Id
-                && (s.ExpiresAt == null || s.ExpiresAt > DateTimeOffset.UtcNow), ct);
+            || (await db.Shares
+                .Where(s => ((s.ResourceId == id && s.ResourceType == "file")
+                    || (s.ResourceId == file.FolderId && s.ResourceType == "folder"))
+                    && s.SharedWithId == user.Id)
+                .Select(s => s.ExpiresAt)
+                .ToListAsync(ct))
+                .Any(e => e == null || e > now);
 
         if (!hasAccess)
             return AppError.Forbidden("You do not have access to this file").ToProblemResult();

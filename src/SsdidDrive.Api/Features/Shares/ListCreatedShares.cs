@@ -13,10 +13,11 @@ public static class ListCreatedShares
     {
         var user = accessor.User!;
 
-        var shares = await db.Shares
+        // Order client-side for cross-database compatibility
+        // (SQLite cannot ORDER BY DateTimeOffset columns).
+        var shares = (await db.Shares
             .Where(s => s.SharedById == user.Id)
             .Include(s => s.SharedWith)
-            .OrderByDescending(s => s.CreatedAt)
             .Select(s => new
             {
                 s.Id,
@@ -30,7 +31,9 @@ public static class ListCreatedShares
                 s.ExpiresAt,
                 s.CreatedAt
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderByDescending(s => s.CreatedAt)
+            .ToList();
 
         return Results.Ok(shares);
     }
