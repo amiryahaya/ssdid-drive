@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Shield, Eye, EyeOff, Loader2, Fingerprint, LogOut } from 'lucide-react';
+import { Shield, Loader2, Fingerprint, LogOut, Unlock } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useBiometric } from '@/hooks/useBiometric';
 import { Button } from '@/components/ui/Button';
@@ -10,14 +9,10 @@ export function UnlockScreen() {
   const { isAvailable: biometricAvailable, isEnabled: biometricEnabled, biometricType } =
     useBiometric();
 
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUnlock = async () => {
     try {
-      await unlock(password);
-    } catch (err) {
+      await unlock();
+    } catch {
       // Error is handled by store
     }
   };
@@ -25,7 +20,7 @@ export function UnlockScreen() {
   const handleBiometricUnlock = async () => {
     try {
       await unlockWithBiometric();
-    } catch (err) {
+    } catch {
       // Error is handled by store
     }
   };
@@ -44,7 +39,7 @@ export function UnlockScreen() {
           </div>
           <h1 className="text-2xl font-bold">Locked</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {user?.email || 'Enter your password to unlock'}
+            {user?.email || 'Unlock to continue'}
           </p>
         </div>
 
@@ -61,45 +56,20 @@ export function UnlockScreen() {
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 pr-10 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Enter your password"
-                required
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Unlocking...
-              </>
-            ) : (
-              'Unlock'
-            )}
-          </Button>
-        </form>
+        {/* Unlock button */}
+        <Button className="w-full" onClick={handleUnlock} disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Unlocking...
+            </>
+          ) : (
+            <>
+              <Unlock className="mr-2 h-4 w-4" />
+              Unlock
+            </>
+          )}
+        </Button>
 
         {/* Biometric unlock - only show if available and enabled */}
         {biometricAvailable && biometricEnabled && (

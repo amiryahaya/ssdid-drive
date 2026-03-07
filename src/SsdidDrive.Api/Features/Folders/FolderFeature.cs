@@ -1,0 +1,14 @@
+namespace SsdidDrive.Api.Features.Folders;
+
+public static class FolderFeature
+{
+    public static void MapFolderFeature(this IEndpointRouteBuilder routes)
+    {
+        var group = routes.MapGroup("/api/folders").WithTags("Folders");
+
+        CreateFolder.Map(group);
+        ListFolders.Map(group);
+        GetFolder.Map(group);
+        DeleteFolder.Map(group);
+    }
+}

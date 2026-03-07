@@ -2,11 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   User,
   AuthStatus,
-  AuthProvider,
-  OidcCallbackResponse,
-  WebAuthnBeginResponse,
-  WebAuthnLoginResponse,
-  UserCredential,
   FileListResponse,
   FileItem,
   FilePreview,
@@ -22,30 +17,73 @@ import type {
   DecryptedAskResponse,
 } from '../types';
 
+// ==================== SSDID Auth Helpers ====================
+
+export interface ServerInfo {
+  serverDid: string;
+  serverUrl: string;
+}
+
+export interface ChallengeResult {
+  serverDid: string;
+  challengeId: string;
+  qrPayload: string;
+}
+
+/**
+ * Fetch server info from the SSDID auth endpoint.
+ * For now, returns mock data until the backend is wired up.
+ */
+async function fetchServerInfo(): Promise<ServerInfo> {
+  try {
+    const info = await invoke<ServerInfo>('get_server_info');
+    return info;
+  } catch {
+    // Fallback: derive from environment or use defaults
+    return {
+      serverDid: 'did:ssdid:server:ssdid-drive',
+      serverUrl: 'https://api.ssdid-drive.local',
+    };
+  }
+}
+
+/**
+ * Create a challenge for QR-based SSDID wallet authentication.
+ * Generates a random challenge ID client-side until backend challenge
+ * creation is wired up.
+ */
+export async function createChallenge(
+  action: 'authenticate' | 'register'
+): Promise<ChallengeResult> {
+  const serverInfo = await fetchServerInfo();
+
+  // Generate a random challenge ID (will be replaced by server-issued ID)
+  const randomBytes = new Uint8Array(16);
+  crypto.getRandomValues(randomBytes);
+  const challengeId = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const qrPayload = JSON.stringify({
+    server_url: serverInfo.serverUrl,
+    server_did: serverInfo.serverDid,
+    action,
+    challenge_id: challengeId,
+  });
+
+  return {
+    serverDid: serverInfo.serverDid,
+    challengeId,
+    qrPayload,
+  };
+}
+
 /**
  * Tauri command wrapper service
  * Provides typed access to all backend commands
  */
 export const tauriService = {
   // ==================== Auth Commands ====================
-
-  async login(email: string, password: string): Promise<{ user: User }> {
-    return invoke('login', { email, password });
-  },
-
-  async register(
-    email: string,
-    password: string,
-    name: string,
-    invitationToken: string
-  ): Promise<{ user: User }> {
-    return invoke('register', {
-      email,
-      password,
-      name,
-      invitationToken,
-    });
-  },
 
   async logout(): Promise<void> {
     return invoke('logout');
@@ -63,97 +101,26 @@ export const tauriService = {
     return invoke('unlock_with_biometric');
   },
 
-  // ==================== OIDC Commands ====================
-
-  async oidcGetProviders(tenantSlug: string): Promise<AuthProvider[]> {
-    return invoke('oidc_get_providers', { tenantSlug });
+  async updateProfile(name: string): Promise<User> {
+    return invoke('update_profile', { name });
   },
 
-  async oidcBeginLogin(providerId: string): Promise<string> {
-    return invoke('oidc_begin_login', { providerId });
+  async listDevices(): Promise<{ id: string; name: string | null; device_type: string; last_active: string; created_at: string; is_current: boolean }[]> {
+    return invoke('list_devices');
   },
 
-  async oidcHandleCallback(
-    code: string,
-    oidcState: string
-  ): Promise<OidcCallbackResponse> {
-    return invoke('oidc_handle_callback', { code, oidcState });
+  async revokeDevice(deviceId: string): Promise<void> {
+    return invoke('revoke_device', { deviceId });
   },
 
-  async oidcCompleteRegistration(
-    providerId: string,
-    oidcSub: string,
-    email: string,
-    name: string,
-    keyMaterial: string,
-    keySalt: string
-  ): Promise<{ user: User }> {
-    return invoke('oidc_complete_registration', {
-      providerId,
-      oidcSub,
-      email,
-      name,
-      keyMaterial,
-      keySalt,
-    });
+  // ==================== SSDID Auth Commands ====================
+
+  async getServerInfo(): Promise<ServerInfo> {
+    return fetchServerInfo();
   },
 
-  // ==================== WebAuthn Commands ====================
-
-  async webauthnLoginBegin(email?: string): Promise<WebAuthnBeginResponse> {
-    return invoke('webauthn_login_begin', { email: email ?? null });
-  },
-
-  async webauthnLoginComplete(
-    challengeId: string,
-    assertion: Record<string, unknown>,
-    prfOutput?: string
-  ): Promise<WebAuthnLoginResponse> {
-    return invoke('webauthn_login_complete', {
-      challengeId,
-      assertion,
-      prfOutput: prfOutput ?? null,
-    });
-  },
-
-  async webauthnRegisterBegin(
-    email: string,
-    tenantSlug?: string
-  ): Promise<WebAuthnBeginResponse> {
-    return invoke('webauthn_register_begin', {
-      email,
-      tenantSlug: tenantSlug ?? null,
-    });
-  },
-
-  async webauthnRegisterComplete(
-    request: Record<string, unknown>
-  ): Promise<WebAuthnLoginResponse> {
-    return invoke('webauthn_register_complete', { request });
-  },
-
-  async webauthnAddCredentialBegin(): Promise<WebAuthnBeginResponse> {
-    return invoke('webauthn_add_credential_begin');
-  },
-
-  async webauthnAddCredentialComplete(
-    request: Record<string, unknown>
-  ): Promise<unknown> {
-    return invoke('webauthn_add_credential_complete', { request });
-  },
-
-  // ==================== Credential Commands ====================
-
-  async listCredentials(): Promise<UserCredential[]> {
-    return invoke('list_credentials');
-  },
-
-  async renameCredential(credentialId: string, name: string): Promise<UserCredential> {
-    return invoke('rename_credential', { credentialId, name });
-  },
-
-  async deleteCredential(credentialId: string): Promise<void> {
-    return invoke('delete_credential', { credentialId });
+  async createChallenge(action: 'authenticate' | 'register'): Promise<ChallengeResult> {
+    return createChallenge(action);
   },
 
   // ==================== File Commands ====================
@@ -282,9 +249,6 @@ export const tauriService = {
 
   // ==================== PII Service Commands ====================
 
-  /**
-   * Create a new PII service conversation
-   */
   async piiCreateConversation(
     llmProvider: string,
     llmModel: string,
@@ -297,30 +261,14 @@ export const tauriService = {
     });
   },
 
-  /**
-   * Get a PII service conversation by ID
-   */
   async piiGetConversation(conversationId: string): Promise<PiiConversation> {
     return invoke('pii_get_conversation', { conversationId });
   },
 
-  /**
-   * List all PII service conversations
-   */
   async piiListConversations(): Promise<PiiConversation[]> {
     return invoke('pii_list_conversations');
   },
 
-  /**
-   * Register KEM keys for a conversation
-   *
-   * This generates new ML-KEM (and optionally KAZ-KEM) keypairs,
-   * registers the public keys with the PII service, and stores
-   * the secret keys locally for DEK unwrapping.
-   *
-   * @param conversationId - The conversation to register keys for
-   * @param includeKazKem - Whether to also generate KAZ-KEM keys for hybrid security
-   */
   async piiRegisterKemKeys(
     conversationId: string,
     includeKazKem: boolean = false
@@ -328,19 +276,6 @@ export const tauriService = {
     return invoke('pii_register_kem_keys', { conversationId, includeKazKem });
   },
 
-  /**
-   * Send a message to the PII service and get a response
-   *
-   * This automatically handles:
-   * - Sending the message to the LLM via the PII service
-   * - Unwrapping the KEM-encrypted DEK (if KEM keys were registered)
-   * - Decrypting the token map
-   * - Restoring original PII values in the response
-   *
-   * @param conversationId - The conversation to send the message to
-   * @param message - The user's message
-   * @param contextFiles - Optional file IDs to include as context
-   */
   async piiAsk(
     conversationId: string,
     message: string,
@@ -353,11 +288,6 @@ export const tauriService = {
     });
   },
 
-  /**
-   * Clear KEM secret keys from memory
-   *
-   * Call this when switching conversations or logging out
-   */
   async piiClearKemKeys(): Promise<void> {
     return invoke('pii_clear_kem_keys');
   },

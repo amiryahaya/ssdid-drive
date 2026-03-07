@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   Moon,
   Sun,
@@ -13,15 +13,13 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  KeyRound,
   Smartphone,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { RecoveryStatusCard } from '@/components/recovery/RecoveryStatusCard';
 import { PendingRecoveryRequests } from '@/components/recovery/PendingRecoveryRequests';
-import { PasswordChangeDialog, ProfileSection, DevicesList } from '@/components/settings';
-import { CredentialManager } from '@/components/settings/CredentialManager';
+import { ProfileSection, DevicesList } from '@/components/settings';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { usePushPermission } from '@/hooks/usePushPermission';
 import { useBiometric } from '@/hooks/useBiometric';
@@ -59,8 +57,6 @@ export function SettingsPage() {
     disable: disableBiometric,
     status: biometricStatus,
   } = useBiometric();
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-
   useEffect(() => {
     loadSettings();
     loadStorageInfo();
@@ -79,20 +75,6 @@ export function SettingsPage() {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Account</h2>
         <ProfileSection />
-        <div className="flex items-center justify-between p-4 rounded-lg border">
-          <div className="flex items-center gap-4">
-            <KeyRound className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p className="font-medium">Password</p>
-              <p className="text-sm text-muted-foreground">
-                Change your account password
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setShowPasswordDialog(true)}>
-            Change Password
-          </Button>
-        </div>
       </div>
 
       {/* Devices */}
@@ -139,15 +121,6 @@ export function SettingsPage() {
             <span className="text-sm">System</span>
           </button>
         </div>
-      </div>
-
-      {/* Security Keys & Passkeys */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Fingerprint className="h-5 w-5" />
-          Security Keys & Passkeys
-        </h2>
-        <CredentialManager />
       </div>
 
       {/* Security */}
@@ -407,8 +380,6 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Password Change Dialog */}
-      <PasswordChangeDialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog} />
     </div>
   );
 }

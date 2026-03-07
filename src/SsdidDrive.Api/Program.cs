@@ -5,8 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Features.Auth;
+using SsdidDrive.Api.Features.Files;
+using SsdidDrive.Api.Features.Folders;
 using SsdidDrive.Api.Features.Health;
+using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Users;
+using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
 using SsdidDrive.Api.Crypto;
@@ -30,6 +34,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ── Scoped services ──
 builder.Services.AddScoped<CurrentUserAccessor>();
+
+// ── Storage ──
+builder.Services.AddSingleton<IStorageService, LocalStorageService>();
 
 // ── Crypto Providers ──
 builder.Services.AddSingleton<ICryptoProvider, Ed25519Provider>();
@@ -127,6 +134,9 @@ app.UseWhen(
 app.MapHealthFeature();
 app.MapAuthFeature();
 app.MapUserFeature();
+app.MapFolderFeature();
+app.MapFileFeature();
+app.MapShareFeature();
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||

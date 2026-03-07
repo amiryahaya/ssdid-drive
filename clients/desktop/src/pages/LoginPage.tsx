@@ -1,25 +1,17 @@
-import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { Button } from '@/components/ui/Button';
-import { OidcProviderButtons } from '@/components/auth/OidcProviderButtons';
-import { PasskeyButton } from '@/components/auth/PasskeyButton';
+import { QrChallenge } from '@/components/auth/QrChallenge';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { loginWithSession, error, clearError } = useAuthStore();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAuthenticated = async (sessionToken: string) => {
     try {
-      await login(email, password);
+      await loginWithSession(sessionToken);
       navigate('/files');
-    } catch (err) {
+    } catch {
       // Error is handled by store
     }
   };
@@ -34,7 +26,7 @@ export function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold">SSDID Drive</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Sign in to your account
+            Sign in with your SSDID Wallet
           </p>
         </div>
 
@@ -51,73 +43,30 @@ export function LoginPage() {
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
+        {/* QR Challenge */}
+        <QrChallenge action="authenticate" onAuthenticated={handleAuthenticated} />
 
-          <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 pr-10 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Enter your password"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign in'
-            )}
-          </Button>
-        </form>
-
-        {/* Passkey login */}
-        <div className="mt-4">
-          <PasskeyButton email={email || undefined} />
-        </div>
-
-        {/* OIDC providers */}
-        <div className="mt-4">
-          <OidcProviderButtons tenantSlug="default" />
+        {/* Download link */}
+        <div className="mt-6 text-center text-sm">
+          <p className="text-muted-foreground">
+            Don't have SSDID Wallet?{' '}
+            <a
+              href="https://ssdid.io/wallet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-medium"
+            >
+              Download it &rarr;
+            </a>
+          </p>
         </div>
 
         {/* Register link */}
-        <div className="mt-6 text-center text-sm">
+        <div className="mt-2 text-center text-sm">
           <p className="text-muted-foreground">
-            Don't have an account?{' '}
+            New to SSDID Drive?{' '}
             <Link to="/register" className="text-primary hover:underline font-medium">
-              Sign up
+              Register
             </Link>
           </p>
         </div>

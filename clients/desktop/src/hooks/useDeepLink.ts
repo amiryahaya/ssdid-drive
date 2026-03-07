@@ -18,7 +18,7 @@ interface DeepLinkPayload {
 }
 
 interface ParsedDeepLink {
-  action: 'invite' | 'share' | 'recovery' | 'file' | 'folder' | 'oidc-callback' | 'unknown';
+  action: 'invite' | 'share' | 'recovery' | 'file' | 'folder' | 'unknown';
   id: string;
   params?: Record<string, string>;
 }
@@ -55,9 +55,6 @@ function parseDeepLink(url: string): ParsedDeepLink {
       case 'file':
       case 'folder':
         return { action, id, params };
-      case 'oidc':
-        // OIDC callback: ssdid-drive://oidc/callback?code=X&state=Y
-        return { action: 'oidc-callback', id: segments[1] ?? '', params };
       default:
         return { action: 'unknown', id: '', params };
     }
@@ -139,12 +136,6 @@ export function useDeepLink() {
         case 'folder':
           // Navigate to the specific folder
           navigate(`/files/${parsed.id}`);
-          break;
-
-        case 'oidc-callback':
-          // OIDC callback is handled by OidcProviderButtons via the 'oidc-callback' event
-          // The deep-link listener in lib.rs emits 'oidc-callback' directly
-          console.log('OIDC callback received via deep link');
           break;
 
         case 'unknown':
