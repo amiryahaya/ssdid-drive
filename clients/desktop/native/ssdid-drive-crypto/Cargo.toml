@@ -1,0 +1,32 @@
+[package]
+name = "ssdid-drive-crypto"
+version = "1.0.0"
+edition = "2021"
+description = "Safe Rust wrappers for SSDID Drive cryptographic operations"
+license = "Proprietary"
+
+[dependencies]
+# FFI crates
+kaz-kem-sys = { path = "../kaz-kem-sys" }
+kaz-sign-sys = { path = "../kaz-sign-sys" }
+
+# NIST PQC algorithms
+pqcrypto-mlkem = "0.1"
+pqcrypto-mldsa = "0.1"
+pqcrypto-traits = "0.3"
+
+# Symmetric crypto
+aes-gcm = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+argon2 = "0.5"
+bcrypt = "0.15"
+
+# Utilities
+rand = "0.8"
+zeroize = { version = "1.8", features = ["derive"] }
+thiserror = "1"
+base64 = "0.22"
+
+[dev-dependencies]
+hex = "0.4"

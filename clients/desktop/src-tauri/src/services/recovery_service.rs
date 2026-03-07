@@ -12,8 +12,8 @@ use crate::models::{
 use crate::services::{ApiClient, CryptoService};
 use crate::storage::Database;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use securesharing_crypto::shamir::{self, Share};
-use securesharing_crypto::symmetric::{encrypt_aes_gcm, decrypt_aes_gcm, KEY_SIZE};
+use ssdid_drive_crypto::shamir::{self, Share};
+use ssdid_drive_crypto::symmetric::{encrypt_aes_gcm, decrypt_aes_gcm, KEY_SIZE};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -43,7 +43,7 @@ struct RecoverySetupApiRequest {
 }
 
 /// Known verification plaintext (constant, not secret)
-const VERIFICATION_PLAINTEXT: &[u8] = b"SecureSharing-Recovery-Verification-v1";
+const VERIFICATION_PLAINTEXT: &[u8] = b"SsdidDrive-Recovery-Verification-v1";
 
 /// Encrypted share for a trustee
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 //! Low-level FFI bindings for KAZ-KEM
 //!
 //! This crate provides raw, unsafe bindings to the KAZ-KEM C library.
-//! For safe Rust wrappers, use the `securesharing-crypto` crate.
+//! For safe Rust wrappers, use the `ssdid-drive-crypto` crate.
 //!
 //! # Safety
 //!

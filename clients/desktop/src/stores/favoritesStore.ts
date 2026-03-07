@@ -57,7 +57,7 @@ export const useFavoritesStore = create<FavoritesState>()(
       clearFavorites: () => set({ favorites: new Set() }),
     }),
     {
-      name: 'securesharing-favorites',
+      name: 'ssdid-drive-favorites',
       // Custom serialization for Set
       storage: {
         getItem: (name) => {

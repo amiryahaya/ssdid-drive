@@ -30,7 +30,7 @@ describe('Sidebar', () => {
   it('should render the app logo and name', () => {
     render(<Sidebar />);
 
-    expect(screen.getByText('SecureSharing')).toBeInTheDocument();
+    expect(screen.getByText('SSDID Drive')).toBeInTheDocument();
   });
 
   it('should render all navigation links', () => {

@@ -1,4 +1,4 @@
-//! Error types for the SecureSharing Desktop application
+//! Error types for the SSDID Drive Desktop application
 
 use serde::Serialize;
 use thiserror::Error;

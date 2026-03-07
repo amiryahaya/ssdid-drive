@@ -1,4 +1,4 @@
-# SecureSharing ProGuard Rules
+# SSDID Drive ProGuard Rules
 
 # Retrofit
 -keepattributes Signature
@@ -28,8 +28,8 @@
 }
 
 # Keep data classes
--keep class com.securesharing.data.remote.dto.** { *; }
--keep class com.securesharing.domain.model.** { *; }
+-keep class my.ssdid.drive.data.remote.dto.** { *; }
+-keep class my.ssdid.drive.domain.model.** { *; }
 
 # Room
 -keep class * extends androidx.room.RoomDatabase
@@ -83,25 +83,25 @@
 }
 
 # ====================================================================================
-# SecureSharing Crypto Classes - DO NOT OBFUSCATE
+# SSDID Drive Crypto Classes - DO NOT OBFUSCATE
 # These handle sensitive cryptographic operations
 # ====================================================================================
--keep class com.securesharing.crypto.** { *; }
--keepclassmembers class com.securesharing.crypto.** {
+-keep class my.ssdid.drive.crypto.** { *; }
+-keepclassmembers class my.ssdid.drive.crypto.** {
     public *;
     private *;
 }
 
 # Keep crypto providers specifically
--keep class com.securesharing.crypto.providers.** { *; }
--keep class com.securesharing.crypto.CryptoManager { *; }
--keep class com.securesharing.crypto.KeyManager { *; }
--keep class com.securesharing.crypto.KeyBundle { *; }
--keep class com.securesharing.crypto.SecureMemory { *; }
--keep class com.securesharing.crypto.ShamirSecretSharing { *; }
--keep class com.securesharing.crypto.FileEncryptor { *; }
--keep class com.securesharing.crypto.FileDecryptor { *; }
--keep class com.securesharing.crypto.FolderKeyManager { *; }
+-keep class my.ssdid.drive.crypto.providers.** { *; }
+-keep class my.ssdid.drive.crypto.CryptoManager { *; }
+-keep class my.ssdid.drive.crypto.KeyManager { *; }
+-keep class my.ssdid.drive.crypto.KeyBundle { *; }
+-keep class my.ssdid.drive.crypto.SecureMemory { *; }
+-keep class my.ssdid.drive.crypto.ShamirSecretSharing { *; }
+-keep class my.ssdid.drive.crypto.FileEncryptor { *; }
+-keep class my.ssdid.drive.crypto.FileDecryptor { *; }
+-keep class my.ssdid.drive.crypto.FolderKeyManager { *; }
 
 # Kotlin Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}

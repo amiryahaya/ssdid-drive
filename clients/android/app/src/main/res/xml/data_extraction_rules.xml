@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-   SecureSharing Data Extraction Rules
+   SSDID Drive Data Extraction Rules
 
    SECURITY: Disable all backup and extraction for security-sensitive app.
    We store encrypted private keys and tokens that should never leave the device.

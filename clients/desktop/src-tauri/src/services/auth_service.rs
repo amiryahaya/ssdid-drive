@@ -8,7 +8,7 @@ use crate::models::{
 use crate::services::{ApiClient, CryptoService};
 use crate::storage::KeyringStore;
 use parking_lot::RwLock;
-use securesharing_crypto::symmetric::{
+use ssdid_drive_crypto::symmetric::{
     tiered_kdf_create_salt, tiered_kdf_derive, KdfProfile, TIERED_KDF_WIRE_SALT_SIZE,
 };
 use std::sync::Arc;

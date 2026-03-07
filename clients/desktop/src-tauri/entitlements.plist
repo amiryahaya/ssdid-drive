@@ -13,13 +13,13 @@
     <!-- Keychain access (shared with File Provider extension) -->
     <key>com.apple.security.keychain-access-groups</key>
     <array>
-        <string>$(AppIdentifierPrefix)com.securesharing</string>
+        <string>$(AppIdentifierPrefix)my.ssdid.drive</string>
     </array>
 
     <!-- App Groups (for sharing data with File Provider extension) -->
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>group.com.securesharing.desktop</string>
+        <string>group.my.ssdid.drive.desktop</string>
     </array>
 
     <!-- File access -->

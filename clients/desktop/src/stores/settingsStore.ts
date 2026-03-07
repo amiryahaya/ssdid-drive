@@ -156,7 +156,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
     }),
     {
-      name: 'securesharing-settings',
+      name: 'ssdid-drive-settings',
       partialize: (state) => ({ settings: state.settings }),
       onRehydrateStorage: () => {
         // Apply theme after rehydration

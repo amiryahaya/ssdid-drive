@@ -3,6 +3,6 @@ members = [
     "src-tauri",
     "native/kaz-kem-sys",
     "native/kaz-sign-sys",
-    "native/securesharing-crypto",
+    "native/ssdid-drive-crypto",
 ]
 resolver = "2"

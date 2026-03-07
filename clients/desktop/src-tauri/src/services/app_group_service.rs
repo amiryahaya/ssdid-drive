@@ -8,13 +8,13 @@ use tracing::{debug, error, info, warn};
 use objc2::runtime::AnyClass;
 
 /// App Group identifier for sharing data between the main app and File Provider extension
-const APP_GROUP_ID: &str = "group.com.securesharing.desktop";
+const APP_GROUP_ID: &str = "group.my.ssdid.drive.desktop";
 
 /// Keychain service name for shared credentials
-const KEYCHAIN_SERVICE: &str = "com.securesharing.desktop";
+const KEYCHAIN_SERVICE: &str = "my.ssdid.drive.desktop";
 
 /// Notification name for crypto requests
-const CRYPTO_REQUEST_NOTIFICATION: &str = "com.securesharing.cryptoRequest";
+const CRYPTO_REQUEST_NOTIFICATION: &str = "my.ssdid.drive.cryptoRequest";
 
 /// Crypto request from the File Provider extension
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-# SecureSharing Android Client
+# SSDID Drive Android Client
 
 A secure, end-to-end encrypted file sharing application for Android with post-quantum cryptography support.
 
@@ -46,8 +46,8 @@ A secure, end-to-end encrypted file sharing application for Android with post-qu
 android/
 ├── app/
 │   └── src/main/
-│       ├── kotlin/com/securesharing/
-│       │   ├── SecureSharingApp.kt      # Application class
+│       ├── kotlin/my/ssdid/drive/
+│       │   ├── SsdidDriveApp.kt      # Application class
 │       │   ├── MainActivity.kt           # Single activity
 │       │   ├── di/                       # Hilt modules
 │       │   ├── data/                     # Data layer
@@ -136,7 +136,7 @@ buildConfigField("String", "SENTRY_DSN", "\"https://your-key@your-org.ingest.sen
 
 1. Start the backend server:
    ```bash
-   cd ../  # SecureSharing root
+   cd ../  # SSDID Drive root
    mix phx.server
    ```
 
@@ -243,7 +243,7 @@ ProGuard rules are configured in `proguard-rules.pro` to:
 
 ## API Endpoints
 
-The app communicates with the SecureSharing backend API:
+The app communicates with the SSDID Drive backend API:
 
 | Endpoint | Description |
 |----------|-------------|

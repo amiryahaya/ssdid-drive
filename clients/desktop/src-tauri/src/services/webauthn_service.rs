@@ -108,9 +108,9 @@ impl WebAuthnService {
 
     /// Derive wrapping key from PRF output (for PRF-capable platforms)
     pub fn derive_prf_wrapping_key(&self, prf_output: &[u8]) -> AppResult<Vec<u8>> {
-        let wrapping_key = securesharing_crypto::symmetric::hkdf_derive(
+        let wrapping_key = ssdid_drive_crypto::symmetric::hkdf_derive(
             prf_output,
-            b"securesharing-webauthn-mk",
+            b"ssdid-drive-webauthn-mk",
             b"wrapping-key",
         )
         .map_err(|e| AppError::Crypto(format!("PRF key derivation failed: {}", e)))?;

@@ -14,7 +14,7 @@ interface FileProviderStatus {
 /**
  * Hook for managing macOS File Provider extension (Finder integration)
  *
- * The File Provider extension allows SecureSharing files to appear directly
+ * The File Provider extension allows SSDID Drive files to appear directly
  * in Finder, enabling users to browse, open, and manage encrypted files
  * as if they were local files.
  *

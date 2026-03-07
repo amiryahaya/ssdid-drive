@@ -52,7 +52,7 @@ describe('useDeepLink', () => {
     it('should navigate to /shared-with-me with share ID for share links', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://share/share-123');
+      await result.current.handleDeepLink('ssdid-drive://share/share-123');
 
       expect(mockNavigate).toHaveBeenCalledWith('/shared-with-me', {
         state: { highlightShare: 'share-123' },
@@ -62,7 +62,7 @@ describe('useDeepLink', () => {
     it('should navigate to /files with openFile state for file links', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://file/file-456');
+      await result.current.handleDeepLink('ssdid-drive://file/file-456');
 
       expect(mockNavigate).toHaveBeenCalledWith('/files', {
         state: { openFile: 'file-456' },
@@ -72,7 +72,7 @@ describe('useDeepLink', () => {
     it('should navigate to /files/{folderId} for folder links', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://folder/folder-789');
+      await result.current.handleDeepLink('ssdid-drive://folder/folder-789');
 
       expect(mockNavigate).toHaveBeenCalledWith('/files/folder-789');
     });
@@ -80,7 +80,7 @@ describe('useDeepLink', () => {
     it('should navigate to /register with invite token for invite links', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://invite/token-abc');
+      await result.current.handleDeepLink('ssdid-drive://invite/token-abc');
 
       expect(mockNavigate).toHaveBeenCalledWith('/register?invite=token-abc');
     });
@@ -88,7 +88,7 @@ describe('useDeepLink', () => {
     it('should navigate to /settings with recovery state for recovery links', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://recovery/req-001');
+      await result.current.handleDeepLink('ssdid-drive://recovery/req-001');
 
       expect(mockNavigate).toHaveBeenCalledWith('/settings', {
         state: { section: 'recovery', requestId: 'req-001' },
@@ -98,7 +98,7 @@ describe('useDeepLink', () => {
     it('should show error toast for unknown deep link actions', async () => {
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://unknown/something');
+      await result.current.handleDeepLink('ssdid-drive://unknown/something');
 
       expect(mockError).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Invalid link' })
@@ -110,19 +110,19 @@ describe('useDeepLink', () => {
   describe('parseDeepLink', () => {
     it('should parse share deep links', () => {
       const { result } = renderHook(() => useDeepLink());
-      const parsed = result.current.parseDeepLink('securesharing://share/abc-123');
+      const parsed = result.current.parseDeepLink('ssdid-drive://share/abc-123');
       expect(parsed).toEqual({ action: 'share', id: 'abc-123', params: {} });
     });
 
     it('should parse deep links with query parameters', () => {
       const { result } = renderHook(() => useDeepLink());
-      const parsed = result.current.parseDeepLink('securesharing://invite/tok?source=email');
+      const parsed = result.current.parseDeepLink('ssdid-drive://invite/tok?source=email');
       expect(parsed).toEqual({ action: 'invite', id: 'tok', params: { source: 'email' } });
     });
 
     it('should return unknown for malformed deep links', () => {
       const { result } = renderHook(() => useDeepLink());
-      const parsed = result.current.parseDeepLink('securesharing://');
+      const parsed = result.current.parseDeepLink('ssdid-drive://');
       expect(parsed.action).toBe('unknown');
     });
   });
@@ -138,10 +138,10 @@ describe('useDeepLink', () => {
 
       const { result } = renderHook(() => useDeepLink());
 
-      await result.current.handleDeepLink('securesharing://file/file-789');
+      await result.current.handleDeepLink('ssdid-drive://file/file-789');
 
       expect(mockNavigate).toHaveBeenCalledWith('/login');
-      expect(sessionStorage.getItem('pendingDeepLink')).toBe('securesharing://file/file-789');
+      expect(sessionStorage.getItem('pendingDeepLink')).toBe('ssdid-drive://file/file-789');
 
       // Clean up
       sessionStorage.removeItem('pendingDeepLink');

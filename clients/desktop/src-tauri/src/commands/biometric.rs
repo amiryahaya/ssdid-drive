@@ -80,7 +80,7 @@ pub async fn unlock_with_biometric(
     // Authenticate
     let authenticated = state
         .biometric_service()
-        .authenticate("Unlock SecureSharing")
+        .authenticate("Unlock SSDID Drive")
         .await?;
 
     if authenticated {

@@ -1,4 +1,0 @@
-module Argon2Swift {
-header "Argon2Swift-Swift.h"
-export *
-}

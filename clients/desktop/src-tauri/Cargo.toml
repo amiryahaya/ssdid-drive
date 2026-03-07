@@ -1,10 +1,10 @@
 [package]
-name = "securesharing-desktop"
+name = "ssdid-drive-desktop"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.77"
-description = "SecureSharing Desktop - Secure file sharing with post-quantum cryptography"
-authors = ["SecureSharing Team"]
+description = "SSDID Drive Desktop - Secure file sharing with post-quantum cryptography"
+authors = ["SSDID Team"]
 license = "Proprietary"
 
 [build-dependencies]
@@ -24,7 +24,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-updater = "2"
 
 # Crypto (our crates)
-securesharing-crypto = { path = "../native/securesharing-crypto" }
+ssdid-drive-crypto = { path = "../native/ssdid-drive-crypto" }
 
 # Key storage
 keyring = "3"

@@ -9,12 +9,12 @@ use std::future::Future;
 use std::pin::Pin;
 
 /// Default API base URL (production)
-const DEFAULT_API_BASE_URL: &str = "https://api.securesharing.com/api/v1";
+const DEFAULT_API_BASE_URL: &str = "https://api.ssdid.my/api/v1";
 
 /// Environment variable name for API URL override
-const API_URL_ENV_VAR: &str = "SECURESHARING_API_URL";
+const API_URL_ENV_VAR: &str = "SSDID_DRIVE_API_URL";
 
-const USER_AGENT: &str = concat!("SecureSharing-Desktop/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("SsdidDrive-Desktop/", env!("CARGO_PKG_VERSION"));
 
 /// Get the API base URL from environment or use default
 fn get_api_base_url() -> String {

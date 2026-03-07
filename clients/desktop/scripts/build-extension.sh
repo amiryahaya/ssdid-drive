@@ -71,7 +71,7 @@ if [ -n "$DEVELOPMENT_TEAM" ]; then
 fi
 
 # Check if xcodeproj exists, if not create it
-if [ ! -d "SecureSharingFileProvider.xcodeproj" ]; then
+if [ ! -d "SsdidDriveFileProvider.xcodeproj" ]; then
     echo "Creating Xcode project..."
 
     # Create a Package.swift for the extension
@@ -80,20 +80,20 @@ if [ ! -d "SecureSharingFileProvider.xcodeproj" ]; then
 import PackageDescription
 
 let package = Package(
-    name: "SecureSharingFileProvider",
+    name: "SsdidDriveFileProvider",
     platforms: [
         .macOS(.v13)
     ],
     products: [
         .library(
-            name: "SecureSharingFileProvider",
-            targets: ["SecureSharingFileProvider"]
+            name: "SsdidDriveFileProvider",
+            targets: ["SsdidDriveFileProvider"]
         ),
     ],
     targets: [
         .target(
-            name: "SecureSharingFileProvider",
-            path: "SecureSharingFileProvider"
+            name: "SsdidDriveFileProvider",
+            path: "SsdidDriveFileProvider"
         ),
     ]
 )
@@ -106,7 +106,7 @@ EOF
     echo "1. Open Xcode"
     echo "2. Create a new macOS App Extension project"
     echo "3. Select 'File Provider Extension' template"
-    echo "4. Copy the Swift files from SecureSharingFileProvider/ into the project"
+    echo "4. Copy the Swift files from SsdidDriveFileProvider/ into the project"
     echo "5. Configure entitlements and Info.plist"
     echo ""
     exit 0
@@ -115,8 +115,8 @@ fi
 # Build the extension
 echo "Building extension..."
 xcodebuild \
-    -project SecureSharingFileProvider.xcodeproj \
-    -scheme SecureSharingFileProvider \
+    -project SsdidDriveFileProvider.xcodeproj \
+    -scheme SsdidDriveFileProvider \
     "${BUILD_ARGS[@]}" \
     build
 

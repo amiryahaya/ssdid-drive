@@ -1,6 +1,6 @@
-name: SecureSharing
+name: SsdidDrive
 options:
-  bundleIdPrefix: com.securesharing
+  bundleIdPrefix: my.ssdid.drive
   deploymentTarget:
     iOS: "16.0"
   xcodeVersion: "15.0"
@@ -15,36 +15,36 @@ settings:
     SWIFT_VERSION: "5.9"
 
 targets:
-  SecureSharing:
+  SsdidDrive:
     type: application
     platform: iOS
     sources:
-      - path: SecureSharing
+      - path: SsdidDrive
         excludes:
           - "**/.DS_Store"
     settings:
       base:
-        INFOPLIST_FILE: SecureSharing/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.securesharing.app
+        INFOPLIST_FILE: SsdidDrive/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: my.ssdid.drive.app
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
         ENABLE_BITCODE: NO
     entitlements:
-      path: SecureSharing/SecureSharing.entitlements
+      path: SsdidDrive/SsdidDrive.entitlements
       properties:
         com.apple.developer.associated-domains: []
         keychain-access-groups:
-          - $(AppIdentifierPrefix)com.securesharing.app
+          - $(AppIdentifierPrefix)my.ssdid.drive.app
     preBuildScripts: []
     postBuildScripts: []
 
 schemes:
-  SecureSharing:
+  SsdidDrive:
     build:
       targets:
-        SecureSharing: all
+        SsdidDrive: all
     run:
       config: Debug
     test:

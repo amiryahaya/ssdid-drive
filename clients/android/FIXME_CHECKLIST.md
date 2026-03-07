@@ -1,4 +1,4 @@
-# SecureSharing Android - Fix Checklist
+# SSDID Drive Android - Fix Checklist
 
 Generated from code review on 2026-01-17
 
@@ -45,7 +45,7 @@ Generated from code review on 2026-01-17
   - File: `proguard-rules.pro`
   - Added comprehensive rules for KAZ-KEM and KAZ-SIGN native methods
   - Added rules for Bouncy Castle PQC classes (ML-KEM, ML-DSA)
-  - Added rules to preserve all SecureSharing crypto classes from obfuscation
+  - Added rules to preserve all SSDID Drive crypto classes from obfuscation
   - Includes specific keep rules for all crypto providers
 
 ### 🟠 HIGH
@@ -302,7 +302,7 @@ Generated from code review on 2026-01-17
   - Updated: `AndroidManifest.xml` - Added intent filters for deep links and share intents
   - Created: `util/DeepLinkHandler.kt` - Parse deep links and share intents
   - Updated: `MainActivity.kt` - Handle deep links on launch and new intent
-  - Supports: securesharing:// scheme, HTTPS app links, ACTION_SEND intents
+  - Supports: ssdiddrive:// scheme, HTTPS app links, ACTION_SEND intents
   - Routes: /share/{id}, /file/{id}, /folder/{id}
 
 - [x] **Add Multi-Select Mode** ✅ FIXED
@@ -418,7 +418,7 @@ Generated from code review on 2026-01-17
 - [x] **Add Analytics** ✅ FIXED
   - Created `AnalyticsManager.kt` - Privacy-preserving analytics facade via Sentry
   - Opt-in preference in `PreferencesManager` (default: disabled)
-  - Analytics toggle in Settings UI ("Help improve SecureSharing")
+  - Analytics toggle in Settings UI ("Help improve SSDID Drive")
   - Typed events: login, file upload/download, share, navigation, crypto timing
   - MIME types generalized to categories, file sizes bucketed (no PII)
   - Wired up at: AuthRepositoryImpl, FileRepositoryImpl, ShareRepositoryImpl, NavGraph, CryptoManager

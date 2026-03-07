@@ -56,7 +56,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
       </h1>
 
       <p className="text-lg text-muted-foreground mb-8 max-w-md">
-        Your account is ready. Let's take a quick tour to help you get the most out of SecureSharing.
+        Your account is ready. Let's take a quick tour to help you get the most out of SSDID Drive.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl mb-8">
@@ -102,7 +102,7 @@ function SecurityStep({ onNext, onPrev }: { onNext: () => void; onPrev: () => vo
       <h1 className="text-3xl font-bold mb-3">Post-Quantum Security</h1>
 
       <p className="text-lg text-muted-foreground mb-8 max-w-md">
-        SecureSharing uses next-generation cryptography to protect your data against future quantum computer attacks.
+        SSDID Drive uses next-generation cryptography to protect your data against future quantum computer attacks.
       </p>
 
       <div className="space-y-4 w-full max-w-lg mb-8">
@@ -310,7 +310,7 @@ export function OnboardingPage() {
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <div className="flex items-center gap-2">
             <Shield className="h-6 w-6 text-primary" />
-            <span className="font-semibold">SecureSharing</span>
+            <span className="font-semibold">SSDID Drive</span>
           </div>
           <StepIndicator steps={steps} currentStep={currentStep} />
           <div className="w-24" /> {/* Spacer for centering */}

@@ -32,7 +32,7 @@ export function LoginPage() {
           <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center mb-4">
             <Shield className="h-10 w-10 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold">SecureSharing</h1>
+          <h1 className="text-2xl font-bold">SSDID Drive</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Sign in to your account
           </p>

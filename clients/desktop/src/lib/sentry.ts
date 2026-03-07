@@ -1,5 +1,5 @@
 /**
- * Sentry configuration for SecureSharing Desktop
+ * Sentry configuration for SSDID Drive Desktop
  *
  * IMPORTANT: Replace SENTRY_DSN with your actual Sentry DSN from
  * https://sentry.io/settings/[org]/projects/[project]/keys/
@@ -57,7 +57,7 @@ export async function initSentry() {
   sentry.init({
     dsn: SENTRY_DSN,
     environment: ENVIRONMENT,
-    release: `securesharing-desktop@${APP_VERSION}`,
+    release: `ssdid-drive-desktop@${APP_VERSION}`,
 
     // Performance monitoring
     tracesSampleRate: ENVIRONMENT === 'production' ? 0.1 : 1.0,

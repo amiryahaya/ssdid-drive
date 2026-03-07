@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SecureSharing",
-  "identifier": "com.securesharing.desktop",
+  "productName": "SsdidDrive",
+  "identifier": "my.ssdid.drive.desktop",
   "version": "1.0.0",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -11,7 +11,7 @@
   },
   "app": {
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.securesharing.com wss://api.securesharing.com",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.ssdid.my wss://api.ssdid.my",
       "dangerousDisableAssetCspModification": false,
       "assetProtocol": {
         "enable": true,
@@ -21,7 +21,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "SecureSharing",
+        "title": "SSDID Drive",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
@@ -38,7 +38,7 @@
       "iconPath": "icons/tray-icon.png",
       "iconAsTemplate": true,
       "menuOnLeftClick": false,
-      "title": "SecureSharing"
+      "title": "SSDID Drive"
     }
   },
   "bundle": {
@@ -53,8 +53,8 @@
     ],
     "category": "Productivity",
     "shortDescription": "Secure file sharing with post-quantum cryptography",
-    "longDescription": "SecureSharing is an enterprise-grade secure file sharing platform with zero-trust, zero-knowledge architecture and post-quantum cryptographic protection.",
-    "copyright": "Copyright (c) 2026 SecureSharing",
+    "longDescription": "SSDID Drive is an enterprise-grade secure file sharing platform with zero-trust, zero-knowledge architecture and post-quantum cryptographic protection.",
+    "copyright": "Copyright (c) 2026 SSDID",
     "macOS": {
       "entitlements": "entitlements.plist",
       "exceptionDomain": "",
@@ -83,12 +83,12 @@
     "deep-link": {
       "mobile": [],
       "desktop": {
-        "schemes": ["securesharing"]
+        "schemes": ["ssdid-drive"]
       }
     },
     "updater": {
       "endpoints": [
-        "https://releases.securesharing.app/{{target}}/{{arch}}/{{current_version}}"
+        "https://releases.ssdid.my/{{target}}/{{arch}}/{{current_version}}"
       ],
       "pubkey": ""
     }

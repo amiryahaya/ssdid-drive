@@ -19,7 +19,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.securesharing"
+    namespace = "my.ssdid.drive"
     compileSdk = 34
 
     // ==================== Signing Configurations ====================
@@ -35,7 +35,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.securesharing"
+        applicationId = "my.ssdid.drive"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -67,7 +67,7 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "SecureSharing Dev")
+            resValue("string", "app_name", "SSDID Drive Dev")
 
             // Local development server (emulator)
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4000/api/\"")
@@ -90,18 +90,18 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            resValue("string", "app_name", "SecureSharing Staging")
+            resValue("string", "app_name", "SSDID Drive Staging")
 
             // Staging server
-            buildConfigField("String", "API_BASE_URL", "\"https://staging-api.securesharing.example/api/\"")
-            buildConfigField("String", "API_WS_URL", "\"wss://staging-api.securesharing.example/socket/websocket\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://staging-api.ssdiddrive.example/api/\"")
+            buildConfigField("String", "API_WS_URL", "\"wss://staging-api.ssdiddrive.example/socket/websocket\"")
             buildConfigField("Boolean", "ENABLE_LOGGING", "true")
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
             buildConfigField("String", "CERT_PIN_PRIMARY", "\"REPLACE_WITH_STAGING_PRIMARY_PIN\"")
             buildConfigField("String", "CERT_PIN_BACKUP", "\"REPLACE_WITH_STAGING_BACKUP_PIN\"")
 
             // Certificate pinning - IMPORTANT: Replace with actual staging server cert hashes
-            // Generate using: openssl s_client -servername staging-api.securesharing.example -connect staging-api.securesharing.example:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+            // Generate using: openssl s_client -servername staging-api.ssdiddrive.example -connect staging-api.ssdiddrive.example:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
             buildConfigField("String", "CERT_PIN_PRIMARY", "\"PLACEHOLDER_STAGING_PRIMARY\"")
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_STAGING_BACKUP\"")
 
@@ -112,18 +112,18 @@ android {
 
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "SecureSharing")
+            resValue("string", "app_name", "SSDID Drive")
 
             // Production server
-            buildConfigField("String", "API_BASE_URL", "\"https://api.securesharing.example/api/\"")
-            buildConfigField("String", "API_WS_URL", "\"wss://api.securesharing.example/socket/websocket\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.ssdiddrive.example/api/\"")
+            buildConfigField("String", "API_WS_URL", "\"wss://api.ssdiddrive.example/socket/websocket\"")
             buildConfigField("Boolean", "ENABLE_LOGGING", "false")
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
             buildConfigField("String", "CERT_PIN_PRIMARY", "\"REPLACE_WITH_PROD_PRIMARY_PIN\"")
             buildConfigField("String", "CERT_PIN_BACKUP", "\"REPLACE_WITH_PROD_BACKUP_PIN\"")
 
             // Certificate pinning - CRITICAL: Replace with actual production cert hashes before release!
-            // Generate using: openssl s_client -servername api.securesharing.example -connect api.securesharing.example:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+            // Generate using: openssl s_client -servername api.ssdiddrive.example -connect api.ssdiddrive.example:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
             // Include both primary (current cert) and backup (next cert for rotation)
             buildConfigField("String", "CERT_PIN_PRIMARY", "\"PLACEHOLDER_PROD_PRIMARY\"")
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_PROD_BACKUP\"")

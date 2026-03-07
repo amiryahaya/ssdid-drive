@@ -39,7 +39,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b">
         <Shield className="h-8 w-8 text-primary" />
-        <span className="ml-3 text-xl font-semibold">SecureSharing</span>
+        <span className="ml-3 text-xl font-semibold">SSDID Drive</span>
       </div>
 
       {/* Navigation */}

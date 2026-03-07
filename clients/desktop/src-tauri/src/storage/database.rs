@@ -110,7 +110,7 @@ impl Database {
         let data_dir = dirs::data_dir()
             .ok_or_else(|| AppError::Storage("Could not find data directory".to_string()))?;
 
-        Ok(data_dir.join("SecureSharing").join("securesharing.db"))
+        Ok(data_dir.join("SsdidDrive").join("ssdid-drive.db"))
     }
 
     /// Open a new connection to the database

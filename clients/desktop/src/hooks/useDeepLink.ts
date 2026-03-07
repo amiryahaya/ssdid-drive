@@ -6,11 +6,11 @@ import { useToast } from './useToast';
 
 /**
  * Deep link URL structure:
- * - securesharing://invite/{token} - Accept a tenant invitation
- * - securesharing://share/{shareId} - Open a shared file/folder
- * - securesharing://recovery/{requestId} - Handle recovery request
- * - securesharing://file/{fileId} - Open a specific file
- * - securesharing://folder/{folderId} - Open a specific folder
+ * - ssdid-drive://invite/{token} - Accept a tenant invitation
+ * - ssdid-drive://share/{shareId} - Open a shared file/folder
+ * - ssdid-drive://recovery/{requestId} - Handle recovery request
+ * - ssdid-drive://file/{fileId} - Open a specific file
+ * - ssdid-drive://folder/{folderId} - Open a specific folder
  */
 
 interface DeepLinkPayload {
@@ -29,7 +29,7 @@ interface ParsedDeepLink {
 function parseDeepLink(url: string): ParsedDeepLink {
   try {
     // Remove the protocol prefix
-    const withoutProtocol = url.replace(/^securesharing:\/\//, '');
+    const withoutProtocol = url.replace(/^ssdid-drive:\/\//, '');
     const [path, queryString] = withoutProtocol.split('?');
     const segments = path.split('/').filter(Boolean);
 
@@ -56,7 +56,7 @@ function parseDeepLink(url: string): ParsedDeepLink {
       case 'folder':
         return { action, id, params };
       case 'oidc':
-        // OIDC callback: securesharing://oidc/callback?code=X&state=Y
+        // OIDC callback: ssdid-drive://oidc/callback?code=X&state=Y
         return { action: 'oidc-callback', id: segments[1] ?? '', params };
       default:
         return { action: 'unknown', id: '', params };
@@ -71,11 +71,11 @@ function parseDeepLink(url: string): ParsedDeepLink {
  * Hook to handle deep links in the desktop app.
  *
  * Supports the following URL schemes:
- * - securesharing://invite/{token} - Accept tenant invitation
- * - securesharing://share/{shareId} - View shared item
- * - securesharing://recovery/{requestId} - Handle recovery request
- * - securesharing://file/{fileId} - Open file
- * - securesharing://folder/{folderId} - Open folder
+ * - ssdid-drive://invite/{token} - Accept tenant invitation
+ * - ssdid-drive://share/{shareId} - View shared item
+ * - ssdid-drive://recovery/{requestId} - Handle recovery request
+ * - ssdid-drive://file/{fileId} - Open file
+ * - ssdid-drive://folder/{folderId} - Open folder
  */
 export function useDeepLink() {
   const navigate = useNavigate();

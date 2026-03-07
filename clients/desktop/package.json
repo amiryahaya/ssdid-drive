@@ -1,7 +1,7 @@
 {
-  "name": "securesharing-desktop",
+  "name": "ssdid-drive-desktop",
   "version": "1.0.0",
-  "description": "SecureSharing Desktop - Secure file sharing with post-quantum cryptography",
+  "description": "SSDID Drive Desktop - Secure file sharing with post-quantum cryptography",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,4 +1,4 @@
-//! System tray menu management for SecureSharing Desktop
+//! System tray menu management for SSDID Drive Desktop
 //!
 //! Provides a menu bar / system tray interface with:
 //! - Quick actions (open app, upload, settings)
@@ -80,7 +80,7 @@ fn build_tray_menu(app: &AppHandle, state: &TrayState) -> tauri::Result<Menu<Wry
     let mut menu_builder = MenuBuilder::new(app);
 
     // Open app
-    let open_item = MenuItemBuilder::with_id(menu_ids::OPEN_APP, "Open SecureSharing")
+    let open_item = MenuItemBuilder::with_id(menu_ids::OPEN_APP, "Open SSDID Drive")
         .build(app)?;
     menu_builder = menu_builder.item(&open_item);
 
@@ -144,7 +144,7 @@ fn build_tray_menu(app: &AppHandle, state: &TrayState) -> tauri::Result<Menu<Wry
     menu_builder = menu_builder.separator();
 
     // Quit
-    let quit_item = MenuItemBuilder::with_id(menu_ids::QUIT, "Quit SecureSharing")
+    let quit_item = MenuItemBuilder::with_id(menu_ids::QUIT, "Quit SSDID Drive")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
     menu_builder = menu_builder.item(&quit_item);
@@ -169,7 +169,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     // Get the existing tray icon (configured in tauri.conf.json)
     if let Some(tray) = app.tray_by_id("main") {
         tray.set_menu(Some(menu))?;
-        tray.set_tooltip(Some("SecureSharing"))?;
+        tray.set_tooltip(Some("SSDID Drive"))?;
 
         // Handle menu events
         let app_handle = app.clone();
@@ -188,7 +188,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         // Create tray if not configured
         let _tray = TrayIconBuilder::with_id("main")
             .menu(&menu)
-            .tooltip("SecureSharing")
+            .tooltip("SSDID Drive")
             .menu_on_left_click(false)
             .on_menu_event({
                 let app_handle = app.clone();

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.tauri.app/config/2/capability",
   "identifier": "default",
-  "description": "Default capabilities for SecureSharing desktop app",
+  "description": "Default capabilities for SSDID Drive desktop app",
   "windows": ["main"],
   "permissions": [
     "core:default",

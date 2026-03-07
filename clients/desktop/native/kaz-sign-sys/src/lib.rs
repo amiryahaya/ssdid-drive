@@ -1,7 +1,7 @@
 //! Low-level FFI bindings for KAZ-SIGN
 //!
 //! This crate provides raw, unsafe bindings to the KAZ-SIGN C library.
-//! For safe Rust wrappers, use the `securesharing-crypto` crate.
+//! For safe Rust wrappers, use the `ssdid-drive-crypto` crate.
 
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]

@@ -1,4 +1,0 @@
-module OneSignalFrameworkWrapper {
-umbrella "/Users/amirrudinyahaya/Library/Developer/Xcode/DerivedData/SecureSharing-aombqvqqfnuxaretxiwprpzdaosv/SourcePackages/checkouts/OneSignal-iOS-SDK/OneSignalFrameworkWrapper/include"
-export *
-}

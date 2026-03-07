@@ -37,7 +37,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: SecureSharing Desktop v${{ steps.version.outputs.version }}
+          name: SSDID Drive Desktop v${{ steps.version.outputs.version }}
           draft: true
           prerelease: false
         env:

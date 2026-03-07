@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SecureSharing"
+rootProject.name = "SsdidDrive"
 include(":app")

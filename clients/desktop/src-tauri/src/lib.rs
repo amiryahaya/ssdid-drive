@@ -1,4 +1,4 @@
-//! SecureSharing Desktop Application
+//! SSDID Drive Desktop Application
 //!
 //! Cross-platform desktop client with post-quantum cryptography support.
 
@@ -36,7 +36,7 @@ fn init_sentry() -> Option<sentry::ClientInitGuard> {
         dsn,
         sentry::ClientOptions {
             release: Some(std::borrow::Cow::Borrowed(concat!(
-                "securesharing-desktop@",
+                "ssdid-drive-desktop@",
                 env!("CARGO_PKG_VERSION")
             ))),
             environment: Some(std::borrow::Cow::Borrowed(environment)),
@@ -67,13 +67,13 @@ pub fn run() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "securesharing_desktop=debug,tauri=info".into()),
+                .unwrap_or_else(|_| "ssdid_drive_desktop=debug,tauri=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .with(sentry_layer)
         .init();
 
-    tracing::info!("Starting SecureSharing Desktop v{}", env!("CARGO_PKG_VERSION"));
+    tracing::info!("Starting SSDID Drive Desktop v{}", env!("CARGO_PKG_VERSION"));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -103,7 +103,7 @@ pub fn run() {
                         for url_val in urls {
                             if let Some(url) = url_val.as_str() {
                                 // Check for OIDC callback URLs
-                                if url.starts_with("securesharing://oidc/callback") {
+                                if url.starts_with("ssdid-drive://oidc/callback") {
                                     tracing::info!("OIDC callback deep-link received");
                                     // Parse code and state from URL
                                     if let Ok(parsed) = url::Url::parse(url) {

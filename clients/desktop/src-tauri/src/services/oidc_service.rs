@@ -41,7 +41,7 @@ impl OidcService {
     pub async fn begin_authorize(&self, provider_id: &str) -> AppResult<OidcAuthorizeResponse> {
         let request = OidcAuthorizeRequest {
             provider_id: provider_id.to_string(),
-            redirect_uri: "securesharing://oidc/callback".to_string(),
+            redirect_uri: "ssdid-drive://oidc/callback".to_string(),
         };
 
         let response: OidcAuthorizeResponse = self
@@ -95,10 +95,10 @@ impl OidcService {
             .map_err(|e| AppError::Crypto(format!("Failed to decode key_salt: {}", e)))?;
 
         // HKDF-SHA384: key_material + salt → vault_key
-        let vault_key = securesharing_crypto::symmetric::hkdf_derive(
+        let vault_key = ssdid_drive_crypto::symmetric::hkdf_derive(
             &material_bytes,
             &salt_bytes,
-            b"securesharing-vault-key",
+            b"ssdid-drive-vault-key",
         )
         .map_err(|e| AppError::Crypto(format!("HKDF derivation failed: {}", e)))?;
 

@@ -4,7 +4,7 @@ use crate::commands::crypto::{EncryptionResult, SignatureResult};
 use crate::error::{AppError, AppResult};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use parking_lot::RwLock;
-use securesharing_crypto::{
+use ssdid_drive_crypto::{
     kaz_kem, kaz_sign, ml_dsa, ml_kem,
     symmetric::{
         argon2_derive, decrypt_aes_gcm, encrypt_aes_gcm, generate_key, generate_salt, hkdf_derive,
@@ -24,7 +24,7 @@ impl CryptoService {
     /// Create a new crypto service
     pub fn new() -> AppResult<Self> {
         // Initialize the crypto library
-        securesharing_crypto::init()
+        ssdid_drive_crypto::init()
             .map_err(|e| AppError::Crypto(format!("Failed to initialize crypto: {}", e)))?;
 
         Ok(Self {
@@ -487,6 +487,6 @@ impl CryptoService {
 impl Drop for CryptoService {
     fn drop(&mut self) {
         self.clear_master_key();
-        securesharing_crypto::cleanup();
+        ssdid_drive_crypto::cleanup();
     }
 }

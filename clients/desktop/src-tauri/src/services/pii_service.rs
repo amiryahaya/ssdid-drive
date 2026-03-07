@@ -11,7 +11,7 @@ use crate::services::crypto_service::CryptoService;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use parking_lot::RwLock;
 use reqwest::{header, Client};
-use securesharing_crypto::{
+use ssdid_drive_crypto::{
     ml_kem,
     symmetric::{decrypt_aes_gcm, hkdf_derive, KEY_SIZE},
 };
@@ -130,7 +130,7 @@ impl PiiServiceClient {
     /// Create a new PII service client
     pub fn new() -> AppResult<Self> {
         let client = Client::builder()
-            .user_agent("SecureSharing-Desktop")
+            .user_agent("SsdidDrive-Desktop")
             .timeout(std::time::Duration::from_secs(60))
             .build()
             .map_err(|e| AppError::Network(e.to_string()))?;
@@ -356,7 +356,7 @@ impl PiiServiceClient {
                 .decode(kaz_ct_b64)
                 .map_err(|e| AppError::Crypto(format!("Invalid KAZ-KEM ciphertext: {}", e)))?;
 
-            let kaz_ss = securesharing_crypto::kaz_kem::decapsulate(&kaz_ct, &kaz_kem_sk)
+            let kaz_ss = ssdid_drive_crypto::kaz_kem::decapsulate(&kaz_ct, &kaz_kem_sk)
                 .map_err(|e| AppError::Crypto(format!("KAZ-KEM decapsulation failed: {}", e)))?;
 
             // Combine ML-KEM and KAZ-KEM shared secrets

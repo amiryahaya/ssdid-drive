@@ -3,7 +3,7 @@
 use crate::error::{AppError, AppResult};
 use keyring::Entry;
 
-const SERVICE_NAME: &str = "com.securesharing.desktop";
+const SERVICE_NAME: &str = "my.ssdid.drive.desktop";
 
 /// Key names for stored secrets
 mod keys {

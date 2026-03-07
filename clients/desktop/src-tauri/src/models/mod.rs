@@ -1,4 +1,4 @@
-//! Data models for SecureSharing Desktop
+//! Data models for SSDID Drive Desktop
 
 mod auth_provider;
 mod file;
