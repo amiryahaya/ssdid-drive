@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Services;
@@ -17,6 +18,17 @@ public class SsdidDriveFactory : WebApplicationFactory<Program>
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
+
+        // Register PostgreSQL "now()" so HasDefaultValueSql("now()") works on SQLite.
+        _connection.CreateFunction("now", () => DateTimeOffset.UtcNow.ToString("o"));
+        // Map gen_random_uuid() → randomblob(16) via a SQLite alias.
+        // randomblob(16) returns a 16-byte BLOB that EF Core SQLite reads as Guid.
+        _connection.CreateFunction("gen_random_uuid", () =>
+        {
+            // Use .NET Guid so byte ordering matches what EF Core SQLite expects.
+            var g = Guid.NewGuid();
+            return g;
+        });
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -54,6 +66,7 @@ public class SsdidDriveFactory : WebApplicationFactory<Program>
             var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
             db.Database.EnsureCreated();
         });
     }

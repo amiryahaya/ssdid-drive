@@ -17,13 +17,18 @@ public static class ListFolders
             return AppError.BadRequest("User does not belong to a tenant").ToProblemResult();
 
         var tenantId = user.TenantId.Value;
+        var now = DateTimeOffset.UtcNow;
 
-        // Folder IDs shared with this user
-        var sharedFolderIds = await db.Shares
-            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder"
-                && (s.ExpiresAt == null || s.ExpiresAt > DateTimeOffset.UtcNow))
+        // Folder IDs shared with this user (active, non-expired shares).
+        // Fetch candidates server-side, then filter expiry client-side for
+        // cross-database compatibility (SQLite cannot compare DateTimeOffset).
+        var sharedFolderIds = (await db.Shares
+            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder")
+            .Select(s => new { s.ResourceId, s.ExpiresAt })
+            .ToListAsync(ct))
+            .Where(s => s.ExpiresAt == null || s.ExpiresAt > now)
             .Select(s => s.ResourceId)
-            .ToListAsync(ct);
+            .ToList();
 
         var folders = await db.Folders
             .Where(f => f.TenantId == tenantId
