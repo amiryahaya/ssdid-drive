@@ -31,7 +31,8 @@ async function getApiBaseUrl(): Promise<string> {
     const info = await invoke<{ api_base_url: string }>('get_api_base_url');
     return info.api_base_url;
   } catch {
-    return (import.meta as Record<string, Record<string, Record<string, string>>>).env?.VITE_API_BASE_URL ?? 'http://localhost:5147';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:5147';
   }
 }
 
