@@ -27,6 +27,7 @@ const mockQrPayload = JSON.stringify({
 const mockChallengeResult = {
   serverDid: 'did:example:server',
   challengeId: 'challenge-123',
+  subscriberSecret: 'secret-abc-456',
   qrPayload: mockQrPayload,
 };
 
@@ -38,11 +39,13 @@ let mockEventSourceInstance: {
 };
 
 class MockEventSource {
+  static lastUrl: string = '';
   addEventListener = vi.fn();
   close = vi.fn();
   onerror: ((event: Event) => void) | null = null;
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    MockEventSource.lastUrl = url;
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     mockEventSourceInstance = this;
   }
@@ -250,6 +253,21 @@ describe('QrChallenge', () => {
     await waitFor(() => {
       expect(mockCreateChallenge).toHaveBeenCalledWith('register');
     });
+  });
+
+  it('should include subscriber_secret in SSE URL', async () => {
+    mockCreateChallenge.mockResolvedValue(mockChallengeResult);
+
+    render(
+      <QrChallenge action="authenticate" onAuthenticated={mockOnAuthenticated} />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+    });
+
+    // Verify the EventSource was constructed with subscriber_secret in the URL
+    expect(MockEventSource.lastUrl).toContain('subscriber_secret=secret-abc-456');
   });
 
   it('should close EventSource on unmount', async () => {

@@ -16,6 +16,7 @@ export function QrChallenge({ action, onAuthenticated }: QrChallengeProps) {
   const [qrPayload, setQrPayload] = useState<string>('');
   const [challengeId, setChallengeId] = useState<string>('');
   const [serverUrl, setServerUrl] = useState<string>('');
+  const [subscriberSecret, setSubscriberSecret] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -27,6 +28,7 @@ export function QrChallenge({ action, onAuthenticated }: QrChallengeProps) {
       const result = await createChallenge(action);
       setQrPayload(result.qrPayload);
       setChallengeId(result.challengeId);
+      setSubscriberSecret(result.subscriberSecret);
 
       // Extract server URL from the QR payload
       const payload = JSON.parse(result.qrPayload);
@@ -42,11 +44,11 @@ export function QrChallenge({ action, onAuthenticated }: QrChallengeProps) {
 
   // Subscribe to SSE events when challenge is ready
   useEffect(() => {
-    if (state !== 'ready' || !challengeId || !serverUrl) {
+    if (state !== 'ready' || !challengeId || !serverUrl || !subscriberSecret) {
       return;
     }
 
-    const sseUrl = `${serverUrl}/api/auth/ssdid/events?challenge_id=${challengeId}`;
+    const sseUrl = `${serverUrl}/api/auth/ssdid/events?challenge_id=${challengeId}&subscriber_secret=${subscriberSecret}`;
     const eventSource = new EventSource(sseUrl);
     eventSourceRef.current = eventSource;
 
@@ -74,7 +76,7 @@ export function QrChallenge({ action, onAuthenticated }: QrChallengeProps) {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [state, challengeId, serverUrl, onAuthenticated]);
+  }, [state, challengeId, serverUrl, subscriberSecret, onAuthenticated]);
 
   // Initialize on mount
   useEffect(() => {
