@@ -1,3 +1,4 @@
+using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
@@ -5,10 +6,12 @@ namespace SsdidDrive.Api.Features.Auth;
 public static class LoginInitiate
 {
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPost("/login/initiate", Handle);
+        group.MapPost("/login/initiate", Handle)
+            .WithMetadata(new SsdidPublicAttribute());
 
     private static IResult Handle(
         SsdidIdentity identity,
+        ISseNotificationBus sseBus,
         IConfiguration config)
     {
         // challengeId is a correlation ID for SSE session delivery only —
@@ -16,6 +19,9 @@ public static class LoginInitiate
         var challengeId = Guid.NewGuid().ToString("N");
         var challenge = SsdidCrypto.GenerateChallenge();
         var serverSignature = identity.SignChallenge(challenge);
+
+        // Generate a subscriber secret so only the initiator can listen on SSE
+        var subscriberSecret = sseBus.CreateSubscriberSecret(challengeId);
 
         var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidCrypto.DefaultRegistryUrl;
         var serviceUrl = config["Ssdid:ServiceUrl"] ?? "";
@@ -36,6 +42,7 @@ public static class LoginInitiate
         return Results.Ok(new
         {
             challenge_id = challengeId,
+            subscriber_secret = subscriberSecret,
             qr_payload = qrPayload
         });
     }

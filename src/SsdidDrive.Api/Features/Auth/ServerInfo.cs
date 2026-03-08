@@ -1,3 +1,4 @@
+using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
@@ -7,7 +8,8 @@ public static class ServerInfo
     public record Response(string ServerDid, string ServerKeyId, string ServiceName, string RegistryUrl);
 
     public static void Map(RouteGroupBuilder group) =>
-        group.MapGet("/server-info", Handle);
+        group.MapGet("/server-info", Handle)
+            .WithMetadata(new SsdidPublicAttribute());
 
     private static IResult Handle(SsdidIdentity identity, IConfiguration config)
     {

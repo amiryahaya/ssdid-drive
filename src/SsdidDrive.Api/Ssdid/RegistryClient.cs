@@ -50,13 +50,17 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
 
         foreach (var method in methods.EnumerateArray())
         {
-            var id = method.GetProperty("id").GetString();
-            if (id != keyId) continue;
+            if (!method.TryGetProperty("id", out var idEl) || idEl.GetString() != keyId)
+                continue;
 
-            var multibase = method.GetProperty("publicKeyMultibase").GetString();
+            if (!method.TryGetProperty("publicKeyMultibase", out var multibaseEl))
+                return null;
+            var multibase = multibaseEl.GetString();
             if (multibase is null) return null;
 
-            var vmType = method.GetProperty("type").GetString();
+            if (!method.TryGetProperty("type", out var typeEl))
+                return null;
+            var vmType = typeEl.GetString();
             if (vmType is null) return null;
 
             return (SsdidCrypto.MultibaseDecode(multibase), vmType);

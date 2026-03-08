@@ -21,8 +21,9 @@ public static class DownloadFile
         if (file is null)
             return AppError.NotFound("File not found").ToProblemResult();
 
+        // Return 404 (not 403) for cross-tenant access to prevent file existence enumeration
         if (user.TenantId is null || file.Folder.TenantId != user.TenantId)
-            return AppError.Forbidden("You do not have access to this file").ToProblemResult();
+            return AppError.NotFound("File not found").ToProblemResult();
 
         // Check ownership or share access (file-level or folder-level).
         // Evaluate expiry client-side for cross-database compatibility

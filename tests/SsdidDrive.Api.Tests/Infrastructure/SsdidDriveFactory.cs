@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Services;
 
@@ -22,13 +22,7 @@ public class SsdidDriveFactory : WebApplicationFactory<Program>
         // Register PostgreSQL "now()" so HasDefaultValueSql("now()") works on SQLite.
         _connection.CreateFunction("now", () => DateTimeOffset.UtcNow.ToString("o"));
         // Map gen_random_uuid() → randomblob(16) via a SQLite alias.
-        // randomblob(16) returns a 16-byte BLOB that EF Core SQLite reads as Guid.
-        _connection.CreateFunction("gen_random_uuid", () =>
-        {
-            // Use .NET Guid so byte ordering matches what EF Core SQLite expects.
-            var g = Guid.NewGuid();
-            return g;
-        });
+        _connection.CreateFunction("gen_random_uuid", () => Guid.NewGuid());
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -61,14 +55,19 @@ public class SsdidDriveFactory : WebApplicationFactory<Program>
 
             // Memory storage
             services.AddSingleton<IStorageService, MemoryStorageService>();
-
-            // Build a temporary SP to create the DB schema
-            var sp = services.BuildServiceProvider();
-            using var scope = sp.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-            db.Database.EnsureCreated();
         });
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+
+        // Create the DB schema using the real DI container (no BuildServiceProvider needed)
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.EnsureCreated();
+
+        return host;
     }
 
     protected override void Dispose(bool disposing)

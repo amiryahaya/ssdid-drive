@@ -1,12 +1,7 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-using SsdidDrive.Api.Data;
-using SsdidDrive.Api.Data.Entities;
-using SsdidDrive.Api.Ssdid;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -17,101 +12,6 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
 
     public SecureFileSharingE2eTests(SsdidDriveFactory factory) => _factory = factory;
 
-    #region Helpers
-
-    private static async Task<(HttpClient Client, Guid UserId)> CreateUserInTenantAsync(
-        SsdidDriveFactory factory, Guid tenantId, string displayName = "Tenant Member")
-    {
-        var did = $"did:ssdid:test-{Guid.NewGuid():N}";
-        var sessionToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
-
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sessionStore = scope.ServiceProvider.GetRequiredService<SessionStore>();
-
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Did = did,
-            DisplayName = displayName,
-            Status = UserStatus.Active,
-            TenantId = tenantId,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
-        db.Users.Add(user);
-
-        var userTenant = new UserTenant
-        {
-            UserId = user.Id,
-            TenantId = tenantId,
-            Role = TenantRole.Member,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        db.UserTenants.Add(userTenant);
-        await db.SaveChangesAsync();
-
-        sessionStore.CreateSessionDirect(did, sessionToken);
-
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken);
-
-        return (client, user.Id);
-    }
-
-    private static async Task<string> CreateFolderAsync(HttpClient client, string name = "E2E Test Folder")
-    {
-        var resp = await client.PostAsJsonAsync("/api/folders", new
-        {
-            name,
-            encrypted_folder_key = Convert.ToBase64String(new byte[32]),
-            kem_algorithm = "ML-KEM-768"
-        }, TestFixture.Json);
-        resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        return body.GetProperty("id").GetString()!;
-    }
-
-    private static async Task<string> UploadFileAsync(HttpClient client, string folderId,
-        string fileName = "test.bin", string content = "encrypted-data")
-    {
-        var encKey = Convert.ToBase64String(Encoding.UTF8.GetBytes("test-file-key-0123456789abcdef"));
-        var nonce = Convert.ToBase64String(new byte[12]);
-
-        var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "file", fileName);
-
-        var url = $"/api/folders/{folderId}/files"
-            + $"?encrypted_file_key={Uri.EscapeDataString(encKey)}"
-            + $"&nonce={Uri.EscapeDataString(nonce)}"
-            + $"&encryption_algorithm=AES-256-GCM";
-
-        var response = await client.PostAsync(url, form);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        return body.GetProperty("id").GetString()!;
-    }
-
-    private static async Task<(HttpStatusCode Status, JsonElement Body)> CreateShareAsync(
-        HttpClient client, string folderId, Guid sharedWithId, string permission = "read")
-    {
-        var request = new
-        {
-            resource_id = Guid.Parse(folderId),
-            resource_type = "folder",
-            shared_with_id = sharedWithId,
-            permission,
-            encrypted_key = Convert.ToBase64String(new byte[32]),
-            kem_algorithm = "ML-KEM-768"
-        };
-
-        var response = await client.PostAsJsonAsync("/api/shares", request, TestFixture.Json);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        return (response.StatusCode, body);
-    }
-
-    #endregion
-
     // ── Test 1: Full Secure File Sharing Workflow ────────────────────────
 
     [Fact]
@@ -119,14 +19,14 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
     {
         // Setup: Alice creates tenant, Bob joins same tenant
         var (alice, aliceId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Alice-E2E");
-        var (bob, bobId) = await CreateUserInTenantAsync(_factory, tenantId, "Bob-E2E");
+        var (bob, bobId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "Bob-E2E");
 
         // Step 1: Alice creates a folder
-        var folderId = await CreateFolderAsync(alice, "Alice Secret Folder");
+        var folderId = await TestFixture.CreateFolderAsync(alice, "Alice Secret Folder");
 
         // Step 2: Alice uploads an encrypted file
         var fileContent = "alice-top-secret-encrypted-payload";
-        var fileId = await UploadFileAsync(alice, folderId, "secret.bin", fileContent);
+        var fileId = await TestFixture.UploadFileAsync(alice, folderId, "secret.bin", fileContent);
 
         // Step 3: Bob CANNOT access folder or download file before sharing
         var bobFolderBefore = await bob.GetAsync($"/api/folders/{folderId}");
@@ -142,7 +42,7 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
             $"Bob should not download file before share, got {(int)bobDownloadBefore.StatusCode}");
 
         // Step 4: Alice shares folder with Bob (read permission)
-        var (shareStatus, shareBody) = await CreateShareAsync(alice, folderId, bobId, "read");
+        var (shareStatus, shareBody) = await TestFixture.CreateShareAsync(alice, folderId, bobId, "read");
         Assert.Equal(HttpStatusCode.Created, shareStatus);
         var shareId = shareBody.GetProperty("id").GetString()!;
 
@@ -208,18 +108,18 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
     {
         // Setup: Alice creates tenant, Bob joins same tenant
         var (alice, aliceId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Alice-Write");
-        var (bob, bobId) = await CreateUserInTenantAsync(_factory, tenantId, "Bob-Write");
+        var (bob, bobId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "Bob-Write");
 
         // Step 1: Alice creates a folder
-        var folderId = await CreateFolderAsync(alice, "Alice Write-Share Folder");
+        var folderId = await TestFixture.CreateFolderAsync(alice, "Alice Write-Share Folder");
 
         // Step 2: Alice shares with Bob (WRITE permission)
-        var (shareStatus, _) = await CreateShareAsync(alice, folderId, bobId, "write");
+        var (shareStatus, _) = await TestFixture.CreateShareAsync(alice, folderId, bobId, "write");
         Assert.Equal(HttpStatusCode.Created, shareStatus);
 
         // Step 3: Bob uploads a file to Alice's folder
         var bobFileContent = "bob-uploaded-encrypted-data";
-        var bobFileId = await UploadFileAsync(bob, folderId, "bob-file.bin", bobFileContent);
+        var bobFileId = await TestFixture.UploadFileAsync(bob, folderId, "bob-file.bin", bobFileContent);
         Assert.False(string.IsNullOrEmpty(bobFileId), "Bob should get a file ID after upload");
 
         // Step 4: Alice can see Bob's file in the folder listing
@@ -239,13 +139,13 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
     {
         // Setup: Alice creates tenant, Bob joins same tenant
         var (alice, aliceId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Alice-ReadOnly");
-        var (bob, bobId) = await CreateUserInTenantAsync(_factory, tenantId, "Bob-ReadOnly");
+        var (bob, bobId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "Bob-ReadOnly");
 
         // Step 1: Alice creates a folder
-        var folderId = await CreateFolderAsync(alice, "Alice Read-Only Folder");
+        var folderId = await TestFixture.CreateFolderAsync(alice, "Alice Read-Only Folder");
 
         // Step 2: Alice shares with Bob (READ permission)
-        var (shareStatus, _) = await CreateShareAsync(alice, folderId, bobId, "read");
+        var (shareStatus, _) = await TestFixture.CreateShareAsync(alice, folderId, bobId, "read");
         Assert.Equal(HttpStatusCode.Created, shareStatus);
 
         // Step 3: Bob tries to upload — should get 403

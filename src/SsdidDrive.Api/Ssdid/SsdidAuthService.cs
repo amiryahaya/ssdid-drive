@@ -12,17 +12,17 @@ public record AuthenticateResponse(string SessionToken, string Did, string Serve
 public class SsdidAuthService
 {
     private readonly SsdidIdentity _identity;
-    private readonly SessionStore _sessionStore;
+    private readonly ISessionStore _sessionStore;
     private readonly RegistryClient _registryClient;
     private readonly CryptoProviderFactory _cryptoFactory;
     private readonly ILogger<SsdidAuthService> _logger;
-    private readonly IReadOnlyDictionary<string, (byte[] PublicKey, string AlgorithmType)> _trustedKeys;
+    private readonly IReadOnlyDictionary<string, (byte[] PublicKey, string AlgorithmType, string KeyId)> _trustedKeys;
 
     private static readonly JsonSerializerOptions VcSerializerOptions = new() { WriteIndented = false };
 
     public SsdidAuthService(
         SsdidIdentity identity,
-        SessionStore sessionStore,
+        ISessionStore sessionStore,
         RegistryClient registryClient,
         CryptoProviderFactory cryptoFactory,
         IConfiguration config,
@@ -36,12 +36,12 @@ public class SsdidAuthService
         _trustedKeys = BuildTrustedKeys(identity, config);
     }
 
-    private static IReadOnlyDictionary<string, (byte[] PublicKey, string AlgorithmType)> BuildTrustedKeys(
+    private static IReadOnlyDictionary<string, (byte[] PublicKey, string AlgorithmType, string KeyId)> BuildTrustedKeys(
         SsdidIdentity identity, IConfiguration config)
     {
-        var keys = new Dictionary<string, (byte[] PublicKey, string AlgorithmType)>
+        var keys = new Dictionary<string, (byte[] PublicKey, string AlgorithmType, string KeyId)>
         {
-            [identity.Did] = (identity.PublicKey, identity.AlgorithmType)
+            [identity.Did] = (identity.PublicKey, identity.AlgorithmType, identity.KeyId)
         };
         var previous = config.GetSection("Ssdid:PreviousIdentities").GetChildren();
         foreach (var entry in previous)
@@ -49,8 +49,9 @@ public class SsdidAuthService
             var did = entry["Did"];
             var pubKey = entry["PublicKey"];
             var algType = entry["AlgorithmType"] ?? "Ed25519VerificationKey2020";
+            var keyId = entry["KeyId"] ?? $"{did}#key-1";
             if (did is not null && pubKey is not null)
-                keys[did] = (SsdidCrypto.Base64UrlDecode(pubKey), algType);
+                keys[did] = (SsdidCrypto.Base64UrlDecode(pubKey), algType, keyId);
         }
         return keys.AsReadOnly();
     }
@@ -113,7 +114,7 @@ public class SsdidAuthService
         return new VerifyResponse(credential, clientDid);
     }
 
-    public Result<AuthenticateResponse> HandleAuthenticate(JsonElement credential)
+    public Result<string> VerifyCredential(JsonElement credential)
     {
         if (!VerifyCredentialOffline(credential))
         {
@@ -129,7 +130,12 @@ public class SsdidAuthService
         if (subjectDid is null)
             return AppError.Unauthorized("Credential missing subject DID");
 
-        var sessionToken = _sessionStore.CreateSession(subjectDid);
+        return subjectDid;
+    }
+
+    public Result<AuthenticateResponse> CreateAuthenticatedSession(string did)
+    {
+        var sessionToken = _sessionStore.CreateSession(did);
         if (sessionToken is null)
         {
             _logger.LogWarning("Authentication failed: session limit reached");
@@ -137,9 +143,9 @@ public class SsdidAuthService
         }
 
         var serverSignature = _identity.SignChallenge(sessionToken);
-        _logger.LogInformation("Authenticated {Did}", subjectDid);
+        _logger.LogInformation("Authenticated {Did}", did);
 
-        return new AuthenticateResponse(sessionToken, subjectDid, _identity.Did, serverSignature);
+        return new AuthenticateResponse(sessionToken, did, _identity.Did, serverSignature);
     }
 
     public void RevokeSession(string token) => _sessionStore.DeleteSession(token);
@@ -157,7 +163,7 @@ public class SsdidAuthService
         var now = DateTimeOffset.UtcNow;
         var vcId = $"urn:uuid:{Guid.NewGuid()}";
         var issuanceDate = now.ToString("o");
-        var expirationDate = now.AddDays(365).ToString("o");
+        var expirationDate = now.AddDays(30).ToString("o");
 
         var signingInput = BuildSigningInput(
             vcId, _identity.Did, issuanceDate, expirationDate, subjectDid, "drive");
@@ -206,6 +212,30 @@ public class SsdidAuthService
                 return false;
             }
 
+            // Validate VC type includes SsdidRegistrationCredential
+            if (!credential.TryGetProperty("type", out var typeArr) ||
+                typeArr.ValueKind != JsonValueKind.Array)
+            {
+                _logger.LogWarning("VC verification failed: missing or invalid type array");
+                return false;
+            }
+
+            var hasCredentialType = false;
+            foreach (var t in typeArr.EnumerateArray())
+            {
+                if (t.GetString() == "SsdidRegistrationCredential")
+                {
+                    hasCredentialType = true;
+                    break;
+                }
+            }
+
+            if (!hasCredentialType)
+            {
+                _logger.LogWarning("VC verification failed: missing SsdidRegistrationCredential type");
+                return false;
+            }
+
             if (!credential.TryGetProperty("id", out var idEl) ||
                 !credential.TryGetProperty("issuanceDate", out var issuanceDateEl) ||
                 !credential.TryGetProperty("expirationDate", out var expirationDateEl) ||
@@ -216,6 +246,22 @@ public class SsdidAuthService
                 !proof.TryGetProperty("proofValue", out var proofValueEl))
             {
                 _logger.LogWarning("VC verification failed: missing required properties");
+                return false;
+            }
+
+            // Validate proof.proofPurpose
+            if (!proof.TryGetProperty("proofPurpose", out var proofPurposeEl) ||
+                proofPurposeEl.GetString() != "assertionMethod")
+            {
+                _logger.LogWarning("VC verification failed: invalid or missing proofPurpose");
+                return false;
+            }
+
+            // Validate proof.verificationMethod matches trusted key
+            if (!proof.TryGetProperty("verificationMethod", out var vmEl) ||
+                vmEl.GetString() != trustedKey.KeyId)
+            {
+                _logger.LogWarning("VC verification failed: verificationMethod mismatch");
                 return false;
             }
 
@@ -233,7 +279,13 @@ public class SsdidAuthService
                 return false;
             }
 
-            var exp = DateTimeOffset.Parse(expirationDate);
+            if (!DateTimeOffset.TryParse(expirationDate, null,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var exp))
+            {
+                _logger.LogWarning("VC verification failed: unparseable expirationDate");
+                return false;
+            }
+
             if (exp < DateTimeOffset.UtcNow) return false;
 
             var signingInput = BuildSigningInput(vcId, issuer, issuanceDate, expirationDate, subjectDid, service);
@@ -242,7 +294,7 @@ public class SsdidAuthService
 
             return _cryptoFactory.Verify(trustedKey.AlgorithmType, msgBytes, sigBytes, trustedKey.PublicKey);
         }
-        catch (FormatException ex)
+        catch (Exception ex) when (ex is FormatException or ArgumentException or KeyNotFoundException)
         {
             _logger.LogWarning(ex, "VC verification failed: invalid date or encoding format");
             return false;

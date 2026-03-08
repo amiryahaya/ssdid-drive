@@ -5,12 +5,13 @@ namespace SsdidDrive.Api.Ssdid;
 // TODO: Replace with IDistributedCache or Redis-backed implementation
 // for horizontal scaling. The current in-memory store is single-instance only.
 
-public class SessionStore : IHostedService
+public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 {
     private readonly ConcurrentDictionary<string, ChallengeEntry> _challenges = new();
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new();
     private record WaiterEntry(TaskCompletionSource<string> Tcs, DateTimeOffset CreatedAt);
     private readonly ConcurrentDictionary<string, WaiterEntry> _completionWaiters = new();
+    private readonly ConcurrentDictionary<string, (string Secret, DateTimeOffset CreatedAt)> _subscriberSecrets = new();
     private long _sessionCount;
     private Timer? _gcTimer;
 
@@ -84,8 +85,31 @@ public class SessionStore : IHostedService
 
     internal void CreateSessionDirect(string did, string token)
     {
-        _sessions[token] = new SessionEntry(did, DateTimeOffset.UtcNow);
-        Interlocked.Increment(ref _sessionCount);
+        if (_sessions.TryAdd(token, new SessionEntry(did, DateTimeOffset.UtcNow)))
+            Interlocked.Increment(ref _sessionCount);
+    }
+
+    // ── SSE subscriber secrets (ownership binding) ──
+
+    public string CreateSubscriberSecret(string challengeId)
+    {
+        var secret = SsdidCrypto.GenerateChallenge();
+        _subscriberSecrets[challengeId] = (secret, DateTimeOffset.UtcNow);
+        return secret;
+    }
+
+    public bool ValidateSubscriberSecret(string challengeId, string secret)
+    {
+        if (!_subscriberSecrets.TryGetValue(challengeId, out var entry))
+            return false;
+
+        if (DateTimeOffset.UtcNow - entry.CreatedAt > ChallengeTtl)
+        {
+            _subscriberSecrets.TryRemove(challengeId, out _);
+            return false;
+        }
+
+        return string.Equals(entry.Secret, secret, StringComparison.Ordinal);
     }
 
     // ── SSE completion waiters ──
@@ -156,6 +180,12 @@ public class SessionStore : IHostedService
                 if (_completionWaiters.TryRemove(key, out var removed))
                     removed.Tcs.TrySetCanceled();
             }
+        }
+
+        foreach (var (key, entry) in _subscriberSecrets)
+        {
+            if (now - entry.CreatedAt > ChallengeTtl)
+                _subscriberSecrets.TryRemove(key, out _);
         }
     }
 }

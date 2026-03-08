@@ -47,17 +47,18 @@ builder.Services.AddSingleton<ICryptoProvider, KazSignProvider>();
 builder.Services.AddSingleton<CryptoProviderFactory>();
 
 // ── SSDID Services ──
-#pragma warning disable ASP0000 // CryptoProviderFactory needed before DI container is built
-var cryptoFactory = builder.Services.BuildServiceProvider().GetRequiredService<CryptoProviderFactory>();
-#pragma warning restore ASP0000
-var identityPath = builder.Configuration["Ssdid:IdentityPath"]
-    ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
-var algorithmType = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
-var identity = SsdidIdentity.LoadOrCreate(identityPath, algorithmType, cryptoFactory);
-builder.Services.AddSingleton(identity);
+builder.Services.AddSingleton<SsdidIdentity>(sp =>
+{
+    var factory = sp.GetRequiredService<CryptoProviderFactory>();
+    var identityPath = builder.Configuration["Ssdid:IdentityPath"]
+        ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
+    var algorithmType = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
+    return SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
+});
 
-var sessionStore = new SessionStore();
-builder.Services.AddSingleton(sessionStore);
+builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
+builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
@@ -102,6 +103,21 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// ── Startup warnings ──
+if (!app.Environment.IsDevelopment())
+{
+    var keyPath = app.Configuration["Ssdid:IdentityPath"]
+        ?? Path.Combine(app.Environment.ContentRootPath, "data", "server-identity.json");
+    if (File.Exists(keyPath))
+        app.Logger.LogWarning(
+            "Server identity private key is stored in plaintext at {Path}. " +
+            "Consider using a key vault or HSM for production.", keyPath);
+
+    app.Logger.LogWarning(
+        "SessionStore is in-memory only (single-instance). " +
+        "Configure a Redis-backed ISessionStore for horizontal scaling.");
+}
+
 // ── Pipeline ──
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -114,22 +130,10 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseRateLimiter();
 
-// Auth middleware — whitelist of public paths that skip authentication
+// Auth middleware — endpoints marked [SsdidPublic] skip authentication.
+// All /api endpoints go through the middleware; it checks endpoint metadata.
 app.UseWhen(
-    context =>
-    {
-        var path = context.Request.Path;
-        if (!path.StartsWithSegments("/api")) return false;
-
-        // Public auth endpoints (no session required)
-        if (path.StartsWithSegments("/api/auth/ssdid/server-info")) return false;
-        if (path.StartsWithSegments("/api/auth/ssdid/register")) return false;
-        if (path.StartsWithSegments("/api/auth/ssdid/authenticate")) return false;
-        if (path.StartsWithSegments("/api/auth/ssdid/login/initiate")) return false;
-        if (path.StartsWithSegments("/api/auth/ssdid/events")) return false;
-
-        return true;
-    },
+    context => context.Request.Path.StartsWithSegments("/api"),
     branch => branch.UseMiddleware<SsdidAuthMiddleware>());
 
 // ── Features ──

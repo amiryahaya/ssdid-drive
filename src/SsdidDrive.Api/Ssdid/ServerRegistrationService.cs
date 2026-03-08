@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using SsdidDrive.Api.Crypto;
 
 namespace SsdidDrive.Api.Ssdid;
@@ -39,19 +37,21 @@ public class ServerRegistrationService(
 
                 var didDoc = identity.BuildDidDocument();
 
-                // Sign the full DID Document (not just the DID string)
-                // to prevent document substitution attacks at the registry.
-                var docJson = JsonSerializer.Serialize(didDoc);
-                var proofBytes = identity.SignRaw(Encoding.UTF8.GetBytes(docJson));
+                // Build proof options (W3C Data Integrity format)
                 var proofType = CryptoProviderFactory.GetProofType(identity.AlgorithmType);
-                var proof = new
+                var proofOptions = new Dictionary<string, object>
                 {
-                    type = proofType,
-                    created = DateTimeOffset.UtcNow.ToString("o"),
-                    verificationMethod = identity.KeyId,
-                    proofPurpose = "assertionMethod",
-                    proofValue = SsdidCrypto.MultibaseEncode(proofBytes)
+                    ["type"] = proofType,
+                    ["created"] = DateTimeOffset.UtcNow.ToString("o"),
+                    ["verificationMethod"] = identity.KeyId,
+                    ["proofPurpose"] = "assertionMethod"
                 };
+
+                // W3C Data Integrity: SHA3-256(canonical(proofOptions)) + SHA3-256(canonical(document))
+                var payload = SsdidCrypto.W3cSigningPayload(didDoc, proofOptions);
+                var proofBytes = identity.SignRaw(payload);
+                proofOptions["proofValue"] = SsdidCrypto.MultibaseEncode(proofBytes);
+                var proof = proofOptions;
 
                 var ok = await registry.RegisterDid(didDoc, proof);
                 if (ok)

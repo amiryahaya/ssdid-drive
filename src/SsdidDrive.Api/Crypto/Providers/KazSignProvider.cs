@@ -2,6 +2,17 @@ using Antrapol.Kaz.Sign;
 
 namespace SsdidDrive.Api.Crypto.Providers;
 
+/// <summary>
+/// KAZ-Sign provider using the native C library.
+/// Keys are stored as raw bytes for local sign/verify operations.
+///
+/// NOTE: The SSDID registry uses the Java JCA KAZ-SIGN provider (kaz-pqc-jcajce)
+/// which uses a different signature format ("KazWire": s1=49 + s2=8 bytes for Level128)
+/// than the C native library (S1=54 + S2=54 + S3=54 = 162 bytes). These formats are
+/// incompatible — signatures produced by the C library cannot be verified by the
+/// Java JCA provider. Registry integration for KAZ-Sign requires aligning the
+/// C and Java implementations to use the same parameterization/wire format.
+/// </summary>
 public class KazSignProvider : ICryptoProvider, IDisposable
 {
     public string Family => "KazSign";

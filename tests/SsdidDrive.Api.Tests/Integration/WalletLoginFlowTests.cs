@@ -34,6 +34,9 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         Assert.True(body.TryGetProperty("challenge_id", out var challengeId));
         Assert.False(string.IsNullOrEmpty(challengeId.GetString()));
 
+        Assert.True(body.TryGetProperty("subscriber_secret", out var subscriberSecret));
+        Assert.False(string.IsNullOrEmpty(subscriberSecret.GetString()));
+
         Assert.True(body.TryGetProperty("qr_payload", out var qrPayload));
         var payload = qrPayload;
         Assert.Equal("login", payload.GetProperty("action").GetString());
@@ -103,10 +106,11 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
         var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
         var challengeId = initBody.GetProperty("challenge_id").GetString()!;
+        var subscriberSecret = initBody.GetProperty("subscriber_secret").GetString()!;
 
         // Step 2: Client subscribes to SSE (in background)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var sseTask = ReadSseEvent(client, challengeId, cts.Token);
+        var sseTask = ReadSseEvent(client, challengeId, subscriberSecret, cts.Token);
 
         // Step 3: Wallet authenticates (triggers SSE notification)
         var walletClient = _factory.CreateClient();
@@ -150,11 +154,12 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
         var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
         var challengeId = initBody.GetProperty("challenge_id").GetString()!;
+        var subscriberSecret = initBody.GetProperty("subscriber_secret").GetString()!;
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var request = new HttpRequestMessage(HttpMethod.Get,
-            $"/api/auth/ssdid/events?challenge_id={challengeId}");
+            $"/api/auth/ssdid/events?challenge_id={challengeId}&subscriber_secret={Uri.EscapeDataString(subscriberSecret)}");
         request.Headers.Accept.Add(
             new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
@@ -239,6 +244,34 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         var client = _factory.CreateClient();
         var resp = await client.GetAsync("/api/auth/ssdid/events");
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    // --- SSE with invalid subscriber_secret returns 403 ---
+
+    [Fact]
+    public async Task SseEvents_InvalidSubscriberSecret_Returns403()
+    {
+        var client = _factory.CreateClient();
+
+        var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
+        var challengeId = initBody.GetProperty("challenge_id").GetString()!;
+
+        var resp = await client.GetAsync($"/api/auth/ssdid/events?challenge_id={challengeId}&subscriber_secret=wrong-secret");
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task SseEvents_MissingSubscriberSecret_Returns403()
+    {
+        var client = _factory.CreateClient();
+
+        var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
+        var challengeId = initBody.GetProperty("challenge_id").GetString()!;
+
+        var resp = await client.GetAsync($"/api/auth/ssdid/events?challenge_id={challengeId}");
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 
     // --- G2: Orphaned completion waiters are garbage collected ---
@@ -388,10 +421,10 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         return verifyBody.GetProperty("credential");
     }
 
-    private async Task<JsonElement?> ReadSseEvent(HttpClient client, string challengeId, CancellationToken ct)
+    private async Task<JsonElement?> ReadSseEvent(HttpClient client, string challengeId, string subscriberSecret, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Get,
-            $"/api/auth/ssdid/events?challenge_id={challengeId}");
+            $"/api/auth/ssdid/events?challenge_id={challengeId}&subscriber_secret={Uri.EscapeDataString(subscriberSecret)}");
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
         var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);

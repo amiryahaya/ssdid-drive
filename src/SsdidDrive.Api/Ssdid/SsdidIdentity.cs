@@ -71,25 +71,29 @@ public class SsdidIdentity
         return identity;
     }
 
-    public object BuildDidDocument()
+    /// <summary>
+    /// Builds a W3C DID Document. Uses Dictionary to ensure "@context" serializes
+    /// with the @ prefix (C# anonymous type @context would serialize as "context").
+    /// </summary>
+    public Dictionary<string, object> BuildDidDocument()
     {
-        return new
+        return new Dictionary<string, object>
         {
-            @context = new[] { "https://www.w3.org/ns/did/v1" },
-            id = Did,
-            verificationMethod = new[]
+            ["@context"] = new[] { "https://www.w3.org/ns/did/v1" },
+            ["id"] = Did,
+            ["verificationMethod"] = new[]
             {
-                new
+                new Dictionary<string, object>
                 {
-                    id = KeyId,
-                    type = AlgorithmType,
-                    controller = Did,
-                    publicKeyMultibase = SsdidCrypto.MultibaseEncode(PublicKey)
+                    ["id"] = KeyId,
+                    ["type"] = AlgorithmType,
+                    ["controller"] = Did,
+                    ["publicKeyMultibase"] = SsdidCrypto.MultibaseEncode(PublicKey)
                 }
             },
-            authentication = new[] { KeyId },
-            assertionMethod = new[] { KeyId },
-            capabilityInvocation = new[] { KeyId }
+            ["authentication"] = new[] { KeyId },
+            ["assertionMethod"] = new[] { KeyId },
+            ["capabilityInvocation"] = new[] { KeyId }
         };
     }
 
