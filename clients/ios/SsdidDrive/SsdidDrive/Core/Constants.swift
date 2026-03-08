@@ -304,22 +304,19 @@ enum Constants {
     // MARK: - Push Notifications (OneSignal)
 
     enum OneSignal {
-        /// OneSignal App ID - same across all environments
-        static let appId = "265f3b98-a29f-405c-b45e-d104b1c9aec0"
+        /// OneSignal App ID — read from Info.plist (set via xcconfig or CI)
+        static let appId: String = {
+            Bundle.main.object(forInfoDictionaryKey: "ONESIGNAL_APP_ID") as? String ?? ""
+        }()
     }
 
     // MARK: - Crash Reporting (Sentry)
 
     enum Sentry {
-        /// Sentry DSN (Data Source Name) for crash reporting
-        /// Get this from: https://sentry.io/settings/projects/{project}/keys/
-        #if DEBUG
-        /// Debug DSN - can be empty to disable in debug builds
-        static let dsn = ""
-        #else
-        /// Production DSN
-        static let dsn = "https://f00607f8f70d7603ee05b4b34c506e30@o4507469191380992.ingest.de.sentry.io/4510738302632016"
-        #endif
+        /// Sentry DSN — read from Info.plist (set via xcconfig or CI)
+        static let dsn: String = {
+            Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String ?? ""
+        }()
 
         /// Environment name for Sentry
         #if DEBUG

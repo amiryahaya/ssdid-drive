@@ -5,59 +5,134 @@ obj/
 *.suo
 *.userprefs
 *.DotSettings.user
+*.nupkg
+**/packages/
+project.lock.json
+*.nuget.props
+*.nuget.targets
+
+## .NET Build Artifacts
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+publish/
+bld/
+log/
+TestResults/
+*.trx
+
+## EF Core / SQLite
+*.db
+*.db-shm
+*.db-wal
 
 ## IDE
 .vs/
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
 
 ## OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-## Build
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-publish/
-
-## NuGet
-*.nupkg
-**/packages/
-
-## EF Core
-*.db
-*.db-shm
-*.db-wal
-
-## Environment
+## Environment & Secrets
 .env
-
-## Server identity (contains private key)
+.env.*
+!.env.example
 **/data/server-identity.json
+*.pem
+*.key
+*.p12
+*.pfx
+keystore.properties
 
-# Android
+## Android
 clients/android/.gradle/
 clients/android/build/
 clients/android/app/build/
 clients/android/local.properties
+clients/android/captures/
+clients/android/.externalNativeBuild/
+clients/android/.cxx/
 *.apk
 *.aab
+*.hprof
 
-# Desktop (Tauri + Node)
+## Desktop (Tauri + Node)
 clients/desktop/node_modules/
 clients/desktop/dist/
 clients/desktop/target/
 clients/desktop/coverage/
 clients/desktop/src-tauri/target/
+clients/desktop/native/**/target/
 
-# iOS
-clients/ios/SsdidDrive/build/
-clients/ios/DerivedData/
+## iOS
+clients/ios/**/build/
+clients/ios/**/DerivedData/
+clients/ios/**/.build/
 *.xcuserdata
 *.xcworkspace/xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+Pods/
+Carthage/Build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.moved-aside
+*.hmap
+*.mdb
 
-# General
-*.swo
+## Rust
+**/target/
+**/*.rs.bk
+Cargo.lock
+!clients/desktop/Cargo.lock
+
+## Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+coverage/
+.parcel-cache/
+.turbo/
+
+## Logs
+*.log
+logs/
+
+## Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+## Docker / Podman
+docker-compose.override.yml
+compose.override.yml
+
+## Test artifacts
+*.coverage
+*.coveragexml
+lcov.info
+.nyc_output/
+
+## Backup files
+*.bak
+*.orig
+*.tmp

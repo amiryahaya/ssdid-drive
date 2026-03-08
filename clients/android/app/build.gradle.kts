@@ -18,6 +18,16 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
+// Load local properties for API keys (not in version control)
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
+fun localProp(key: String, default: String = ""): String =
+    localProperties.getProperty(key, default)
+
 android {
     namespace = "my.ssdid.drive"
     compileSdk = 34
@@ -55,7 +65,7 @@ android {
         }
 
         // Sentry DSN (shared across all variants)
-        buildConfigField("String", "SENTRY_DSN", "\"https://31e6862c18c1b40319a48f5b1538afd1@o4507469191380992.ingest.de.sentry.io/4510725989204048\"")
+        buildConfigField("String", "SENTRY_DSN", "\"${localProp("sentry.dsn")}\"")
         buildConfigField("String", "E2E_TENANT_SLUG", "\"e2e\"")
     }
 
@@ -82,7 +92,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_DEV\"")
 
             // OneSignal App ID (use your dev/test app)
-            manifestPlaceholders["onesignal_app_id"] = "265f3b98-a29f-405c-b45e-d104b1c9aec0"
+            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
             manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
         }
 
@@ -106,7 +116,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_STAGING_BACKUP\"")
 
             // OneSignal App ID (staging)
-            manifestPlaceholders["onesignal_app_id"] = "265f3b98-a29f-405c-b45e-d104b1c9aec0"
+            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
             manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
         }
 
@@ -129,7 +139,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_PROD_BACKUP\"")
 
             // OneSignal App ID (production)
-            manifestPlaceholders["onesignal_app_id"] = "265f3b98-a29f-405c-b45e-d104b1c9aec0"
+            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
             manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
         }
     }

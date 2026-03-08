@@ -1,0 +1,15 @@
+# Local Properties Template
+# =========================
+# Copy this file to local.properties and fill in your values.
+# NEVER commit local.properties to version control!
+
+# Android SDK location (auto-set by Android Studio)
+# sdk.dir=/path/to/android/sdk
+
+# OneSignal Push Notifications
+# Get your App ID from https://onesignal.com
+onesignal.app.id=
+
+# Sentry Crash Reporting
+# Get your DSN from https://sentry.io
+sentry.dsn=

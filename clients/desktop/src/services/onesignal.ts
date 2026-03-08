@@ -7,8 +7,8 @@
 
 import OneSignal from 'react-onesignal';
 
-const ONESIGNAL_APP_ID = '265f3b98-a29f-405c-b45e-d104b1c9aec0';
-const SAFARI_WEB_ID = 'web.onesignal.auto.39adc2cb-6008-498a-9928-7e19718d3b6a';
+const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || '';
+const SAFARI_WEB_ID = import.meta.env.VITE_ONESIGNAL_SAFARI_WEB_ID || '';
 
 let isInitialized = false;
 
