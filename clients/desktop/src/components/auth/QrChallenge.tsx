@@ -32,7 +32,7 @@ export function QrChallenge({ action, onAuthenticated }: QrChallengeProps) {
 
       // Extract server URL from the QR payload
       const payload = JSON.parse(result.qrPayload);
-      setServerUrl(payload.server_url);
+      setServerUrl(payload.service_url);
 
       setState('ready');
     } catch (err) {

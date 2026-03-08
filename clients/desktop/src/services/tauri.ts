@@ -54,6 +54,10 @@ export async function createChallenge(
 
   const data = await resp.json();
 
+  if (!data?.challenge_id || !data?.subscriber_secret || !data?.qr_payload?.server_did) {
+    throw new Error('Unexpected response from login/initiate');
+  }
+
   return {
     serverDid: data.qr_payload.server_did,
     challengeId: data.challenge_id,

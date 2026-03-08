@@ -19,7 +19,7 @@ vi.mock('qrcode.react', () => ({
 }));
 
 const mockQrPayload = JSON.stringify({
-  server_url: 'https://example.com',
+  service_url: 'https://example.com',
   challenge_id: 'challenge-123',
   action: 'authenticate',
 });
