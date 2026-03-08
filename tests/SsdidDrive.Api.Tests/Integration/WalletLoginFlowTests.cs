@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Crypto;
 using SsdidDrive.Api.Crypto.Providers;
+using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Ssdid;
 using SsdidDrive.Api.Tests.Infrastructure;
 
@@ -227,6 +229,134 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
             new { credential = fakeCredential, challenge_id = challengeId }, SnakeJson);
 
         Assert.Equal(HttpStatusCode.Unauthorized, authResp.StatusCode);
+    }
+
+    // --- G1: SSE missing challenge_id returns 400 ---
+
+    [Fact]
+    public async Task SseEvents_MissingChallengeId_Returns400()
+    {
+        var client = _factory.CreateClient();
+        var resp = await client.GetAsync("/api/auth/ssdid/events");
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    // --- G2: Orphaned completion waiters are garbage collected ---
+
+    [Fact]
+    public async Task SessionStore_CollectExpired_CleansUpOrphanedWaiters()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<SessionStore>();
+
+        // Create a waiter for a fake challenge_id
+        using var cts = new CancellationTokenSource();
+        var waiterTask = store.WaitForCompletion("orphaned-challenge-123", cts.Token);
+
+        // The waiter should not have completed yet
+        Assert.False(waiterTask.IsCompleted);
+
+        // NotifyCompletion with a different key should return false (waiter still there)
+        Assert.False(store.NotifyCompletion("different-key", "token"));
+
+        // Notify the actual key to confirm it exists and clean up
+        Assert.True(store.NotifyCompletion("orphaned-challenge-123", "test-token"));
+
+        // The waiter should now be resolved
+        var result = await waiterTask;
+        Assert.Equal("test-token", result);
+
+        // A second notify on the same key should return false (already removed)
+        Assert.False(store.NotifyCompletion("orphaned-challenge-123", "token2"));
+    }
+
+    // --- G5: Valid VC but no User row returns 404 ---
+
+    [Fact]
+    public async Task Authenticate_ValidCredentialButNoUserRow_Returns404()
+    {
+        var (walletIdentity, _) = CreateWalletIdentity();
+        _factory.MockRegistryHandler.RegisterDid(walletIdentity.Did, walletIdentity.BuildDidDocument());
+
+        // Register to get a valid credential
+        var credential = await RegisterWallet(walletIdentity);
+
+        // Delete the User row directly
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Did == walletIdentity.Did);
+            if (user != null)
+            {
+                // Remove UserTenants first (FK constraint)
+                var userTenants = db.UserTenants.Where(ut => ut.UserId == user.Id);
+                db.UserTenants.RemoveRange(userTenants);
+                db.Users.Remove(user);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        // Now authenticate — VC is valid but no User exists
+        var client = _factory.CreateClient();
+        var authResp = await client.PostAsJsonAsync("/api/auth/ssdid/authenticate",
+            new { credential }, SnakeJson);
+
+        Assert.Equal(HttpStatusCode.NotFound, authResp.StatusCode);
+    }
+
+    // --- G8: challenge_id uniqueness ---
+
+    [Fact]
+    public async Task LoginInitiate_CalledTwice_ProducesDistinctChallengeIds()
+    {
+        var client = _factory.CreateClient();
+
+        var resp1 = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        var body1 = await resp1.Content.ReadFromJsonAsync<JsonElement>();
+        var id1 = body1.GetProperty("challenge_id").GetString()!;
+
+        var resp2 = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        var body2 = await resp2.Content.ReadFromJsonAsync<JsonElement>();
+        var id2 = body2.GetProperty("challenge_id").GetString()!;
+
+        Assert.NotEqual(id1, id2);
+    }
+
+    // --- G9: Server signature is valid over the challenge ---
+
+    [Fact]
+    public async Task LoginInitiate_ServerSignatureIsValidOverChallenge()
+    {
+        var client = _factory.CreateClient();
+
+        // Get server identity info
+        var infoResp = await client.GetAsync("/api/auth/ssdid/server-info");
+        var infoBody = await infoResp.Content.ReadFromJsonAsync<JsonElement>();
+        var serverDid = infoBody.GetProperty("server_did").GetString()!;
+        var serverKeyId = infoBody.GetProperty("server_key_id").GetString()!;
+
+        // Initiate login
+        var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
+        var payload = initBody.GetProperty("qr_payload");
+
+        var challenge = payload.GetProperty("challenge").GetString()!;
+        var serverSignature = payload.GetProperty("server_signature").GetString()!;
+
+        // Verify server_did and server_key_id match server-info
+        Assert.Equal(serverDid, payload.GetProperty("server_did").GetString());
+        Assert.Equal(serverKeyId, payload.GetProperty("server_key_id").GetString());
+
+        // Verify the signature is valid using the server's identity
+        using var scope = _factory.Services.CreateScope();
+        var identity = scope.ServiceProvider.GetRequiredService<SsdidIdentity>();
+        var cryptoFactory = scope.ServiceProvider.GetRequiredService<CryptoProviderFactory>();
+
+        var sigBytes = SsdidCrypto.MultibaseDecode(serverSignature);
+        var challengeBytes = System.Text.Encoding.UTF8.GetBytes(challenge);
+
+        var verified = cryptoFactory.Verify(identity.AlgorithmType, challengeBytes, sigBytes, identity.PublicKey);
+        Assert.True(verified, "Server signature over QR challenge is invalid");
     }
 
     // --- Helper methods ---

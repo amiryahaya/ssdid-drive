@@ -9,7 +9,8 @@ public class SessionStore : IHostedService
 {
     private readonly ConcurrentDictionary<string, ChallengeEntry> _challenges = new();
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new();
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _completionWaiters = new();
+    private record WaiterEntry(TaskCompletionSource<string> Tcs, DateTimeOffset CreatedAt);
+    private readonly ConcurrentDictionary<string, WaiterEntry> _completionWaiters = new();
     private long _sessionCount;
     private Timer? _gcTimer;
 
@@ -91,24 +92,26 @@ public class SessionStore : IHostedService
 
     public Task<string> WaitForCompletion(string challengeId, CancellationToken ct)
     {
-        var tcs = _completionWaiters.GetOrAdd(challengeId,
-            _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
+        var entry = _completionWaiters.GetOrAdd(challengeId,
+            _ => new WaiterEntry(
+                new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously),
+                DateTimeOffset.UtcNow));
 
         var reg = ct.Register(() =>
         {
-            tcs.TrySetCanceled(ct);
+            entry.Tcs.TrySetCanceled(ct);
             _completionWaiters.TryRemove(challengeId, out _);
         });
 
-        _ = tcs.Task.ContinueWith(_ => reg.Dispose(), TaskScheduler.Default);
+        _ = entry.Tcs.Task.ContinueWith(_ => reg.Dispose(), TaskScheduler.Default);
 
-        return tcs.Task;
+        return entry.Tcs.Task;
     }
 
     public bool NotifyCompletion(string challengeId, string sessionToken)
     {
-        if (_completionWaiters.TryRemove(challengeId, out var tcs))
-            return tcs.TrySetResult(sessionToken);
+        if (_completionWaiters.TryRemove(challengeId, out var entry))
+            return entry.Tcs.TrySetResult(sessionToken);
 
         return false;
     }
@@ -143,6 +146,15 @@ public class SessionStore : IHostedService
             {
                 if (_sessions.TryRemove(key, out _))
                     Interlocked.Decrement(ref _sessionCount);
+            }
+        }
+
+        foreach (var (key, entry) in _completionWaiters)
+        {
+            if (now - entry.CreatedAt > ChallengeTtl)
+            {
+                if (_completionWaiters.TryRemove(key, out var removed))
+                    removed.Tcs.TrySetCanceled();
             }
         }
     }
