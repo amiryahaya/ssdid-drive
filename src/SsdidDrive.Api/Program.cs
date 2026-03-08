@@ -74,9 +74,10 @@ builder.Services.AddHostedService<ServerRegistrationService>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
+    var isTesting = builder.Environment.EnvironmentName == "Testing";
     options.AddFixedWindowLimiter("auth", limiter =>
     {
-        limiter.PermitLimit = 20;
+        limiter.PermitLimit = isTesting ? 10_000 : 20;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
     });
@@ -124,6 +125,7 @@ app.UseWhen(
         if (path.StartsWithSegments("/api/auth/ssdid/server-info")) return false;
         if (path.StartsWithSegments("/api/auth/ssdid/register")) return false;
         if (path.StartsWithSegments("/api/auth/ssdid/authenticate")) return false;
+        if (path.StartsWithSegments("/api/auth/ssdid/login/initiate")) return false;
         if (path.StartsWithSegments("/api/auth/ssdid/events")) return false;
 
         return true;

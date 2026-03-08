@@ -13,6 +13,7 @@ public static class AuthFeature
         RegisterVerify.Map(group);
         Authenticate.Map(group);
         Logout.Map(group);
+        LoginInitiate.Map(group);
 
         // SSE endpoint for real-time challenge completion (mapped outside the group
         // because it needs its own path prefix, not nested under the group)
