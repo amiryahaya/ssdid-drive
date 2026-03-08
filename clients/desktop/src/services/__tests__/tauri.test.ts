@@ -6,6 +6,64 @@ vi.mock('@tauri-apps/api/core');
 
 const mockInvoke = vi.mocked(invoke);
 
+describe('createChallenge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('should call backend login/initiate and return subscriberSecret', async () => {
+    const mockResponse = {
+      challenge_id: 'abc123',
+      subscriber_secret: 'secret-xyz',
+      qr_payload: {
+        action: 'login',
+        service_url: 'http://localhost:5147',
+        service_name: 'ssdid-drive',
+        challenge_id: 'abc123',
+        challenge: 'base64challenge',
+        server_did: 'did:ssdid:test',
+        server_key_id: 'did:ssdid:test#key-1',
+        server_signature: 'sig123',
+        registry_url: 'https://registry.ssdid.my',
+      },
+    };
+
+    // Mock invoke to reject (so getApiBaseUrl falls back to env/default)
+    mockInvoke.mockRejectedValue(new Error('not available'));
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const { createChallenge } = await import('../tauri');
+    const result = await createChallenge('authenticate');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/auth/ssdid/login/initiate'),
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(result.challengeId).toBe('abc123');
+    expect(result.subscriberSecret).toBe('secret-xyz');
+    expect(result.serverDid).toBe('did:ssdid:test');
+    expect(result.qrPayload).toContain('abc123');
+  });
+
+  it('should throw on non-ok response', async () => {
+    mockInvoke.mockRejectedValue(new Error('not available'));
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    const { createChallenge } = await import('../tauri');
+    await expect(createChallenge('authenticate')).rejects.toThrow('Login initiate failed');
+  });
+});
+
 describe('tauriService', () => {
   beforeEach(() => {
     vi.clearAllMocks();

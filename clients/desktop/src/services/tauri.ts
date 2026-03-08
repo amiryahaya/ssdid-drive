@@ -19,62 +19,45 @@ import type {
 
 // ==================== SSDID Auth Helpers ====================
 
-export interface ServerInfo {
-  serverDid: string;
-  serverUrl: string;
-}
-
 export interface ChallengeResult {
   serverDid: string;
   challengeId: string;
+  subscriberSecret: string;
   qrPayload: string;
 }
 
-/**
- * Fetch server info from the SSDID auth endpoint.
- * For now, returns mock data until the backend is wired up.
- */
-async function fetchServerInfo(): Promise<ServerInfo> {
+async function getApiBaseUrl(): Promise<string> {
   try {
-    const info = await invoke<ServerInfo>('get_server_info');
-    return info;
+    const info = await invoke<{ api_base_url: string }>('get_api_base_url');
+    return info.api_base_url;
   } catch {
-    // Fallback: derive from environment or use defaults
-    return {
-      serverDid: 'did:ssdid:server:ssdid-drive',
-      serverUrl: 'https://api.ssdid-drive.local',
-    };
+    return (import.meta as Record<string, Record<string, Record<string, string>>>).env?.VITE_API_BASE_URL ?? 'http://localhost:5147';
   }
 }
 
 /**
- * Create a challenge for QR-based SSDID wallet authentication.
- * Generates a random challenge ID client-side until backend challenge
- * creation is wired up.
+ * Create a challenge by calling the backend login/initiate endpoint.
  */
 export async function createChallenge(
-  action: 'authenticate' | 'register'
+  _action: 'authenticate' | 'register'
 ): Promise<ChallengeResult> {
-  const serverInfo = await fetchServerInfo();
-
-  // Generate a random challenge ID (will be replaced by server-issued ID)
-  const randomBytes = new Uint8Array(16);
-  crypto.getRandomValues(randomBytes);
-  const challengeId = Array.from(randomBytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  const qrPayload = JSON.stringify({
-    server_url: serverInfo.serverUrl,
-    server_did: serverInfo.serverDid,
-    action,
-    challenge_id: challengeId,
+  const baseUrl = await getApiBaseUrl();
+  const resp = await fetch(`${baseUrl}/api/auth/ssdid/login/initiate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
   });
 
+  if (!resp.ok) {
+    throw new Error(`Login initiate failed: ${resp.status} ${resp.statusText}`);
+  }
+
+  const data = await resp.json();
+
   return {
-    serverDid: serverInfo.serverDid,
-    challengeId,
-    qrPayload,
+    serverDid: data.qr_payload.server_did,
+    challengeId: data.challenge_id,
+    subscriberSecret: data.subscriber_secret,
+    qrPayload: JSON.stringify(data.qr_payload),
   };
 }
 
@@ -114,10 +97,6 @@ export const tauriService = {
   },
 
   // ==================== SSDID Auth Commands ====================
-
-  async getServerInfo(): Promise<ServerInfo> {
-    return fetchServerInfo();
-  },
 
   async createChallenge(action: 'authenticate' | 'register'): Promise<ChallengeResult> {
     return createChallenge(action);
