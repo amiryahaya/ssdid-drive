@@ -17,7 +17,7 @@
  *   byte[] sig = signer.SignDetached(data, secretKey);
  *   bool ok = signer.VerifyDetached(data, sig, publicKey);
  *
- *   // SHA3-256
+ *   // SHA-256
  *   byte[] hash = KazSigner.Sha3_256(data);
  *
  *   // DER encoding, X.509 certificates, PKCS#12 keystores
@@ -25,6 +25,8 @@
 
 using System;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Threading;
 
 namespace Antrapol.Kaz.Sign
 {
@@ -33,11 +35,11 @@ namespace Antrapol.Kaz.Sign
     /// </summary>
     public enum SecurityLevel
     {
-        /// <summary>128-bit security (SHA3-256)</summary>
+        /// <summary>128-bit security (SHA-256)</summary>
         Level128 = 128,
-        /// <summary>192-bit security (SHA3-384)</summary>
+        /// <summary>192-bit security (SHA-384)</summary>
         Level192 = 192,
-        /// <summary>256-bit security (SHA3-512)</summary>
+        /// <summary>256-bit security (SHA-512)</summary>
         Level256 = 256
     }
 
@@ -77,18 +79,18 @@ namespace Antrapol.Kaz.Sign
         /// <summary>Get secret key size in bytes for the given security level</summary>
         public static int GetSecretKeyBytes(SecurityLevel level) => level switch
         {
-            SecurityLevel.Level128 => 32,
-            SecurityLevel.Level192 => 50,
-            SecurityLevel.Level256 => 64,
+            SecurityLevel.Level128 => 32,   // s(16) + t(16)
+            SecurityLevel.Level192 => 50,   // s(25) + t(25)
+            SecurityLevel.Level256 => 64,   // s(32) + t(32)
             _ => throw new ArgumentException($"Invalid security level: {level}")
         };
 
         /// <summary>Get public key size in bytes for the given security level</summary>
         public static int GetPublicKeyBytes(SecurityLevel level) => level switch
         {
-            SecurityLevel.Level128 => 54,
-            SecurityLevel.Level192 => 88,
-            SecurityLevel.Level256 => 119,
+            SecurityLevel.Level128 => 54,   // V(54)
+            SecurityLevel.Level192 => 88,   // V(88)
+            SecurityLevel.Level256 => 118,  // V(118)
             _ => throw new ArgumentException($"Invalid security level: {level}")
         };
 
@@ -98,18 +100,30 @@ namespace Antrapol.Kaz.Sign
         {
             SecurityLevel.Level128 => 162,  // S1(54) + S2(54) + S3(54)
             SecurityLevel.Level192 => 264,  // S1(88) + S2(88) + S3(88)
-            SecurityLevel.Level256 => 357,  // S1(119) + S2(119) + S3(119)
+            SecurityLevel.Level256 => 354,  // S1(118) + S2(118) + S3(118)
             _ => throw new ArgumentException($"Invalid security level: {level}")
         };
 
         /// <summary>Get hash output size in bytes for the given security level</summary>
         public static int GetHashBytes(SecurityLevel level) => level switch
         {
-            SecurityLevel.Level128 => 32,  // SHA3-256
-            SecurityLevel.Level192 => 48,  // SHA3-384
-            SecurityLevel.Level256 => 64,  // SHA3-512
+            SecurityLevel.Level128 => 32,  // SHA-256
+            SecurityLevel.Level192 => 48,  // SHA-384
+            SecurityLevel.Level256 => 64,  // SHA-512
             _ => throw new ArgumentException($"Invalid security level: {level}")
         };
+
+        /// <summary>KazWire header length in bytes</summary>
+        public const int WireHeaderBytes = 5;
+
+        /// <summary>Get public key size in KazWire format (header + raw key)</summary>
+        public static int GetWirePublicKeyBytes(SecurityLevel level) => WireHeaderBytes + GetPublicKeyBytes(level);
+
+        /// <summary>Get private key size in KazWire format (header + raw key)</summary>
+        public static int GetWirePrivateKeyBytes(SecurityLevel level) => WireHeaderBytes + GetSecretKeyBytes(level);
+
+        /// <summary>Get detached signature size in KazWire format (header + raw sig)</summary>
+        public static int GetWireSignatureBytes(SecurityLevel level) => WireHeaderBytes + GetSignatureOverhead(level);
     }
 
     /// <summary>
@@ -127,10 +141,10 @@ namespace Antrapol.Kaz.Sign
         // Version API
         // ============================================================
 
-        [DllImport(LibName, EntryPoint = "kaz_sign_version")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_version", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr Version();
 
-        [DllImport(LibName, EntryPoint = "kaz_sign_version_number")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_version_number", CallingConvention = CallingConvention.Cdecl)]
         public static extern int VersionNumber();
 
         // ============================================================
@@ -141,45 +155,45 @@ namespace Antrapol.Kaz.Sign
         /// Initialize the library for a specific security level.
         /// Can be called multiple times with different levels.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_init_level")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_init_level", CallingConvention = CallingConvention.Cdecl)]
         public static extern int InitLevel(int level);
 
         /// <summary>
         /// Clear resources for a specific security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_clear_level")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_clear_level", CallingConvention = CallingConvention.Cdecl)]
         public static extern void ClearLevel(int level);
 
         /// <summary>
         /// Clear resources for all security levels.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_clear_all")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_clear_all", CallingConvention = CallingConvention.Cdecl)]
         public static extern void ClearAll();
 
         /// <summary>
         /// Generate a key pair for a specific security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_keypair_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_keypair_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int KeyPairEx(int level, byte[] pk, byte[] sk);
 
         /// <summary>
         /// Sign a message with a specific security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_signature_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_signature_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int SignEx(int level, byte[] sig, ref ulong siglen,
             byte[] msg, ulong msglen, byte[] sk);
 
         /// <summary>
         /// Verify a signature with a specific security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_verify_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_verify_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int VerifyEx(int level, byte[] msg, ref ulong msglen,
             byte[] sig, ulong siglen, byte[] pk);
 
         /// <summary>
         /// Hash a message with the hash function for a specific security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_hash_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_hash_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int HashEx(int level, byte[] msg, ulong msglen, byte[] hash);
 
         // ============================================================
@@ -188,31 +202,31 @@ namespace Antrapol.Kaz.Sign
         // ============================================================
 
         [Obsolete("Use InitLevel instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_init_random")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_init_random", CallingConvention = CallingConvention.Cdecl)]
         public static extern int InitRandom();
 
         [Obsolete("Use ClearLevel instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_clear_random")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_clear_random", CallingConvention = CallingConvention.Cdecl)]
         public static extern void ClearRandom();
 
         [Obsolete("Use the Ex variant instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_is_initialized")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_is_initialized", CallingConvention = CallingConvention.Cdecl)]
         public static extern int IsInitialized();
 
         [Obsolete("Use KeyPairEx instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_keypair")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_keypair", CallingConvention = CallingConvention.Cdecl)]
         public static extern int KeyPair(byte[] pk, byte[] sk);
 
         [Obsolete("Use SignEx instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_signature")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_signature", CallingConvention = CallingConvention.Cdecl)]
         public static extern int Sign(byte[] sig, ref ulong siglen, byte[] msg, ulong msglen, byte[] sk);
 
         [Obsolete("Use VerifyEx instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_verify")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_verify", CallingConvention = CallingConvention.Cdecl)]
         public static extern int Verify(byte[] msg, ref ulong msglen, byte[] sig, ulong siglen, byte[] pk);
 
         [Obsolete("Use HashEx instead")]
-        [DllImport(LibName, EntryPoint = "kaz_sign_hash")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_hash", CallingConvention = CallingConvention.Cdecl)]
         public static extern int Hash(byte[] msg, ulong msglen, byte[] hash);
 
         // ============================================================
@@ -222,31 +236,31 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Get the detached signature size for a security level.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_detached_sig_bytes")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_detached_sig_bytes", CallingConvention = CallingConvention.Cdecl)]
         public static extern ulong DetachedSigBytes(int level);
 
         /// <summary>
         /// Create a detached signature (signature does not include the message).
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_detached_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_detached_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int DetachedEx(int level, byte[] sig, ref ulong siglen,
             byte[] msg, ulong msglen, byte[] sk);
 
         /// <summary>
         /// Verify a detached signature.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_verify_detached_ex")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_verify_detached_ex", CallingConvention = CallingConvention.Cdecl)]
         public static extern int VerifyDetachedEx(int level, byte[] sig, ulong siglen,
             byte[] msg, ulong msglen, byte[] pk);
 
         // ============================================================
-        // SHA3-256 API (v3.0+)
+        // SHA-256 API (v3.0+)
         // ============================================================
 
         /// <summary>
-        /// Compute SHA3-256 hash of a message in one shot.
+        /// Compute SHA-256 hash of a message in one shot.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sha3_256")]
+        [DllImport(LibName, EntryPoint = "kaz_sha3_256", CallingConvention = CallingConvention.Cdecl)]
         public static extern int Sha3_256(byte[] msg, ulong msglen, byte[] output);
 
         // ============================================================
@@ -256,25 +270,25 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Encode a public key to DER format.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_to_der")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_to_der", CallingConvention = CallingConvention.Cdecl)]
         public static extern int PubKeyToDer(int level, byte[] pk, byte[] der, ref ulong derlen);
 
         /// <summary>
         /// Decode a public key from DER format.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_from_der")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_from_der", CallingConvention = CallingConvention.Cdecl)]
         public static extern int PubKeyFromDer(int level, byte[] der, ulong derlen, byte[] pk);
 
         /// <summary>
         /// Encode a private key to DER format.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_to_der")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_to_der", CallingConvention = CallingConvention.Cdecl)]
         public static extern int PrivKeyToDer(int level, byte[] sk, byte[] der, ref ulong derlen);
 
         /// <summary>
         /// Decode a private key from DER format.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_from_der")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_from_der", CallingConvention = CallingConvention.Cdecl)]
         public static extern int PrivKeyFromDer(int level, byte[] der, ulong derlen, byte[] sk);
 
         // ============================================================
@@ -284,7 +298,7 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Generate a PKCS#10 Certificate Signing Request (CSR).
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_generate_csr")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_generate_csr", CallingConvention = CallingConvention.Cdecl)]
         public static extern int GenerateCsr(int level, byte[] sk, byte[] pk,
             [MarshalAs(UnmanagedType.LPStr)] string subject,
             byte[] csr, ref ulong csrlen);
@@ -292,13 +306,13 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Verify a PKCS#10 CSR self-signature.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_verify_csr")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_verify_csr", CallingConvention = CallingConvention.Cdecl)]
         public static extern int VerifyCsr(int level, byte[] csr, ulong csrlen);
 
         /// <summary>
         /// Issue an X.509 certificate by signing a CSR.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_issue_certificate")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_issue_certificate", CallingConvention = CallingConvention.Cdecl)]
         public static extern int IssueCertificate(int level, byte[] issuerSk, byte[] issuerPk,
             [MarshalAs(UnmanagedType.LPStr)] string issuerName,
             byte[] csr, ulong csrlen, ulong serial, int days,
@@ -307,13 +321,13 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Extract the public key from an X.509 certificate.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_cert_extract_pubkey")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_cert_extract_pubkey", CallingConvention = CallingConvention.Cdecl)]
         public static extern int CertExtractPubKey(int level, byte[] cert, ulong certlen, byte[] pk);
 
         /// <summary>
         /// Verify an X.509 certificate signature against an issuer public key.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_verify_certificate")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_verify_certificate", CallingConvention = CallingConvention.Cdecl)]
         public static extern int VerifyCertificate(int level, byte[] cert, ulong certlen, byte[] issuerPk);
 
         // ============================================================
@@ -323,7 +337,7 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Create a PKCS#12 keystore containing a key pair and optional certificate.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_create_p12")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_create_p12", CallingConvention = CallingConvention.Cdecl)]
         public static extern int CreateP12(int level, byte[] sk, byte[] pk,
             byte[]? cert, ulong certlen,
             [MarshalAs(UnmanagedType.LPStr)] string password,
@@ -333,10 +347,56 @@ namespace Antrapol.Kaz.Sign
         /// <summary>
         /// Load a key pair and certificate from a PKCS#12 keystore.
         /// </summary>
-        [DllImport(LibName, EntryPoint = "kaz_sign_load_p12")]
+        [DllImport(LibName, EntryPoint = "kaz_sign_load_p12", CallingConvention = CallingConvention.Cdecl)]
         public static extern int LoadP12(int level, byte[] p12, ulong p12len,
             [MarshalAs(UnmanagedType.LPStr)] string password,
             byte[] sk, byte[] pk, byte[]? cert, ref ulong certlen);
+
+        // ============================================================
+        // KazWire Encoding/Decoding API
+        // ============================================================
+
+        /// <summary>
+        /// Encode a public key to KazWire format (5-byte header + raw key).
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_to_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int PubKeyToWire(int level, byte[] pk, UIntPtr pkLen,
+            byte[] wire, ref UIntPtr wireLen);
+
+        /// <summary>
+        /// Decode a public key from KazWire format.
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_pubkey_from_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int PubKeyFromWire(byte[] wire, UIntPtr wireLen,
+            ref int level, byte[] pk, ref UIntPtr pkLen);
+
+        /// <summary>
+        /// Encode a private key to KazWire format (5-byte header + raw key).
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_to_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int PrivKeyToWire(int level, byte[] sk, UIntPtr skLen,
+            byte[] wire, ref UIntPtr wireLen);
+
+        /// <summary>
+        /// Decode a private key from KazWire format.
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_privkey_from_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int PrivKeyFromWire(byte[] wire, UIntPtr wireLen,
+            ref int level, byte[] sk, ref UIntPtr skLen);
+
+        /// <summary>
+        /// Encode a detached signature to KazWire format (5-byte header + raw sig).
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_sig_to_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int SigToWire(int level, byte[] sig, UIntPtr sigLen,
+            byte[] wire, ref UIntPtr wireLen);
+
+        /// <summary>
+        /// Decode a detached signature from KazWire format.
+        /// </summary>
+        [DllImport(LibName, EntryPoint = "kaz_sign_sig_from_wire", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int SigFromWire(byte[] wire, UIntPtr wireLen,
+            ref int level, byte[] sig, ref UIntPtr sigLen);
     }
 
     /// <summary>
@@ -365,20 +425,21 @@ namespace Antrapol.Kaz.Sign
             KazSignError.MemoryError => "Memory allocation failed",
             KazSignError.RngError => "Random number generation failed",
             KazSignError.InvalidParameter => "Invalid parameter",
-            KazSignError.VerificationFailed => "Verification failed",
-            KazSignError.DerError => "Buffer too small",
-            KazSignError.X509Error => "Not initialized",
-            KazSignError.P12Error => "Invalid level",
-            KazSignError.HashError => "File I/O error",
-            KazSignError.BufferError => "Certificate error",
+            KazSignError.VerificationFailed => "Signature verification failed",
+            KazSignError.DerError => "DER encoding/decoding failed",
+            KazSignError.X509Error => "X.509 certificate operation failed",
+            KazSignError.P12Error => "PKCS#12 operation failed",
+            KazSignError.HashError => "Hash operation failed",
+            KazSignError.BufferError => "Buffer too small",
             _ => $"Unknown error: {(int)error}"
         };
     }
 
     /// <summary>
-    /// Contents loaded from a PKCS#12 keystore
+    /// Contents loaded from a PKCS#12 keystore.
+    /// Implements IDisposable to securely zero the secret key material.
     /// </summary>
-    public sealed class P12Contents
+    public sealed class P12Contents : IDisposable
     {
         /// <summary>Secret signing key</summary>
         public byte[] SecretKey { get; }
@@ -395,6 +456,11 @@ namespace Antrapol.Kaz.Sign
             PublicKey = publicKey;
             Certificate = certificate;
         }
+
+        public void Dispose()
+        {
+            CryptographicOperations.ZeroMemory(SecretKey);
+        }
     }
 
     /// <summary>
@@ -404,7 +470,7 @@ namespace Antrapol.Kaz.Sign
     {
         private readonly SecurityLevel _level;
         private bool _initialized;
-        private bool _disposed;
+        private int _disposed; // 0 = alive, 1 = disposed; use Interlocked for thread safety
 
         /// <summary>
         /// Create a new KazSigner with the specified security level.
@@ -440,7 +506,7 @@ namespace Antrapol.Kaz.Sign
         /// </summary>
         public void Initialize()
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (_initialized) return;
 
             int result = NativeMethods.InitLevel((int)_level);
@@ -457,7 +523,7 @@ namespace Antrapol.Kaz.Sign
         /// </summary>
         public bool IsInitialized()
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             return _initialized;
         }
 
@@ -468,7 +534,7 @@ namespace Antrapol.Kaz.Sign
         /// <param name="secretKey">Output: secret signing key</param>
         public void GenerateKeyPair(out byte[] publicKey, out byte[] secretKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             EnsureInitialized();
 
             publicKey = new byte[PublicKeyBytes];
@@ -478,6 +544,7 @@ namespace Antrapol.Kaz.Sign
 
             if (result != (int)KazSignError.Success)
             {
+                CryptographicOperations.ZeroMemory(secretKey);
                 throw new KazSignException((KazSignError)result);
             }
         }
@@ -490,7 +557,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Signature (includes the message)</returns>
         public byte[] Sign(byte[] message, byte[] secretKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (message == null) throw new ArgumentNullException(nameof(message));
             if (secretKey == null) throw new ArgumentNullException(nameof(secretKey));
             if (secretKey.Length != SecretKeyBytes)
@@ -509,6 +576,7 @@ namespace Antrapol.Kaz.Sign
             }
 
             // Resize to actual length if different
+            GuardLength(siglen);
             if ((int)siglen != signature.Length)
             {
                 Array.Resize(ref signature, (int)siglen);
@@ -526,11 +594,12 @@ namespace Antrapol.Kaz.Sign
         /// <returns>True if signature is valid, false otherwise</returns>
         public bool Verify(byte[] signature, byte[] publicKey, out byte[] message)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (signature == null) throw new ArgumentNullException(nameof(signature));
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
             if (publicKey.Length != PublicKeyBytes)
                 throw new ArgumentException($"Public key must be {PublicKeyBytes} bytes", nameof(publicKey));
+            EnsureInitialized();
 
             // Message can be at most signature length minus overhead
             int maxMsgLen = signature.Length - SignatureOverhead;
@@ -552,6 +621,7 @@ namespace Antrapol.Kaz.Sign
                 return false;
             }
 
+            GuardLength(msglen);
             message = new byte[msglen];
             Array.Copy(msgBuffer, message, (int)msglen);
             return true;
@@ -564,7 +634,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Hash value</returns>
         public byte[] Hash(byte[] message)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (message == null) throw new ArgumentNullException(nameof(message));
 
             byte[] hash = new byte[HashBytes];
@@ -587,14 +657,14 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Detached signature</returns>
         public byte[] SignDetached(byte[] data, byte[] secretKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (data == null) throw new ArgumentNullException(nameof(data));
             if (secretKey == null) throw new ArgumentNullException(nameof(secretKey));
             if (secretKey.Length != SecretKeyBytes)
                 throw new ArgumentException($"Secret key must be {SecretKeyBytes} bytes", nameof(secretKey));
             EnsureInitialized();
 
-            ulong sigBytes = NativeMethods.DetachedSigBytes((int)_level);
+            int sigBytes = SignatureOverhead; // use known constant instead of native size_t return
             byte[] signature = new byte[sigBytes];
             ulong siglen = 0;
 
@@ -606,6 +676,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(siglen);
             if ((int)siglen != signature.Length)
             {
                 Array.Resize(ref signature, (int)siglen);
@@ -623,7 +694,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>True if signature is valid, false otherwise</returns>
         public bool VerifyDetached(byte[] data, byte[] signature, byte[] publicKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (data == null) throw new ArgumentNullException(nameof(data));
             if (signature == null) throw new ArgumentNullException(nameof(signature));
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
@@ -638,10 +709,10 @@ namespace Antrapol.Kaz.Sign
         }
 
         /// <summary>
-        /// Compute SHA3-256 hash of data.
+        /// Compute SHA-256 hash of data.
         /// </summary>
         /// <param name="data">Data to hash</param>
-        /// <returns>32-byte SHA3-256 hash</returns>
+        /// <returns>32-byte SHA-256 hash</returns>
         public static byte[] Sha3_256(byte[] data)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
@@ -665,7 +736,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>DER-encoded public key</returns>
         public byte[] PublicKeyToDer(byte[] publicKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
             if (publicKey.Length != PublicKeyBytes)
                 throw new ArgumentException($"Public key must be {PublicKeyBytes} bytes", nameof(publicKey));
@@ -682,6 +753,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(derlen);
             if ((int)derlen != der.Length)
             {
                 Array.Resize(ref der, (int)derlen);
@@ -697,7 +769,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Raw public key</returns>
         public byte[] PublicKeyFromDer(byte[] der)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (der == null) throw new ArgumentNullException(nameof(der));
             EnsureInitialized();
 
@@ -720,7 +792,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>DER-encoded private key</returns>
         public byte[] PrivateKeyToDer(byte[] secretKey)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (secretKey == null) throw new ArgumentNullException(nameof(secretKey));
             if (secretKey.Length != SecretKeyBytes)
                 throw new ArgumentException($"Secret key must be {SecretKeyBytes} bytes", nameof(secretKey));
@@ -737,6 +809,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(derlen);
             if ((int)derlen != der.Length)
             {
                 Array.Resize(ref der, (int)derlen);
@@ -752,7 +825,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Raw secret key</returns>
         public byte[] PrivateKeyFromDer(byte[] der)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (der == null) throw new ArgumentNullException(nameof(der));
             EnsureInitialized();
 
@@ -779,7 +852,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>DER-encoded CSR</returns>
         public byte[] GenerateCsr(byte[] secretKey, byte[] publicKey, string cn, string? org, string? ou)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (secretKey == null) throw new ArgumentNullException(nameof(secretKey));
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
             if (cn == null) throw new ArgumentNullException(nameof(cn));
@@ -805,6 +878,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(csrlen);
             if ((int)csrlen != csr.Length)
             {
                 Array.Resize(ref csr, (int)csrlen);
@@ -820,7 +894,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>True if the CSR signature is valid, false otherwise</returns>
         public bool VerifyCsr(byte[] csr)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (csr == null) throw new ArgumentNullException(nameof(csr));
             EnsureInitialized();
 
@@ -842,7 +916,7 @@ namespace Antrapol.Kaz.Sign
         public byte[] IssueCertificate(byte[] issuerSk, byte[] issuerPk, string issuerName,
             byte[] csr, ulong serial, int days)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (issuerSk == null) throw new ArgumentNullException(nameof(issuerSk));
             if (issuerPk == null) throw new ArgumentNullException(nameof(issuerPk));
             if (issuerName == null) throw new ArgumentNullException(nameof(issuerName));
@@ -864,6 +938,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(certlen);
             if ((int)certlen != cert.Length)
             {
                 Array.Resize(ref cert, (int)certlen);
@@ -880,7 +955,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>True if the certificate signature is valid, false otherwise</returns>
         public bool VerifyCertificate(byte[] cert, byte[] issuerPk)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (cert == null) throw new ArgumentNullException(nameof(cert));
             if (issuerPk == null) throw new ArgumentNullException(nameof(issuerPk));
             if (issuerPk.Length != PublicKeyBytes)
@@ -899,7 +974,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Extracted public key</returns>
         public byte[] ExtractPublicKey(byte[] cert)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (cert == null) throw new ArgumentNullException(nameof(cert));
             EnsureInitialized();
 
@@ -926,7 +1001,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>PKCS#12 data</returns>
         public byte[] CreateP12(byte[] secretKey, byte[] publicKey, byte[]? cert, string password, string name)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (secretKey == null) throw new ArgumentNullException(nameof(secretKey));
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
             if (password == null) throw new ArgumentNullException(nameof(password));
@@ -950,6 +1025,7 @@ namespace Antrapol.Kaz.Sign
                 throw new KazSignException((KazSignError)result);
             }
 
+            GuardLength(p12len);
             if ((int)p12len != p12.Length)
             {
                 Array.Resize(ref p12, (int)p12len);
@@ -966,7 +1042,7 @@ namespace Antrapol.Kaz.Sign
         /// <returns>Loaded key pair and optional certificate</returns>
         public P12Contents LoadP12(byte[] p12, string password)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(KazSigner));
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
             if (p12 == null) throw new ArgumentNullException(nameof(p12));
             if (password == null) throw new ArgumentNullException(nameof(password));
             EnsureInitialized();
@@ -981,17 +1057,127 @@ namespace Antrapol.Kaz.Sign
 
             if (result != (int)KazSignError.Success)
             {
+                CryptographicOperations.ZeroMemory(sk);
                 throw new KazSignException((KazSignError)result);
             }
 
             byte[]? cert = null;
             if (certlen > 0)
             {
+                GuardLength(certlen);
                 cert = new byte[certlen];
                 Array.Copy(certBuf, cert, (int)certlen);
             }
 
             return new P12Contents(sk, pk, cert);
+        }
+
+        // ============================================================
+        // KazWire Encoding/Decoding
+        // ============================================================
+
+        /// <summary>
+        /// Encode a raw public key to KazWire format (5-byte header + raw key).
+        /// </summary>
+        public byte[] PublicKeyToWire(byte[] publicKey)
+        {
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
+            if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
+            if (publicKey.Length != PublicKeyBytes)
+                throw new ArgumentException($"Public key must be {PublicKeyBytes} bytes", nameof(publicKey));
+
+            int wireSize = KazSignParameters.GetWirePublicKeyBytes(_level);
+            byte[] wire = new byte[wireSize];
+            UIntPtr wireLen = (UIntPtr)wireSize;
+
+            int result = NativeMethods.PubKeyToWire((int)_level, publicKey, (UIntPtr)publicKey.Length,
+                wire, ref wireLen);
+
+            if (result != (int)KazSignError.Success)
+                throw new KazSignException((KazSignError)result);
+
+            GuardLength(wireLen);
+            if ((int)wireLen != wire.Length)
+                Array.Resize(ref wire, (int)wireLen);
+
+            return wire;
+        }
+
+        /// <summary>
+        /// Decode a public key from KazWire format to raw bytes.
+        /// </summary>
+        public static (byte[] PublicKey, SecurityLevel Level) PublicKeyFromWire(byte[] wire)
+        {
+            if (wire == null) throw new ArgumentNullException(nameof(wire));
+            if (wire.Length < KazSignParameters.WireHeaderBytes)
+                throw new ArgumentException("Wire data too short", nameof(wire));
+
+            int level = 0;
+            byte[] pk = new byte[wire.Length]; // oversized buffer, will resize
+            UIntPtr pkLen = (UIntPtr)pk.Length;
+
+            int result = NativeMethods.PubKeyFromWire(wire, (UIntPtr)wire.Length,
+                ref level, pk, ref pkLen);
+
+            if (result != (int)KazSignError.Success)
+                throw new KazSignException((KazSignError)result);
+
+            GuardLength(pkLen);
+            if ((int)pkLen != pk.Length)
+                Array.Resize(ref pk, (int)pkLen);
+
+            return (pk, (SecurityLevel)level);
+        }
+
+        /// <summary>
+        /// Encode a raw detached signature to KazWire format (5-byte header + raw sig).
+        /// </summary>
+        public byte[] SignatureToWire(byte[] signature)
+        {
+            if (_disposed != 0) throw new ObjectDisposedException(nameof(KazSigner));
+            if (signature == null) throw new ArgumentNullException(nameof(signature));
+
+            int wireSize = KazSignParameters.GetWireSignatureBytes(_level);
+            byte[] wire = new byte[wireSize];
+            UIntPtr wireLen = (UIntPtr)wireSize;
+
+            int result = NativeMethods.SigToWire((int)_level, signature, (UIntPtr)signature.Length,
+                wire, ref wireLen);
+
+            if (result != (int)KazSignError.Success)
+                throw new KazSignException((KazSignError)result);
+
+            GuardLength(wireLen);
+            if ((int)wireLen != wire.Length)
+                Array.Resize(ref wire, (int)wireLen);
+
+            return wire;
+        }
+
+        /// <summary>
+        /// Decode a detached signature from KazWire format to raw bytes.
+        /// </summary>
+        public static (byte[] Signature, SecurityLevel Level) SignatureFromWire(byte[] wire)
+        {
+            if (wire == null) throw new ArgumentNullException(nameof(wire));
+            if (wire.Length < KazSignParameters.WireHeaderBytes)
+                throw new ArgumentException("Wire data too short", nameof(wire));
+
+            int level = 0;
+            byte[] sig = new byte[wire.Length]; // oversized buffer, will resize
+            UIntPtr sigLen = (UIntPtr)sig.Length;
+
+            int result = NativeMethods.SigFromWire(wire, (UIntPtr)wire.Length,
+                ref level, sig, ref sigLen);
+
+            if (result != (int)KazSignError.Success)
+                throw new KazSignException((KazSignError)result);
+
+            GuardLength(sigLen);
+            if ((int)sigLen != sig.Length)
+                Array.Resize(ref sig, (int)sigLen);
+
+            return (sig, (SecurityLevel)level);
         }
 
         /// <summary>
@@ -1019,12 +1205,18 @@ namespace Antrapol.Kaz.Sign
             }
         }
 
+        private static void GuardLength(ulong length)
+        {
+            if (length > (ulong)Array.MaxLength)
+                throw new InvalidOperationException($"Native library returned implausible length: {length}");
+        }
+
         /// <summary>
         /// Clear resources for this security level.
         /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
             if (_initialized)
             {
@@ -1032,7 +1224,15 @@ namespace Antrapol.Kaz.Sign
                 _initialized = false;
             }
 
-            _disposed = true;
+            GC.SuppressFinalize(this);
+        }
+
+        ~KazSigner()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+            if (_initialized)
+                NativeMethods.ClearLevel((int)_level);
         }
 
         /// <summary>

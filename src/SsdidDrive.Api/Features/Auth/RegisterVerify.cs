@@ -21,7 +21,8 @@ public static class RegisterVerify
             return AppError.BadRequest("Invalid DID format").ToProblemResult();
         if (string.IsNullOrWhiteSpace(req.KeyId) || req.KeyId.Length > 512)
             return AppError.BadRequest("Invalid KeyId").ToProblemResult();
-        if (string.IsNullOrWhiteSpace(req.SignedChallenge) || req.SignedChallenge.Length > 1024)
+        // PQC signatures are large: ML-DSA-44 ~3.2K, SLH-DSA-SHA2-256f ~66K base64 chars
+        if (string.IsNullOrWhiteSpace(req.SignedChallenge) || req.SignedChallenge.Length > 100_000)
             return AppError.BadRequest("Invalid SignedChallenge").ToProblemResult();
 
         var result = await auth.HandleVerifyResponse(req.Did, req.KeyId, req.SignedChallenge);
