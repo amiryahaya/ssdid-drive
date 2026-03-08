@@ -84,6 +84,7 @@ public class SessionStore : IHostedService
     internal void CreateSessionDirect(string did, string token)
     {
         _sessions[token] = new SessionEntry(did, DateTimeOffset.UtcNow);
+        Interlocked.Increment(ref _sessionCount);
     }
 
     // ── SSE completion waiters ──
@@ -93,11 +94,13 @@ public class SessionStore : IHostedService
         var tcs = _completionWaiters.GetOrAdd(challengeId,
             _ => new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
 
-        ct.Register(() =>
+        var reg = ct.Register(() =>
         {
             tcs.TrySetCanceled(ct);
             _completionWaiters.TryRemove(challengeId, out _);
         });
+
+        _ = tcs.Task.ContinueWith(_ => reg.Dispose(), TaskScheduler.Default);
 
         return tcs.Task;
     }

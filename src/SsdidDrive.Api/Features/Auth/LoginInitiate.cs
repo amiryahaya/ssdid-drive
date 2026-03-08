@@ -9,16 +9,15 @@ public static class LoginInitiate
 
     private static IResult Handle(
         SsdidIdentity identity,
-        SessionStore sessionStore,
         IConfiguration config)
     {
+        // challengeId is a correlation ID for SSE session delivery only —
+        // the wallet authenticates by presenting a VC, not by signing this challenge.
         var challengeId = Guid.NewGuid().ToString("N");
         var challenge = SsdidCrypto.GenerateChallenge();
         var serverSignature = identity.SignChallenge(challenge);
 
-        sessionStore.CreateChallenge(challengeId, "login", challenge, keyId: "");
-
-        var registryUrl = config["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
+        var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidCrypto.DefaultRegistryUrl;
         var serviceUrl = config["Ssdid:ServiceUrl"] ?? "";
 
         var qrPayload = new
