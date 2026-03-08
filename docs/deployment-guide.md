@@ -240,6 +240,10 @@ drive.ssdid.my {
         reverse_proxy localhost:5000
     }
 
+    # Redirect /admin to /admin/ (handle_path requires trailing slash)
+    @admin-no-slash path /admin
+    redir @admin-no-slash /admin/ permanent
+
     # Admin portal (React SPA) — strip /admin prefix
     handle_path /admin/* {
         root * /var/www/admin
