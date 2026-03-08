@@ -21,7 +21,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useShareStore } from '../../stores/shareStore';
 import { useToast } from '../../hooks/useToast';
 import { cn, formatDate, getPermissionLabel } from '../../lib/utils';
-import type { FileItem, Share, SharePermission } from '../../types';
+import type { FileItem, Share } from '../../types';
 
 interface ShareDetailsDialogProps {
   open: boolean;

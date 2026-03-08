@@ -58,7 +58,7 @@ export function CredentialManager() {
       setIsLoading(true);
       const beginResponse = await tauriService.webauthnAddCredentialBegin();
 
-      const publicKeyOptions = beginResponse.options as PublicKeyCredentialCreationOptions;
+      const publicKeyOptions = beginResponse.options as unknown as PublicKeyCredentialCreationOptions;
       const credential = await navigator.credentials.create({
         publicKey: publicKeyOptions,
       }) as PublicKeyCredential;
