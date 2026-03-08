@@ -189,7 +189,7 @@ export function FilesPage() {
   // Listen for tray quick upload event
   useTrayQuickUpload(triggerUpload);
 
-  const handleUpload = async () => {
+  const handleUpload = useCallback(async () => {
     try {
       const selected = await open({
         multiple: true,
@@ -206,7 +206,7 @@ export function FilesPage() {
     } catch (err) {
       showError({ title: 'Upload failed', description: String(err) });
     }
-  };
+  }, [folderId, uploadFile, success, showError]);
 
   const handleCreateFolder = async (name: string) => {
     await createFolder(name, folderId || null);
@@ -218,7 +218,7 @@ export function FilesPage() {
     success({ title: 'Renamed', description: `Item renamed to "${newName}"` });
   };
 
-  const handleDownload = async (item: FileItem) => {
+  const handleDownload = useCallback(async (item: FileItem) => {
     try {
       const destination = await save({
         defaultPath: item.name,
@@ -231,7 +231,7 @@ export function FilesPage() {
     } catch (err) {
       showError({ title: 'Download failed', description: String(err) });
     }
-  };
+  }, [downloadFile, success, showError]);
 
   const handleDelete = async () => {
     if (!selectedItem) return;
@@ -249,13 +249,13 @@ export function FilesPage() {
     }
   };
 
-  const handleItemClick = (item: FileItem) => {
+  const handleItemClick = useCallback((item: FileItem) => {
     if (item.item_type === 'folder') {
       navigate(`/files/${item.id}`);
     } else {
       loadPreview(item.id);
     }
-  };
+  }, [navigate, loadPreview]);
 
   const openShareDialog = (item: FileItem) => {
     setSelectedItem(item);
@@ -289,7 +289,7 @@ export function FilesPage() {
         description: 'Please delete items one at a time',
       });
     }
-  }, [selectedItems, items]);
+  }, [selectedItems, items, showError]);
 
   const handleRenameShortcut = useCallback(() => {
     if (selectedItems.size !== 1) return;
@@ -307,7 +307,7 @@ export function FilesPage() {
     if (item && item.item_type === 'file') {
       await handleDownload(item);
     }
-  }, [selectedItems, items]);
+  }, [selectedItems, items, handleDownload]);
 
   // Handle share shortcut
   const handleShareShortcut = useCallback(() => {
@@ -327,7 +327,7 @@ export function FilesPage() {
     if (item) {
       handleItemClick(item);
     }
-  }, [selectedItems, items]);
+  }, [selectedItems, items, handleItemClick]);
 
   // Handle new folder shortcut
   const handleNewFolderShortcut = useCallback(() => {
@@ -337,7 +337,7 @@ export function FilesPage() {
   // Handle upload shortcut
   const handleUploadShortcut = useCallback(() => {
     handleUpload();
-  }, []);
+  }, [handleUpload]);
 
   // Setup keyboard shortcuts
   useKeyboardShortcuts([

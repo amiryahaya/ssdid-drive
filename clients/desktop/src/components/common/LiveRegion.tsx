@@ -12,6 +12,7 @@ const LiveRegionContext = createContext<LiveRegionContextValue | null>(null);
  * Hook to announce messages to screen readers.
  * Must be used within a LiveRegionProvider.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAnnounce() {
   const context = useContext(LiveRegionContext);
   if (!context) {

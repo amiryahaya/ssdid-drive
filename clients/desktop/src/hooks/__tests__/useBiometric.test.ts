@@ -43,7 +43,7 @@ describe('useBiometric', () => {
     });
 
     it('should load biometric availability on mount', async () => {
-      const { result } = renderHook(() => useBiometric());
+      const { result: _result } = renderHook(() => useBiometric());
 
       // Wait for useEffect to resolve
       await act(async () => {

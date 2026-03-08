@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useDropZone } from '../useDropZone';
 
 // Mock DragEvent
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createMockDragEvent(type: string, files: File[] = []): any {
   const dataTransfer = {
     items: files,

@@ -165,7 +165,7 @@ describe('useSync', () => {
 
   describe('periodic polling', () => {
     it('should poll sync status every 30 seconds', async () => {
-      const { result } = renderHook(() => useSync());
+      const { result: _result } = renderHook(() => useSync());
 
       // Flush initial mount effects
       await act(async () => {

@@ -17,6 +17,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('@/stores/authStore', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useAuthStore: vi.fn((selector: any) => {
     const state = { isAuthenticated: true, user: { id: 'user-1' } };
     return selector ? selector(state) : state;
@@ -131,6 +132,7 @@ describe('useDeepLink', () => {
     it('should redirect to login and store pending deep link', async () => {
       // Re-mock authStore to return unauthenticated
       const { useAuthStore } = await import('@/stores/authStore');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (useAuthStore as any).mockImplementation((selector: any) => {
         const state = { isAuthenticated: false, user: null };
         return selector ? selector(state) : state;

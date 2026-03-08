@@ -5,8 +5,10 @@ import { PiiChatPage } from '../PiiChatPage';
 import { usePiiStore } from '../../stores/piiStore';
 
 vi.mock('../../components/pii/ConversationList', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ConversationList: ({ conversations, onSelect, onNew }: any) => (
     <div data-testid="conversation-list">
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {conversations?.map((c: any) => (
         <button key={c.id} onClick={() => onSelect(c.id)}>
           {c.title}
@@ -20,6 +22,7 @@ vi.mock('../../components/pii/ConversationList', () => ({
 }));
 
 vi.mock('../../components/pii/ChatView', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ChatView: ({ conversation }: any) => (
     <div data-testid="chat-view">
       {conversation ? conversation.title : 'No conversation selected'}
@@ -28,6 +31,7 @@ vi.mock('../../components/pii/ChatView', () => ({
 }));
 
 vi.mock('../../components/pii/NewConversationDialog', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   NewConversationDialog: ({ open, onClose }: any) =>
     open ? (
       <div data-testid="new-conversation-dialog">
