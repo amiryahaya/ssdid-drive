@@ -2,6 +2,12 @@ const TOKEN_KEY = 'ssdid_admin_token'
 
 let token: string | null = localStorage.getItem(TOKEN_KEY)
 
+let onUnauthorized: (() => void) | null = null
+
+export function setOnUnauthorized(callback: () => void) {
+  onUnauthorized = callback
+}
+
 export function setToken(t: string | null) {
   token = t
   if (t) {
@@ -15,7 +21,7 @@ export function getToken(): string | null {
   return token
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number
 
   constructor(status: number, message: string) {
@@ -46,7 +52,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (res.status === 401 || res.status === 403) {
     setToken(null)
-    window.location.href = '/admin/'
+    onUnauthorized?.()
     throw new ApiError(res.status, 'Unauthorized')
   }
 
@@ -64,7 +70,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (res.status === 204) return undefined as T
 
-  return res.json() as Promise<T>
+  return await res.json() as T
 }
 
 export const api = {

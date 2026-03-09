@@ -78,8 +78,9 @@ interface AdminState {
   tenantsTotal: number
   tenantsLoading: boolean
   fetchTenants: (page: number, pageSize: number, search?: string) => Promise<void>
+  fetchTenantById: (id: string) => Promise<Tenant>
   createTenant: (name: string, slug: string) => Promise<Tenant>
-  updateTenant: (id: string, patch: Partial<Pick<Tenant, 'name' | 'disabled' | 'storage_quota_bytes'>>) => Promise<void>
+  updateTenant: (id: string, patch: Partial<Pick<Tenant, 'name' | 'disabled' | 'storage_quota_bytes'>>, clearStorageQuota?: boolean) => Promise<void>
 
   tenantMembers: TenantMember[]
   tenantMembersLoading: boolean
@@ -105,6 +106,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }
       const res = await api.get<UsersResponse>(path)
       set({ users: res.items, usersTotal: res.total })
+    } catch (err) {
+      set({ users: [], usersTotal: 0 })
+      throw err
     } finally {
       set({ usersLoading: false })
     }
@@ -112,9 +116,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   updateUser: async (id: string, patch: Partial<Pick<User, 'status' | 'system_role'>>) => {
     const updated = await api.patch<User>(`/api/admin/users/${id}`, patch)
-    set({
-      users: get().users.map((u) => (u.id === id ? updated : u)),
-    })
+    const current = get().users
+    if (current.some((u) => u.id === id)) {
+      set({ users: current.map((u) => (u.id === id ? updated : u)) })
+    }
   },
 
   tenants: [],
@@ -130,9 +135,20 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }
       const res = await api.get<TenantsResponse>(path)
       set({ tenants: res.items, tenantsTotal: res.total })
+    } catch (err) {
+      set({ tenants: [], tenantsTotal: 0 })
+      throw err
     } finally {
       set({ tenantsLoading: false })
     }
+  },
+
+  fetchTenantById: async (id: string) => {
+    const res = await api.get<TenantsResponse>(`/api/admin/tenants?page=1&page_size=1&search=${id}`)
+    if (res.items.length === 0) {
+      throw new Error('Tenant not found')
+    }
+    return res.items[0]
   },
 
   createTenant: async (name: string, slug: string) => {
@@ -140,11 +156,17 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     return created
   },
 
-  updateTenant: async (id: string, patch: Partial<Pick<Tenant, 'name' | 'disabled' | 'storage_quota_bytes'>>) => {
-    const updated = await api.patch<Tenant>(`/api/admin/tenants/${id}`, patch)
-    set({
-      tenants: get().tenants.map((t) => (t.id === id ? updated : t)),
-    })
+  updateTenant: async (id: string, patch: Partial<Pick<Tenant, 'name' | 'disabled' | 'storage_quota_bytes'>>, clearStorageQuota?: boolean) => {
+    const body: Record<string, unknown> = { ...patch }
+    if (clearStorageQuota) {
+      body.clear_storage_quota = true
+      delete body.storage_quota_bytes
+    }
+    const updated = await api.patch<Tenant>(`/api/admin/tenants/${id}`, body)
+    const current = get().tenants
+    if (current.some((t) => t.id === id)) {
+      set({ tenants: current.map((t) => (t.id === id ? updated : t)) })
+    }
   },
 
   tenantMembers: [],
@@ -171,6 +193,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         `/api/admin/audit-log?page=${page}&page_size=${pageSize}`,
       )
       set({ auditLog: res.items, auditLogTotal: res.total })
+    } catch (err) {
+      set({ auditLog: [], auditLogTotal: 0 })
+      throw err
     } finally {
       set({ auditLogLoading: false })
     }

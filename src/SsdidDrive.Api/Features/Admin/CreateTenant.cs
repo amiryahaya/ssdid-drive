@@ -47,6 +47,7 @@ public static class CreateTenant
             slug = tenant.Slug,
             disabled = tenant.Disabled,
             storage_quota_bytes = tenant.StorageQuotaBytes,
+            user_count = 0,
             created_at = tenant.CreatedAt
         });
     }

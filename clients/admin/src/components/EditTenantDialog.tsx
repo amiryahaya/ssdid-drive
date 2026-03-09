@@ -35,6 +35,15 @@ export default function EditTenantDialog({
     }
   }, [tenant])
 
+  useEffect(() => {
+    if (!tenant) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [tenant, submitting, onClose])
+
   if (!tenant) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,12 +62,15 @@ export default function EditTenantDialog({
       patch.name = name.trim()
     }
 
-    const newQuotaBytes = quotaGb !== null ? Math.round(quotaGb * 1024 * 1024 * 1024) : null
+    const clearQuota = quotaGb === null && tenant.storage_quota_bytes !== null
+    const newQuotaBytes = quotaGb !== null ? Math.round(quotaGb * 1073741824) : null
     if (newQuotaBytes !== tenant.storage_quota_bytes) {
-      patch.storage_quota_bytes = newQuotaBytes
+      if (!clearQuota) {
+        patch.storage_quota_bytes = newQuotaBytes
+      }
     }
 
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && !clearQuota) {
       onClose()
       return
     }
@@ -66,7 +78,7 @@ export default function EditTenantDialog({
     setSubmitting(true)
     setError(null)
     try {
-      await updateTenant(tenant.id, patch)
+      await updateTenant(tenant.id, patch, clearQuota)
       onUpdated()
       onClose()
     } catch (err) {
@@ -77,9 +89,9 @@ export default function EditTenantDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 className="text-lg font-semibold mb-4">Edit Tenant</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="edit-tenant-title" onClick={() => !submitting && onClose()}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 id="edit-tenant-title" className="text-lg font-semibold mb-4">Edit Tenant</h3>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 mb-4 text-sm">

@@ -27,7 +27,8 @@ export default function UsersPage() {
     useAdminStore()
 
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -43,14 +44,15 @@ export default function UsersPage() {
   )
 
   useEffect(() => {
-    loadUsers(page, search)
-  }, [page, loadUsers, search])
+    loadUsers(page, debouncedSearch)
+  }, [page, loadUsers, debouncedSearch])
 
   const handleSearchChange = (value: string) => {
+    setSearchInput(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       setPage(1)
-      setSearch(value)
+      setDebouncedSearch(value)
     }, 300)
   }
 
@@ -139,6 +141,7 @@ export default function UsersPage() {
         <input
           type="text"
           placeholder="Search users..."
+          value={searchInput}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />

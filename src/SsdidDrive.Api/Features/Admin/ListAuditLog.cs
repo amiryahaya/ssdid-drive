@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 
 namespace SsdidDrive.Api.Features.Admin;
@@ -9,14 +10,10 @@ public static class ListAuditLog
         group.MapGet("/audit-log", Handle);
 
     private static async Task<IResult> Handle(
+        [AsParameters] PaginationParams pagination,
         AppDbContext db,
-        int? page,
-        int? pageSize,
         CancellationToken ct)
     {
-        var p = Math.Max(1, page ?? 1);
-        var ps = Math.Clamp(pageSize ?? 50, 1, 200);
-
         var query = db.AuditLog
             .Include(e => e.Actor)
             .AsNoTracking();
@@ -25,8 +22,8 @@ public static class ListAuditLog
 
         var items = await query
             .OrderByDescending(e => e.CreatedAt)
-            .Skip((p - 1) * ps)
-            .Take(ps)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
             .Select(e => new
             {
                 id = e.Id,
@@ -44,8 +41,8 @@ public static class ListAuditLog
         {
             items,
             total,
-            page = p,
-            page_size = ps
+            page = pagination.NormalizedPage,
+            page_size = pagination.Take
         });
     }
 }

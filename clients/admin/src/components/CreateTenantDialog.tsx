@@ -46,6 +46,15 @@ export default function CreateTenantDialog({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open, submitting, onClose])
+
   if (!open) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,9 +75,9 @@ export default function CreateTenantDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 className="text-lg font-semibold mb-4">Create Tenant</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="create-tenant-title" onClick={() => !submitting && onClose()}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 id="create-tenant-title" className="text-lg font-semibold mb-4">Create Tenant</h3>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 mb-4 text-sm">

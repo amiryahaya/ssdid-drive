@@ -33,6 +33,6 @@ public static class GetTenantMembers
             })
             .ToListAsync(ct);
 
-        return Results.Ok(new { members });
+        return Results.Ok(new { items = members });
     }
 }

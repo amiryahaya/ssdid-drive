@@ -26,25 +26,31 @@ export default function TenantDetailPage() {
     tenants,
     tenantMembers,
     tenantMembersLoading,
-    fetchTenants,
+    fetchTenantById,
     fetchTenantMembers,
   } = useAdminStore()
 
   const [error, setError] = useState<string | null>(null)
+  const [directTenant, setDirectTenant] = useState<Tenant | null>(null)
 
-  const tenant: Tenant | undefined = tenants.find((t) => t.id === id)
+  // Use tenant from store if available, otherwise use directly fetched one
+  const tenant: Tenant | undefined = tenants.find((t) => t.id === id) ?? directTenant ?? undefined
 
   useEffect(() => {
     if (!id) return
-    // Ensure tenants are loaded (in case user navigated directly)
-    if (tenants.length === 0) {
-      fetchTenants(1, 100).catch(() => {})
+
+    // If tenant not in store, fetch it directly
+    if (!tenants.find((t) => t.id === id)) {
+      fetchTenantById(id)
+        .then(setDirectTenant)
+        .catch(() => setError('Tenant not found'))
     }
+
     setError(null)
     fetchTenantMembers(id).catch((err) =>
       setError(err instanceof Error ? err.message : 'Failed to load members'),
     )
-  }, [id, tenants.length, fetchTenants, fetchTenantMembers])
+  }, [id, tenants, fetchTenantById, fetchTenantMembers])
 
   const memberColumns: Column<TenantMember>[] = [
     {
@@ -115,6 +121,10 @@ export default function TenantDetailPage() {
             </div>
           </dl>
         </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-6">
+          {error}
+        </div>
       ) : (
         <div className="bg-white rounded-lg shadow p-6 mb-6 animate-pulse">
           <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
@@ -126,7 +136,8 @@ export default function TenantDetailPage() {
         </div>
       )}
 
-      {error && (
+      {error && !tenant && null}
+      {error && tenant && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-4">
           {error}
         </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, setToken, getToken } from '../services/api'
+import { api, setToken, getToken, setOnUnauthorized } from '../services/api'
 
 interface User {
   id: string
@@ -17,38 +17,49 @@ interface AuthState {
   initialize: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  token: getToken(),
-  user: null,
-  isAuthenticated: false,
-
-  login: async (token: string) => {
-    setToken(token)
-    const user = await api.get<User>('/api/me')
-    if (user.system_role !== 'SuperAdmin') {
-      setToken(null)
-      throw new Error('Admin access required')
-    }
-    set({ token, user, isAuthenticated: true })
-  },
-
-  logout: () => {
+export const useAuthStore = create<AuthState>((set, get) => {
+  const logout = () => {
     setToken(null)
     set({ token: null, user: null, isAuthenticated: false })
-  },
+  }
 
-  initialize: async () => {
-    const token = getToken()
-    if (!token) return
-    try {
-      const user = await api.get<User>('/api/me')
-      if (user.system_role !== 'SuperAdmin') {
-        throw new Error('Admin access required')
+  // Wire up API 401/403 handler to logout
+  setOnUnauthorized(logout)
+
+  return {
+    token: getToken(),
+    user: null,
+    isAuthenticated: false,
+
+    login: async (token: string) => {
+      setToken(token)
+      try {
+        const user = await api.get<User>('/api/me')
+        if (user.system_role !== 'SuperAdmin') {
+          throw new Error('Admin access required')
+        }
+        set({ token, user, isAuthenticated: true })
+      } catch (err) {
+        setToken(null)
+        throw err
       }
-      set({ token, user, isAuthenticated: true })
-    } catch {
-      setToken(null)
-      set({ token: null, user: null, isAuthenticated: false })
-    }
-  },
-}))
+    },
+
+    logout,
+
+    initialize: async () => {
+      const token = getToken()
+      if (!token) return
+      try {
+        const user = await api.get<User>('/api/me')
+        if (user.system_role !== 'SuperAdmin') {
+          throw new Error('Admin access required')
+        }
+        set({ token, user, isAuthenticated: true })
+      } catch {
+        setToken(null)
+        set({ token: null, user: null, isAuthenticated: false })
+      }
+    },
+  }
+})

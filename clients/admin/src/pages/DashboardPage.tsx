@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../services/api'
 import StatsCard from '../components/StatsCard'
+import { formatStorageQuota } from '../utils/format'
 
 interface StatsResponse {
   user_count: number
@@ -15,33 +16,35 @@ interface SessionsResponse {
   active_challenges: number
 }
 
-function formatStorage(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
 export default function DashboardPage() {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [sessions, setSessions] = useState<SessionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<string[]>([])
 
   useEffect(() => {
     async function fetchData() {
-      try {
-        const [statsData, sessionsData] = await Promise.all([
-          api.get<StatsResponse>('/api/admin/stats'),
-          api.get<SessionsResponse>('/api/admin/sessions'),
-        ])
-        setStats(statsData)
-        setSessions(sessionsData)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-      } finally {
-        setLoading(false)
+      const errs: string[] = []
+
+      const [statsResult, sessionsResult] = await Promise.allSettled([
+        api.get<StatsResponse>('/api/admin/stats'),
+        api.get<SessionsResponse>('/api/admin/sessions'),
+      ])
+
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value)
+      } else {
+        errs.push('Failed to load stats')
       }
+
+      if (sessionsResult.status === 'fulfilled') {
+        setSessions(sessionsResult.value)
+      } else {
+        errs.push('Failed to load sessions')
+      }
+
+      setErrors(errs)
+      setLoading(false)
     }
     fetchData()
   }, [])
@@ -62,29 +65,25 @@ export default function DashboardPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div>
-        <h2 className="text-2xl font-semibold mb-6">Dashboard</h2>
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">
-          {error}
-        </div>
-      </div>
-    )
-  }
-
   const sessionCount = sessions?.active_sessions ?? stats?.active_session_count ?? 0
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-6">Dashboard</h2>
+
+      {errors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-4">
+          {errors.join('. ')}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <StatsCard title="Users" value={stats?.user_count ?? 0} />
-        <StatsCard title="Tenants" value={stats?.tenant_count ?? 0} />
-        <StatsCard title="Files" value={stats?.file_count ?? 0} />
+        <StatsCard title="Users" value={stats?.user_count ?? '\u2014'} />
+        <StatsCard title="Tenants" value={stats?.tenant_count ?? '\u2014'} />
+        <StatsCard title="Files" value={stats?.file_count ?? '\u2014'} />
         <StatsCard
           title="Storage"
-          value={formatStorage(stats?.total_storage_bytes ?? 0)}
+          value={stats ? formatStorageQuota(stats.total_storage_bytes) : '\u2014'}
         />
         <StatsCard title="Active Sessions" value={sessionCount} />
       </div>
