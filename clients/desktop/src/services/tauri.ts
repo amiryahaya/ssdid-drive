@@ -170,6 +170,17 @@ export const tauriService = {
     return invoke('get_file_preview', { fileId });
   },
 
+  async getFileMetadata(fileId: string): Promise<{
+    id: string;
+    name: string;
+    folder_id: string | null;
+    encrypted_file_key: string | null;
+    nonce: string | null;
+    algorithm: string | null;
+  }> {
+    return invoke('get_file_metadata', { fileId });
+  },
+
   // ==================== Sharing Commands ====================
 
   async searchRecipients(query: string): Promise<RecipientSearchResult[]> {
