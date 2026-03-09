@@ -22,9 +22,9 @@ export default function DataTable<T>({
   rowKey,
 }: DataTableProps<T>) {
   return (
-    <div className="overflow-x-auto bg-white rounded-lg shadow">
+    <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
       <table className="w-full text-sm text-left">
-        <thead className="bg-gray-50 border-b border-gray-200">
+        <thead className="border-b border-gray-200">
           <tr>
             {columns.map((col) => (
               <th
@@ -36,19 +36,19 @@ export default function DataTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-50">
           {loading
             ? Array.from({ length: skeletonRows }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {columns.map((col) => (
                     <td key={col.key} className="px-4 py-3">
-                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-4 bg-gray-100 rounded w-3/4" />
                     </td>
                   ))}
                 </tr>
               ))
             : data.map((item, i) => (
-                <tr key={rowKey ? rowKey(item, i) : i} className="hover:bg-gray-50">
+                <tr key={rowKey ? rowKey(item, i) : i} className="hover:bg-gray-50/50 transition-colors">
                   {columns.map((col) => (
                     <td key={col.key} className="px-4 py-3 text-gray-700">
                       {col.render

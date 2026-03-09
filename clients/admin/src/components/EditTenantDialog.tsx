@@ -89,8 +89,8 @@ export default function EditTenantDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="edit-tenant-title" onClick={() => !submitting && onClose()}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="edit-tenant-title" onClick={() => !submitting && onClose()}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <h3 id="edit-tenant-title" className="text-lg font-semibold mb-4">Edit Tenant</h3>
 
         {error && (

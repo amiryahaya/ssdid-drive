@@ -159,8 +159,7 @@ export default function TenantsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Tenants</h2>
+      <div className="flex items-center justify-end mb-6">
         <div className="flex items-center gap-3">
           <input
             type="text"
@@ -218,13 +217,13 @@ export default function TenantsPage() {
       <CreateTenantDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreated={() => loadTenants(page, search)}
+        onCreated={() => loadTenants(page, debouncedSearch)}
       />
 
       <EditTenantDialog
         tenant={editingTenant}
         onClose={() => setEditingTenant(null)}
-        onUpdated={() => loadTenants(page, search)}
+        onUpdated={() => loadTenants(page, debouncedSearch)}
       />
     </div>
   )

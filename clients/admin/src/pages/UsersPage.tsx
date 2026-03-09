@@ -136,8 +136,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Users</h2>
+      <div className="flex items-center justify-end mb-6">
         <input
           type="text"
           placeholder="Search users..."

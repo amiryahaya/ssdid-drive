@@ -92,10 +92,6 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold">Audit Log</h2>
-      </div>
-
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-4">
           {error}
