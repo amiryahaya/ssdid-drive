@@ -1,35 +1,39 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace SsdidDrive.Api.Ssdid;
 
 /// <summary>
 /// Redis-backed session and challenge store for horizontal scaling.
-/// Uses IDistributedCache for sessions/challenges and Redis pub/sub for SSE notifications.
+/// Uses IDistributedCache for sessions/challenges, Redis pub/sub for SSE notifications,
+/// and atomic Redis counters for O(1) metrics.
 /// </summary>
 public class RedisSessionStore : ISessionStore, ISseNotificationBus
 {
     private readonly IDistributedCache _cache;
     private readonly IConnectionMultiplexer _redis;
     private readonly ILogger<RedisSessionStore> _logger;
-
-    private static readonly TimeSpan ChallengeTtl = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(1);
+    private readonly SessionStoreOptions _options;
 
     private const string ChallengePrefix = "ssdid:challenge:";
     private const string SessionPrefix = "ssdid:session:";
     private const string SubscriberSecretPrefix = "ssdid:subsecret:";
     private const string CompletionChannel = "ssdid:completion:";
+    private const string SessionCountKey = "ssdid:count:sessions";
+    private const string ChallengeCountKey = "ssdid:count:challenges";
 
     public RedisSessionStore(
         IDistributedCache cache,
         IConnectionMultiplexer redis,
-        ILogger<RedisSessionStore> logger)
+        ILogger<RedisSessionStore> logger,
+        IOptions<SessionStoreOptions> options)
     {
         _cache = cache;
         _redis = redis;
         _logger = logger;
+        _options = options.Value;
     }
 
     // ── Challenges ──
@@ -43,7 +47,11 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         try
         {
             var db = _redis.GetDatabase();
-            db.StringSet(key, json, ChallengeTtl);
+            // Only increment counter if this is a new key (not overwriting an existing challenge).
+            var existed = db.KeyExists(key);
+            db.StringSet(key, json, _options.ChallengeTtl);
+            if (!existed)
+                db.StringIncrement(ChallengeCountKey);
         }
         catch (RedisConnectionException ex)
         {
@@ -52,7 +60,7 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         }
     }
 
-    public SessionStore.ChallengeEntry? ConsumeChallenge(string did, string purpose)
+    public ChallengeEntry? ConsumeChallenge(string did, string purpose)
     {
         var key = $"{ChallengePrefix}{did}:{purpose}";
 
@@ -64,14 +72,15 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
             if (value.IsNullOrEmpty)
                 return null;
 
+            // Key existed and was deleted — decrement counter.
+            db.StringDecrement(ChallengeCountKey);
+
             var data = JsonSerializer.Deserialize<ChallengeData>(value.ToString());
             if (data is null)
                 return null;
 
-            if (DateTimeOffset.UtcNow - data.CreatedAt > ChallengeTtl)
-                return null;
-
-            return new SessionStore.ChallengeEntry(data.Challenge, data.KeyId, data.CreatedAt);
+            // Redis enforces the TTL set during StringSet — no manual expiry check needed.
+            return new ChallengeEntry(data.Challenge, data.KeyId, data.CreatedAt);
         }
         catch (RedisConnectionException ex)
         {
@@ -93,8 +102,11 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         {
             _cache.SetString(key, json, new DistributedCacheEntryOptions
             {
-                SlidingExpiration = SessionTtl
+                SlidingExpiration = _options.SessionTtl
             });
+
+            var db = _redis.GetDatabase();
+            db.StringIncrement(SessionCountKey);
         }
         catch (RedisConnectionException ex)
         {
@@ -131,7 +143,10 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
 
         try
         {
-            _cache.Remove(key);
+            // Atomic delete — KeyDelete returns true only if the key existed.
+            var db = _redis.GetDatabase();
+            if (db.KeyDelete(key))
+                db.StringDecrement(SessionCountKey);
         }
         catch (RedisConnectionException ex)
         {
@@ -149,10 +164,18 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         var entry = new SubscriberSecretData(secret, DateTimeOffset.UtcNow);
         var json = JsonSerializer.Serialize(entry);
 
-        _cache.SetString(key, json, new DistributedCacheEntryOptions
+        try
         {
-            AbsoluteExpirationRelativeToNow = ChallengeTtl
-        });
+            _cache.SetString(key, json, new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = _options.ChallengeTtl
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for CreateSubscriberSecret");
+            throw;
+        }
 
         return secret;
     }
@@ -160,22 +183,24 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
     public bool ValidateSubscriberSecret(string challengeId, string secret)
     {
         var key = $"{SubscriberSecretPrefix}{challengeId}";
-        var json = _cache.GetString(key);
 
-        if (json is null)
-            return false;
-
-        var data = JsonSerializer.Deserialize<SubscriberSecretData>(json);
-        if (data is null)
-            return false;
-
-        if (DateTimeOffset.UtcNow - data.CreatedAt > ChallengeTtl)
+        try
         {
-            _cache.Remove(key);
+            var json = _cache.GetString(key);
+            if (json is null)
+                return false;
+
+            var data = JsonSerializer.Deserialize<SubscriberSecretData>(json);
+            if (data is null)
+                return false;
+
+            return string.Equals(data.Secret, secret, StringComparison.Ordinal);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for ValidateSubscriberSecret");
             return false;
         }
-
-        return string.Equals(data.Secret, secret, StringComparison.Ordinal);
     }
 
     // ── SSE completion (Redis pub/sub) ──
@@ -192,16 +217,12 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
                 tcs.TrySetResult(message!);
         });
 
-        var reg = ct.Register(() =>
-        {
-            tcs.TrySetCanceled(ct);
-            subscriber.Unsubscribe(channel);
-        });
+        // Register cancellation — only signal the TCS; unsubscribe is handled in finally.
+        var reg = ct.Register(() => tcs.TrySetCanceled(ct));
 
         try
         {
-            var result = await tcs.Task;
-            return result;
+            return await tcs.Task;
         }
         finally
         {
@@ -226,7 +247,12 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         }
     }
 
-    // ── Metrics ──
+    // ── Metrics (O(1) atomic counters) ──
+    //
+    // These counters are approximate: they are incremented on create and decremented on
+    // explicit delete/consume, but keys that expire via Redis TTL are not decremented.
+    // Over time, counters may drift slightly above the true count. This is acceptable
+    // for monitoring/metrics use. For exact counts, use SCAN-based counting (expensive).
 
     public int ActiveSessionCount
     {
@@ -234,11 +260,13 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         {
             try
             {
-                return CountKeysByPattern($"{SessionPrefix}*");
+                var db = _redis.GetDatabase();
+                var value = db.StringGet(SessionCountKey);
+                return value.IsNullOrEmpty ? 0 : Math.Max(0, (int)value);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to count active sessions");
+                _logger.LogWarning(ex, "Failed to read active session count");
                 return -1;
             }
         }
@@ -250,26 +278,16 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         {
             try
             {
-                return CountKeysByPattern($"{ChallengePrefix}*");
+                var db = _redis.GetDatabase();
+                var value = db.StringGet(ChallengeCountKey);
+                return value.IsNullOrEmpty ? 0 : Math.Max(0, (int)value);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to count active challenges");
+                _logger.LogWarning(ex, "Failed to read active challenge count");
                 return -1;
             }
         }
-    }
-
-    private int CountKeysByPattern(string pattern)
-    {
-        var count = 0;
-        foreach (var endpoint in _redis.GetEndPoints())
-        {
-            var server = _redis.GetServer(endpoint);
-            foreach (var _ in server.Keys(pattern: pattern, pageSize: 250))
-                count++;
-        }
-        return count;
     }
 
     // ── Internal method for test setup ──
@@ -282,8 +300,11 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
 
         _cache.SetString(key, json, new DistributedCacheEntryOptions
         {
-            SlidingExpiration = SessionTtl
+            SlidingExpiration = _options.SessionTtl
         });
+
+        var db = _redis.GetDatabase();
+        db.StringIncrement(SessionCountKey);
     }
 
     // ── Internal DTOs ──

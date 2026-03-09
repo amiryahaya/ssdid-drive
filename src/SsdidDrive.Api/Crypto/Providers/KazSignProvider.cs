@@ -3,11 +3,11 @@ using Antrapol.Kaz.Sign;
 namespace SsdidDrive.Api.Crypto.Providers;
 
 /// <summary>
-/// KAZ-Sign provider using the native C library (v2.0 algorithm).
+/// KAZ-Sign provider using the native C library.
 /// Public keys are SPKI-encoded (X.509 SubjectPublicKeyInfo with OID 1.3.6.1.4.1.62395.1.1.2)
-/// containing raw V bytes — matching the deployed Java JCA KAZ-SIGN provider (v2.0).
-/// Signatures are KazWire-encoded (5-byte header + S1 + S2 + S3).
-/// Private keys are stored as raw bytes (s||t, local-only).
+/// containing raw V bytes — matching the deployed Java JCA KAZ-SIGN provider.
+/// Signatures are KazWire-encoded (5-byte header + S1 + S2).
+/// Private keys are stored as raw bytes (local-only).
 /// </summary>
 public class KazSignProvider : ICryptoProvider, IDisposable
 {
@@ -167,13 +167,14 @@ public class KazSignProvider : ICryptoProvider, IDisposable
 
     /// <summary>
     /// Infer KazWire algorithm byte from raw public key size.
+    /// Sizes must match KazSignParameters.GetPublicKeyBytes().
     /// </summary>
     private static byte InferWireAlgByte(byte[] rawPk) => rawPk.Length switch
     {
-        54 => 0x01,  // SIGN_128
-        88 => 0x02,  // SIGN_192
-        118 => 0x03, // SIGN_256
-        _ => 0x01    // default to 128
+        54 => 0x01,   // SIGN_128
+        88 => 0x02,   // SIGN_192
+        118 => 0x03,  // SIGN_256
+        _ => throw new ArgumentException($"Cannot infer KAZ-Sign algorithm from public key size: {rawPk.Length}")
     };
 
     /// <summary>
@@ -241,8 +242,25 @@ public class KazSignProvider : ICryptoProvider, IDisposable
     /// <summary>
     /// SPKI-encoded public keys start with ASN.1 SEQUENCE tag (0x30).
     /// </summary>
-    private static bool IsSpkiEncoded(byte[] data) =>
-        data.Length > 50 && data[0] == 0x30;
+    /// <summary>
+    /// SPKI-encoded public keys start with outer SEQUENCE (0x30) followed by
+    /// an inner AlgorithmIdentifier SEQUENCE (0x30). Raw KAZ-Sign keys are
+    /// 54/88/118 bytes and never start with 0x30.
+    /// </summary>
+    private static bool IsSpkiEncoded(byte[] data)
+    {
+        if (data.Length <= 60 || data[0] != 0x30)
+            return false;
+
+        // Skip outer SEQUENCE tag + length to check for inner AlgorithmIdentifier tag.
+        int p = 1;
+        if (data[p] < 0x80)
+            p += 1;
+        else
+            p += 1 + (data[p] & 0x7F);
+
+        return p < data.Length && data[p] == 0x30;
+    }
 
     /// <summary>
     /// KazWire signatures start with magic bytes 0x67 0x52.

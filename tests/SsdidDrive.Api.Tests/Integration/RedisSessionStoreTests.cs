@@ -26,7 +26,10 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
             Configuration = _redis.GetConnectionString(),
             InstanceName = ""
         }));
-        _store = new RedisSessionStore(cache, _mux, NullLogger<RedisSessionStore>.Instance);
+        _store = new RedisSessionStore(
+            cache, _mux,
+            NullLogger<RedisSessionStore>.Instance,
+            Options.Create(new SessionStoreOptions()));
     }
 
     public async ValueTask DisposeAsync()
@@ -109,7 +112,6 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
     [Fact]
     public void ActiveSessionCount_ReturnsCorrectCount()
     {
-        // Create a few sessions
         var token1 = _store.CreateSession("did:test:count-1");
         var token2 = _store.CreateSession("did:test:count-2");
         Assert.NotNull(token1);
@@ -146,7 +148,6 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
     [Fact]
     public void Session_UsesSlidingExpiration()
     {
-        // Verify session uses sliding expiration by checking the key has a TTL
         var token = _store.CreateSession("did:test:sliding");
         Assert.NotNull(token);
 
@@ -154,5 +155,68 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
         var ttl = db.KeyTimeToLive($"ssdid:session:{token}");
         Assert.NotNull(ttl);
         Assert.True(ttl.Value.TotalMinutes > 50, "Session TTL should be close to 1 hour");
+    }
+
+    [Fact]
+    public async Task WaitForCompletion_Cancellation_ThrowsOperationCanceledException()
+    {
+        var challengeId = Guid.NewGuid().ToString();
+        using var cts = new CancellationTokenSource();
+
+        var waitTask = _store.WaitForCompletion(challengeId, cts.Token);
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waitTask);
+    }
+
+    [Fact]
+    public void NotifyCompletion_NoSubscriber_ReturnsFalse()
+    {
+        var result = _store.NotifyCompletion(Guid.NewGuid().ToString(), "some-token");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void Session_KeyStoredWithoutDoubledPrefix()
+    {
+        var token = _store.CreateSession("did:test:prefix");
+        Assert.NotNull(token);
+
+        var db = _mux.GetDatabase();
+        var correctKey = (RedisKey)$"ssdid:session:{token}";
+        var doubledKey = (RedisKey)$"ssdid:ssdid:session:{token}";
+
+        Assert.True(db.KeyExists(correctKey), "Key should exist with single ssdid: prefix");
+        Assert.False(db.KeyExists(doubledKey), "Key must not exist with doubled ssdid:ssdid: prefix");
+    }
+
+    [Fact]
+    public void ActiveSessionCount_ExactCount_AfterIsolatedOperations()
+    {
+        // Flush the DB so prior test data does not pollute the exact count assertion.
+        var server = _mux.GetServer(_mux.GetEndPoints().First());
+        server.FlushDatabase();
+
+        _store.CreateSession("did:test:exact-1");
+        _store.CreateSession("did:test:exact-2");
+        _store.CreateSession("did:test:exact-3");
+
+        Assert.Equal(3, _store.ActiveSessionCount);
+    }
+
+    [Fact]
+    public void ActiveChallengeCount_DecreasesAfterConsume()
+    {
+        var server = _mux.GetServer(_mux.GetEndPoints().First());
+        server.FlushDatabase();
+
+        _store.CreateChallenge("did:test:chal-dec", "p1", "ch1", "k1");
+        _store.CreateChallenge("did:test:chal-dec", "p2", "ch2", "k2");
+
+        Assert.Equal(2, _store.ActiveChallengeCount);
+
+        _store.ConsumeChallenge("did:test:chal-dec", "p1");
+        Assert.Equal(1, _store.ActiveChallengeCount);
     }
 }
