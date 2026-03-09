@@ -193,7 +193,7 @@ public class PaginationTests : IClassFixture<SsdidDriveFactory>
         var pageSize = body.GetProperty("page_size").GetInt32();
 
         Assert.True(items.GetArrayLength() >= 1);
-        Assert.True(pageSize >= 1, $"Expected page_size >= 1 but got {pageSize}");
+        Assert.Equal(1, pageSize);
     }
 
     [Fact]

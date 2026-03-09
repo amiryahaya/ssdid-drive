@@ -281,6 +281,44 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    // ── 13. AcceptInvitation_EmailOnly_NullInvitedUserId_Succeeds ──────
+
+    [Fact]
+    public async Task AcceptInvitation_EmailOnly_NullInvitedUserId_Succeeds()
+    {
+        var (ownerClient, ownerId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvEmailOnlyOwner");
+        var (acceptClient, acceptUserId) = await TestFixture.CreateUserInTenantAsync(
+            _factory,
+            (await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvEmailOnlyAcceptor")).TenantId,
+            "InvEmailOnlyAcceptor2");
+
+        // Create email-only invitation (InvitedUserId is null)
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var invitation = new Invitation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            InvitedById = ownerId,
+            InvitedUserId = null,
+            Email = "emailonly@example.com",
+            Role = TenantRole.Member,
+            Status = InvitationStatus.Pending,
+            Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                .Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Invitations.Add(invitation);
+        await db.SaveChangesAsync();
+
+        // Any authenticated user can accept an email-only invitation
+        // (authorization comes from knowing the invitation ID, which requires the token)
+        var response = await acceptClient.PostAsync($"/api/invitations/{invitation.Id}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     // ── Helper: Create invitation targeting a specific user ────────────
 
     private static async Task<string> CreateInvitationForUser(

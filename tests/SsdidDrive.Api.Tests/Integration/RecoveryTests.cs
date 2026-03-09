@@ -292,6 +292,22 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // ── 13. RejectShare_NonTrustee_ReturnsForbidden ───────────────────
+
+    [Fact]
+    public async Task RejectShare_NonTrustee_ReturnsForbidden()
+    {
+        var (ownerClient, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RecoveryNonTrusteeRejectOwner");
+        var (_, trusteeId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RecoveryRealTrusteeReject");
+        var (unrelatedClient, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RecoveryUnrelatedRejectUser");
+
+        var configId = await SetupRecoveryAsync(ownerClient);
+        var shareId = await DistributeShareAsync(ownerClient, configId, trusteeId);
+
+        var response = await unrelatedClient.PostAsync($"/api/recovery/shares/{shareId}/reject", null);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private static async Task<Guid> SetupRecoveryAsync(HttpClient client, int threshold = 3, int totalShares = 5)
