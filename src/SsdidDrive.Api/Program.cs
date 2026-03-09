@@ -13,6 +13,7 @@ using SsdidDrive.Api.Features.Invitations;
 using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Tenants;
 using SsdidDrive.Api.Features.Notifications;
+using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
@@ -171,6 +172,7 @@ app.MapDeviceFeature();
 app.MapInvitationFeature();
 app.MapTenantFeature();
 app.MapNotificationFeature();
+app.MapRecoveryFeature();
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||
