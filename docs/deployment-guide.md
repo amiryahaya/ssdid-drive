@@ -95,7 +95,8 @@ cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
     }
   },
   "ConnectionStrings": {
-    "Default": "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=CHANGE_ME_STRONG_PASSWORD"
+    "Default": "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=CHANGE_ME_STRONG_PASSWORD",
+    "Redis": "redis:6379"
   },
   "Ssdid": {
     "RegistryUrl": "https://registry.ssdid.my",
@@ -141,11 +142,26 @@ services:
     networks:
       - backend
 
+  redis:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
   api:
     image: localhost/ssdid-drive-api:latest
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -167,6 +183,7 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
 
 networks:
   backend:
@@ -383,6 +400,7 @@ sudo tail -f /var/log/caddy/drive.log
 - [ ] UFW firewall enabled (only 22, 80, 443 open)
 - [ ] Caddy TLS active (check `https://` works)
 - [ ] PostgreSQL not exposed externally (port bound to container network only)
+- [ ] Redis not exposed externally (container network only, no port mapping)
 - [ ] API only listens on `127.0.0.1:5000` (Caddy proxies external traffic)
 - [ ] CORS origins restricted to actual domains
 - [ ] Regular backups configured for database and server identity
@@ -405,10 +423,13 @@ Internet
          │                         │
          ▼                         ▼
 ┌─────────────────┐     ┌──────────────────┐
-│ ssdid-drive API │     │  PostgreSQL 17   │
-│ :5000 (Podman)  │────▶│  :5432 (Podman)  │
-└─────────────────┘     └──────────────────┘
-         │
+│ ssdid-drive API │────▶│  PostgreSQL 17   │
+│ :5000 (Podman)  │     │  :5432 (Podman)  │
+│                 │     └──────────────────┘
+│                 │     ┌──────────────────┐
+│                 │────▶│  Redis 7         │
+└─────────────────┘     │  :6379 (Podman)  │
+         │              └──────────────────┘
          ▼
 ┌───────────────────────┐
 │  SSDID Registry       │

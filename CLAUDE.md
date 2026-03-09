@@ -9,8 +9,8 @@ SsdidDrive is an ASP.NET Core 10 (.NET 10) Web API for a secure file-sharing pla
 ## Build & Run Commands
 
 ```bash
-# Start PostgreSQL (required before running the API)
-docker compose up -d
+# Start PostgreSQL + Redis (required before running the API)
+podman compose up -d
 
 # Build
 dotnet build src/SsdidDrive.Api
@@ -57,7 +57,7 @@ dotnet ef database update --project src/SsdidDrive.Api
 - **Database**: PostgreSQL 17 via EF Core with Npgsql. Auto-migrates in Development mode. Tables use lowercase snake_case names.
 - **Crypto**: Strategy pattern via `ICryptoProvider` with 5 family providers. Ed25519 uses BouncyCastle; ECDSA, ML-DSA, SLH-DSA use native .NET 10 (`System.Security.Cryptography`); KAZ-Sign uses vendored P/Invoke (`libkazsign`). `AlgorithmRegistry` maps 19 W3C verification method type strings to provider families. `CryptoProviderFactory` dispatches operations by type. ML-DSA/SLH-DSA are `[Experimental]` (SYSLIB5006 suppressed).
 - **Server identity**: Persists to `data/server-identity.json` (gitignored — contains private key). Auto-generated on first run. Algorithm configurable via `Ssdid:Algorithm` in `appsettings.json` (default: `KazSignVerificationKey2024`).
-- **Sessions**: In-memory `ConcurrentDictionary` with TTL (1h sessions, 5m challenges). Single-instance only — needs distributed cache for scaling.
+- **Sessions**: Redis-backed via `RedisSessionStore` when `ConnectionStrings:Redis` is configured (production); falls back to in-memory `SessionStore` for local dev without Redis. TTL: 1h sessions, 5m challenges.
 
 ### Database Entities
 
