@@ -49,6 +49,24 @@ interface TenantMembersResponse {
   items: TenantMember[]
 }
 
+export interface AuditLogEntry {
+  id: string
+  actor_id: string
+  actor_name: string | null
+  action: string
+  target_type: string | null
+  target_id: string | null
+  details: string | null
+  created_at: string
+}
+
+interface AuditLogResponse {
+  items: AuditLogEntry[]
+  total: number
+  page: number
+  page_size: number
+}
+
 interface AdminState {
   users: User[]
   usersTotal: number
@@ -66,6 +84,11 @@ interface AdminState {
   tenantMembers: TenantMember[]
   tenantMembersLoading: boolean
   fetchTenantMembers: (tenantId: string) => Promise<void>
+
+  auditLog: AuditLogEntry[]
+  auditLogTotal: number
+  auditLogLoading: boolean
+  fetchAuditLog: (page: number, pageSize: number) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -134,6 +157,22 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set({ tenantMembers: res.items })
     } finally {
       set({ tenantMembersLoading: false })
+    }
+  },
+
+  auditLog: [],
+  auditLogTotal: 0,
+  auditLogLoading: false,
+
+  fetchAuditLog: async (page: number, pageSize: number) => {
+    set({ auditLogLoading: true })
+    try {
+      const res = await api.get<AuditLogResponse>(
+        `/api/admin/audit-log?page=${page}&page_size=${pageSize}`,
+      )
+      set({ auditLog: res.items, auditLogTotal: res.total })
+    } finally {
+      set({ auditLogLoading: false })
     }
   },
 }))
