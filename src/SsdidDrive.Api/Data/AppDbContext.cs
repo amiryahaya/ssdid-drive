@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<FileItem> Files => Set<FileItem>();
     public DbSet<Share> Shares => Set<Share>();
+    public DbSet<Device> Devices => Set<Device>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,6 +144,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(s => s.SharedWith)
                 .WithMany()
                 .HasForeignKey(s => s.SharedWithId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<Device>(e =>
+        {
+            e.ToTable("devices");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.DeviceFingerprint).HasMaxLength(256).IsRequired();
+            e.Property(d => d.DeviceName).HasMaxLength(256);
+            e.Property(d => d.Platform).HasMaxLength(32).IsRequired();
+            e.Property(d => d.DeviceInfo).HasMaxLength(4096);
+            e.Property(d => d.KeyAlgorithm).HasMaxLength(64).IsRequired();
+            e.Property(d => d.Status).HasMaxLength(32)
+                .HasDefaultValue(DeviceStatus.Active)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<DeviceStatus>(v, true));
+            e.Property(d => d.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(d => d.UpdatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(d => new { d.UserId, d.DeviceFingerprint }).IsUnique();
+            e.HasIndex(d => d.UserId);
+
+            e.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
