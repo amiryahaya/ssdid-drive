@@ -25,6 +25,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (token: string) => {
     setToken(token)
     const user = await api.get<User>('/api/me')
+    if (user.system_role !== 'SuperAdmin') {
+      setToken(null)
+      throw new Error('Admin access required')
+    }
     set({ token, user, isAuthenticated: true })
   },
 
@@ -38,6 +42,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (!token) return
     try {
       const user = await api.get<User>('/api/me')
+      if (user.system_role !== 'SuperAdmin') {
+        throw new Error('Admin access required')
+      }
       set({ token, user, isAuthenticated: true })
     } catch {
       setToken(null)
