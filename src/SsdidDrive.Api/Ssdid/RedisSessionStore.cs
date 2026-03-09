@@ -40,10 +40,10 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         var entry = new ChallengeData(challenge, keyId, DateTimeOffset.UtcNow);
         var json = JsonSerializer.Serialize(entry);
 
-        _cache.SetString(key, json, new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = ChallengeTtl
-        });
+        // Use raw Redis StringSet (not IDistributedCache) so that ConsumeChallenge
+        // can use the atomic StringGetDelete to prevent TOCTOU races.
+        var db = _redis.GetDatabase();
+        db.StringSet(key, json, ChallengeTtl);
     }
 
     public SessionStore.ChallengeEntry? ConsumeChallenge(string did, string purpose)
