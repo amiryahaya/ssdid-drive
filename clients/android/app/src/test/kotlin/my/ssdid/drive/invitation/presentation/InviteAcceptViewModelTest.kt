@@ -2,10 +2,8 @@ package my.ssdid.drive.invitation.presentation
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
-import my.ssdid.drive.domain.model.PublicKeys
-import my.ssdid.drive.domain.model.User
-import my.ssdid.drive.domain.model.UserRole
 import my.ssdid.drive.domain.repository.AuthRepository
+import my.ssdid.drive.domain.repository.ChallengeInfo
 import my.ssdid.drive.invitation.fixtures.InvitationTestFixtures
 import my.ssdid.drive.presentation.auth.InviteAcceptViewModel
 import my.ssdid.drive.util.AppException
@@ -25,10 +23,10 @@ import org.junit.Test
  * Tests cover:
  * - Initialization with token
  * - Loading invitation info
- * - Form validation
- * - Accept invitation flow
+ * - Accept with SSDID Wallet flow
+ * - Wallet callback handling
+ * - Retry logic
  * - Error handling
- * - Security (password clearing)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InviteAcceptViewModelTest {
@@ -37,19 +35,11 @@ class InviteAcceptViewModelTest {
     private lateinit var viewModel: InviteAcceptViewModel
     private val testDispatcher = StandardTestDispatcher()
 
-    private val testUser = User(
-        id = "user-123",
-        email = "test@example.com",
-        tenantId = "test-tenant",
-        role = UserRole.USER,
-        publicKeys = PublicKeys(
-            kem = ByteArray(32),
-            sign = ByteArray(32),
-            mlKem = ByteArray(32),
-            mlDsa = ByteArray(32)
-        ),
-        storageQuota = 1073741824,
-        storageUsed = 0
+    private val testChallengeInfo = ChallengeInfo(
+        serverUrl = "https://api.example.com",
+        serverDid = "did:ssdid:server123",
+        challengeId = "challenge-456",
+        walletDeepLink = "ssdidwallet://auth?challenge=challenge-456"
     )
 
     @Before
@@ -96,12 +86,11 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `initial state with blank token shows error`() = runTest {
+    fun `initial state with blank token tries to load`() = runTest {
+        // Blank (spaces) is not empty, so isNotBlank() returns false for "   "
         viewModel = createViewModel("   ")
 
         viewModel.uiState.test {
-            // Blank string is not empty, so it might try to load
-            // Behavior depends on implementation - testing current behavior
             awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
@@ -236,369 +225,116 @@ class InviteAcceptViewModelTest {
         coVerify(exactly = 2) { authRepository.getInvitationInfo(any()) }
     }
 
-    // ==================== Form Input Tests ====================
+    // ==================== Accept With Wallet Tests ====================
 
     @Test
-    fun `updateDisplayName updates state`() = runTest {
+    fun `acceptWithWallet creates challenge and launches wallet`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
+        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.updateDisplayName("John Doe")
+        viewModel.acceptWithWallet()
+        advanceUntilIdle()
 
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("John Doe", state.displayName)
-            cancelAndIgnoreRemainingEvents()
-        }
+        coVerify { authRepository.createChallenge("register") }
+        coVerify { authRepository.launchWalletAuth(testChallengeInfo) }
     }
 
     @Test
-    fun `updateDisplayName clears registration error`() = runTest {
+    fun `acceptWithWallet sets isWaitingForWallet on success`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
+        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        // Trigger an error first
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         advanceUntilIdle()
-
-        // Now update display name
-        viewModel.updateDisplayName("John")
 
         viewModel.uiState.test {
             val state = awaitItem()
+            assertTrue(state.isWaitingForWallet)
+            assertFalse(state.isLoading)
             assertNull(state.registrationError)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `updatePassword updates state`() = runTest {
+    fun `acceptWithWallet failure shows registration error`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.createChallenge("register") } throws
+            RuntimeException("Wallet not installed")
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.updatePassword("password123")
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("password123", state.password)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `updateConfirmPassword updates state`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateConfirmPassword("password123")
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("password123", state.confirmPassword)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // ==================== Form Validation Tests ====================
-
-    @Test
-    fun `acceptInvitation with empty displayName shows error`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         advanceUntilIdle()
 
         viewModel.uiState.test {
             val state = awaitItem()
-            assertEquals("Name is required", state.registrationError)
+            assertFalse(state.isLoading)
+            assertFalse(state.isWaitingForWallet)
+            assertEquals("Wallet not installed", state.registrationError)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
+    // ==================== Wallet Callback Tests ====================
+
     @Test
-    fun `acceptInvitation with displayName too long shows error`() = runTest {
+    fun `handleWalletCallback saves session and sets isRegistered`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
+        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
+        coEvery { authRepository.saveSession("session-token-abc") } just Runs
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.updateDisplayName("A".repeat(101))
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         advanceUntilIdle()
 
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("Name is too long", state.registrationError)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation with empty password shows error`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-
-        viewModel = createViewModel()
+        viewModel.handleWalletCallback("session-token-abc")
         advanceUntilIdle()
 
-        viewModel.updateDisplayName("John Doe")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("Password is required", state.registrationError)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation with short password shows error`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("short")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("Password must be at least 8 characters", state.registrationError)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation with password mismatch shows error`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("different123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("Passwords do not match", state.registrationError)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // ==================== Accept Invitation Flow Tests ====================
-
-    @Test
-    fun `acceptInvitation with valid data calls repository`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
-
-        viewModel = createViewModel("test-token")
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        coVerify { authRepository.acceptInvitation("test-token", "John Doe", any()) }
-    }
-
-    @Test
-    fun `acceptInvitation success sets isRegistered true`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
+        coVerify { authRepository.saveSession("session-token-abc") }
         viewModel.uiState.test {
             val state = awaitItem()
             assertTrue(state.isRegistered)
-            assertFalse(state.isRegistering)
-            assertFalse(state.isGeneratingKeys)
+            assertFalse(state.isWaitingForWallet)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `acceptInvitation success clears password fields`() = runTest {
+    fun `handleWalletCallback failure shows registration error`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
+        coEvery { authRepository.saveSession(any()) } throws
+            RuntimeException("Invalid session token")
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertEquals("", state.password)
-            assertEquals("", state.confirmPassword)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation failure shows error`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Error(AppException.ValidationError("Email already exists"))
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
+        viewModel.handleWalletCallback("bad-token")
         advanceUntilIdle()
 
         viewModel.uiState.test {
             val state = awaitItem()
             assertFalse(state.isRegistered)
-            assertFalse(state.isRegistering)
-            assertEquals("Email already exists", state.registrationError)
+            assertFalse(state.isWaitingForWallet)
+            assertEquals("Invalid session token", state.registrationError)
             cancelAndIgnoreRemainingEvents()
         }
-    }
-
-    @Test
-    fun `acceptInvitation sets isRegistering and isGeneratingKeys during process`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } coAnswers {
-            // Simulate delay
-            Result.Success(testUser)
-        }
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-
-        viewModel.uiState.test {
-            skipItems(1) // Skip current state
-
-            viewModel.acceptInvitation()
-
-            // State during processing
-            val processingState = awaitItem()
-            assertTrue(processingState.isRegistering)
-            assertTrue(processingState.isGeneratingKeys)
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // ==================== Edge Cases ====================
-
-    @Test
-    fun `acceptInvitation with displayName exactly 100 chars succeeds`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("A".repeat(100))
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertTrue(state.isRegistered)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation with password exactly 8 chars succeeds`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("John Doe")
-        viewModel.updatePassword("12345678")
-        viewModel.updateConfirmPassword("12345678")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertTrue(state.isRegistered)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `acceptInvitation with unicode displayName succeeds`() = runTest {
-        coEvery { authRepository.getInvitationInfo(any()) } returns
-            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.acceptInvitation(any(), any(), any()) } returns
-            Result.Success(testUser)
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.updateDisplayName("Jöhn Dœ")
-        viewModel.updatePassword("password123")
-        viewModel.updateConfirmPassword("password123")
-        viewModel.acceptInvitation()
-        advanceUntilIdle()
-
-        coVerify { authRepository.acceptInvitation(any(), "Jöhn Dœ", any()) }
     }
 }
