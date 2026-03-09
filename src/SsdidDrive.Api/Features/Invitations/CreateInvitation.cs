@@ -41,11 +41,20 @@ public static class CreateInvitation
         var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
 
+        // Resolve email to user ID if the user already exists
+        Guid? invitedUserId = null;
+        if (!string.IsNullOrWhiteSpace(req.Email))
+        {
+            var invitedUser = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email, ct);
+            invitedUserId = invitedUser?.Id;
+        }
+
         var invitation = new Invitation
         {
             Id = Guid.NewGuid(),
             TenantId = user.TenantId.Value,
             InvitedById = user.Id,
+            InvitedUserId = invitedUserId,
             Email = req.Email,
             Role = role.Value,
             Status = InvitationStatus.Pending,

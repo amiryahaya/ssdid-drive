@@ -29,10 +29,10 @@ public static class AcceptInvitation
             return AppError.BadRequest("Invitation has expired").ToProblemResult();
         }
 
-        // Only the invited user can accept
-        var isInvitedUser = invitation.InvitedUserId == user.Id;
-
-        if (!isInvitedUser)
+        // Authorization: if InvitedUserId is set, only that user can accept.
+        // If InvitedUserId is null (user wasn't registered at invite time),
+        // any authenticated user can accept — they proved token knowledge to get the invitation ID.
+        if (invitation.InvitedUserId is not null && invitation.InvitedUserId != user.Id)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();
 
         // Check if user is already in the tenant

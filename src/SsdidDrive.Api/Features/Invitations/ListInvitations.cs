@@ -21,8 +21,11 @@ public static class ListInvitations
     {
         var user = accessor.User!;
 
+        // Match by InvitedUserId, or by email when InvitedUserId is null (unresolved at invite time)
         var query = db.Invitations
-            .Where(i => i.Status == InvitationStatus.Pending && i.InvitedUserId == user.Id);
+            .Where(i => i.Status == InvitationStatus.Pending
+                && (i.InvitedUserId == user.Id
+                    || (i.InvitedUserId == null && user.Email != null && i.Email == user.Email)));
 
         var total = await query.CountAsync(ct);
 

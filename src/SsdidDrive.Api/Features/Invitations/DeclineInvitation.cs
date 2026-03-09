@@ -20,10 +20,9 @@ public static class DeclineInvitation
         if (invitation is null)
             return AppError.NotFound("Invitation not found").ToProblemResult();
 
-        // Only the invited user can decline
-        var isInvitedUser = invitation.InvitedUserId == user.Id;
-
-        if (!isInvitedUser)
+        // Authorization: if InvitedUserId is set, only that user can decline.
+        // If null (user wasn't registered at invite time), any authenticated user with the ID can decline.
+        if (invitation.InvitedUserId is not null && invitation.InvitedUserId != user.Id)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();
 
         invitation.Status = InvitationStatus.Declined;
