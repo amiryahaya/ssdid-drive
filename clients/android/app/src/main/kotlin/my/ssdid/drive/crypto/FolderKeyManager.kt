@@ -44,9 +44,9 @@ class FolderKeyManager @Inject constructor(
      * Cleared on logout.
      */
     private val kekCache = object : LruCache<String, ByteArray>(MAX_CACHED_KEKS) {
-        override fun entryRemoved(evicted: Boolean, key: String?, oldValue: ByteArray?, newValue: ByteArray?) {
+        override fun entryRemoved(evicted: Boolean, key: String, oldValue: ByteArray, newValue: ByteArray?) {
             // SECURITY: Zeroize evicted KEKs
-            oldValue?.let { cryptoManager.zeroize(it) }
+            cryptoManager.zeroize(oldValue)
         }
 
         override fun sizeOf(key: String, value: ByteArray): Int {
