@@ -25,7 +25,6 @@
 		2A21C0B99EED149074C052D0 /* LockViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353CAABA65F2DA26CD726B0E /* LockViewModel.swift */; };
 		2BDB70C31F03B68F21EB4084 /* DevicesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 480C258D1ADAA362ECE9237B /* DevicesViewModel.swift */; };
 		2DC4E6E3BA879E3F8272A3FA /* FileBrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB655F8DDD55C21473A9193 /* FileBrowserViewModel.swift */; };
-		30A4ACFD0F5C3B6D5A616ED9 /* RegisterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131B58EDDB0E301FD5F37E8D /* RegisterViewModel.swift */; };
 		3209D8943EF3486E50A6A455 /* InvitationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B530BBD30B8512197917C02 /* InvitationsView.swift */; };
 		327E893F643360F4422AD108 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 955DF9F28360FE8D6B966F99 /* SettingsCoordinator.swift */; };
 		33514BF7ECEB811E5859FF71 /* UserDefaultsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB5E600260971608522B241 /* UserDefaultsManager.swift */; };
@@ -59,7 +58,6 @@
 		9ACC751BA7D7543751EE51F0 /* DevicesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DEBAD6AA53103753626839 /* DevicesViewController.swift */; };
 		A86AF5C3AB9B0EB83EC4A679 /* RecoverySetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3C9A1B1833227A4C5D2AC5 /* RecoverySetupViewModel.swift */; };
 		A96F5D217F2C1FE5B08BF344 /* Coordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B240145B8F43AF24E7A9F8 /* Coordinator.swift */; };
-		AC12475048BBF5C3B0A4A167 /* RegisterViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA8831660A9370CD4BEE47F /* RegisterViewController.swift */; };
 		AED0F84178ADCB2C9FDD4072 /* FilesCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F6AD57AEFE2E366DB72A41 /* FilesCoordinator.swift */; };
 		B60107A1C1434CD1B89F09B3 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376B890A1F42429D08FB09D9 /* LoginView.swift */; };
 		B6DED6AD1A5BBAC011D703A3 /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB6B753658A3F484DC68FD9 /* Device.swift */; };
@@ -99,7 +97,6 @@
 		0CBB5708A76955FF4B751A5F /* InvitationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitationsViewModel.swift; sourceTree = "<group>"; };
 		0D1C2387667FE4DC286E8E8B /* Container.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Container.swift; sourceTree = "<group>"; };
 		0DFF400123744519281EC94E /* InitiateRecoveryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitiateRecoveryViewModel.swift; sourceTree = "<group>"; };
-		131B58EDDB0E301FD5F37E8D /* RegisterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterViewModel.swift; sourceTree = "<group>"; };
 		15A1F2475C2E85827F22EFBD /* BaseViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseViewController.swift; sourceTree = "<group>"; };
 		15DEBAD6AA53103753626839 /* DevicesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesViewController.swift; sourceTree = "<group>"; };
 		1A196962CEEB93A7C75E698A /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
@@ -126,7 +123,6 @@
 		56E7C9F2F825DBBB0A983BCF /* KeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyManager.swift; sourceTree = "<group>"; };
 		5A5FD9D20274D5D350D83EA2 /* workspace-state.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "workspace-state.json"; sourceTree = "<group>"; };
 		5B8F9549CDFECEE2DDAB7D37 /* ReceivedSharesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedSharesView.swift; sourceTree = "<group>"; };
-		5EA8831660A9370CD4BEE47F /* RegisterViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterViewController.swift; sourceTree = "<group>"; };
 		5EB5E600260971608522B241 /* UserDefaultsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaultsManager.swift; sourceTree = "<group>"; };
 		5EBBE0AAC58DAB81D3FDC80E /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		621D6BE33B16B9D7783F7D23 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -388,8 +384,6 @@
 				86EF7F7DEB9A1191A10AB7EC /* LoginViewController.swift */,
 				6606BE7AEC94E92FA0C47837 /* LoginViewModel.swift */,
 				5540A1526D586B1AC69B5FE7 /* RegisterView.swift */,
-				5EA8831660A9370CD4BEE47F /* RegisterViewController.swift */,
-				131B58EDDB0E301FD5F37E8D /* RegisterViewModel.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -777,8 +771,6 @@
 				DA70D5A09F750574E75F30B1 /* RecoverySetupViewController.swift in Sources */,
 				A86AF5C3AB9B0EB83EC4A679 /* RecoverySetupViewModel.swift in Sources */,
 				D372A4896682ACF27B2E6C24 /* RegisterView.swift in Sources */,
-				AC12475048BBF5C3B0A4A167 /* RegisterViewController.swift in Sources */,
-				30A4ACFD0F5C3B6D5A616ED9 /* RegisterViewModel.swift in Sources */,
 				80531A6E6D9B79B5602E7DBE /* SceneDelegate.swift in Sources */,
 				1904BDA6B2C8B5EB4BF0AD5D /* SsdidDriveApp.swift in Sources */,
 				327E893F643360F4422AD108 /* SettingsCoordinator.swift in Sources */,

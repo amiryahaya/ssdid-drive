@@ -1,15 +1,11 @@
 import Foundation
 
-/// Repository for authentication operations
+/// Repository for authentication operations.
+/// Authentication is SSDID wallet-based (QR challenge-response).
+/// Password is only used for client-side key encryption during invitation acceptance.
 protocol AuthRepository: AnyObject {
 
     // MARK: - Authentication
-
-    /// Login with email and password
-    func login(email: String, password: String) async throws -> User
-
-    /// Register a new user
-    func register(email: String, password: String) async throws -> User
 
     /// Logout the current user
     func logout() async throws
@@ -36,9 +32,6 @@ protocol AuthRepository: AnyObject {
     /// Check if biometric unlock is enabled
     func isBiometricUnlockEnabled() async -> Bool
 
-    /// Enable biometric unlock (stores master key protected by biometric)
-    func enableBiometricUnlock(password: String) async throws
-
     /// Disable biometric unlock
     func disableBiometricUnlock() async throws
 
@@ -53,9 +46,6 @@ protocol AuthRepository: AnyObject {
     /// Lock keys (clear from memory)
     func lockKeys() async
 
-    /// Unlock keys with password
-    func unlockKeys(password: String) async throws
-
     // MARK: - Device Management
 
     /// Enroll current device
@@ -69,14 +59,6 @@ protocol AuthRepository: AnyObject {
 
     /// Get current device ID
     var currentDeviceId: String? { get }
-
-    // MARK: - Password
-
-    /// Change user's password
-    func changePassword(currentPassword: String, newPassword: String) async throws
-
-    /// Verify password is correct
-    func verifyPassword(_ password: String) async throws -> Bool
 
     // MARK: - Invitation Token (Public - for new users)
 
