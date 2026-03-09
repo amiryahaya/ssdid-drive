@@ -14,6 +14,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<RecoveryConfig> RecoveryConfigs => Set<RecoveryConfig>();
+    public DbSet<RecoveryShare> RecoveryShares => Set<RecoveryShare>();
+    public DbSet<RecoveryRequest> RecoveryRequests => Set<RecoveryRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -235,6 +238,75 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(n => n.User)
                 .WithMany()
                 .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecoveryConfig>(e =>
+        {
+            e.ToTable("recovery_configs");
+            e.HasKey(rc => rc.Id);
+            e.Property(rc => rc.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(rc => rc.IsActive).HasDefaultValue(false);
+            e.Property(rc => rc.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(rc => rc.UserId);
+
+            e.HasOne(rc => rc.User)
+                .WithMany()
+                .HasForeignKey(rc => rc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecoveryShare>(e =>
+        {
+            e.ToTable("recovery_shares");
+            e.HasKey(rs => rs.Id);
+            e.Property(rs => rs.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(rs => rs.Status).HasMaxLength(32)
+                .HasDefaultValue(RecoveryShareStatus.Pending)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<RecoveryShareStatus>(v, true));
+            e.Property(rs => rs.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(rs => rs.RecoveryConfigId);
+            e.HasIndex(rs => rs.TrusteeId);
+
+            e.HasOne(rs => rs.Config)
+                .WithMany(rc => rc.Shares)
+                .HasForeignKey(rs => rs.RecoveryConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(rs => rs.Trustee)
+                .WithMany()
+                .HasForeignKey(rs => rs.TrusteeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecoveryRequest>(e =>
+        {
+            e.ToTable("recovery_requests");
+            e.HasKey(rr => rr.Id);
+            e.Property(rr => rr.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(rr => rr.Status).HasMaxLength(32)
+                .HasDefaultValue(RecoveryRequestStatus.Pending)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<RecoveryRequestStatus>(v, true));
+            e.Property(rr => rr.ApprovalsReceived).HasDefaultValue(0);
+            e.Property(rr => rr.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(rr => rr.RequesterId);
+            e.HasIndex(rr => rr.RecoveryConfigId);
+
+            e.HasOne(rr => rr.Requester)
+                .WithMany()
+                .HasForeignKey(rr => rr.RequesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(rr => rr.Config)
+                .WithMany()
+                .HasForeignKey(rr => rr.RecoveryConfigId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
