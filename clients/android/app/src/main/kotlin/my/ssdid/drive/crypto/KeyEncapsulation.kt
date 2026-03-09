@@ -26,6 +26,57 @@ class KeyEncapsulation @Inject constructor(
     private val cryptoManager: CryptoManager,
     private val keyManager: KeyManager
 ) {
+    // ==================== Simple Encapsulate / Decapsulate ====================
+
+    /**
+     * Encapsulate a folder key for a recipient using their public KEM key.
+     *
+     * Performs KEM encapsulation to establish a shared secret, derives a wrapping
+     * key via HKDF, and wraps the folder key with AES-GCM.
+     *
+     * The algorithm used (KAZ-KEM, ML-KEM, or HYBRID) is determined by the
+     * tenant's [CryptoConfig].
+     *
+     * @param folderKey The folder KEK to encapsulate (32 bytes)
+     * @param recipientPublicKeys Recipient's public keys
+     * @return EncapsulationResult containing the wrapped key and KEM ciphertexts
+     */
+    fun encapsulate(
+        folderKey: ByteArray,
+        recipientPublicKeys: PublicKeys
+    ): EncapsulationResult {
+        return encapsulateKey(
+            key = folderKey,
+            recipientPublicKeys = recipientPublicKeys,
+            resourceType = "folder-key",
+            resourceId = "",
+            permission = "owner"
+        )
+    }
+
+    /**
+     * Decapsulate a folder key from an encapsulation result.
+     *
+     * Performs KEM decapsulation using the user's private key, derives the
+     * unwrapping key via HKDF, and unwraps the folder key.
+     *
+     * @param wrappedKey Base64-encoded wrapped folder key
+     * @param kemCiphertext Base64-encoded KEM ciphertext
+     * @param mlKemCiphertext Base64-encoded ML-KEM ciphertext (for HYBRID mode)
+     * @return The decapsulated folder key (32 bytes)
+     */
+    fun decapsulate(
+        wrappedKey: String,
+        kemCiphertext: String,
+        mlKemCiphertext: String? = null
+    ): ByteArray {
+        return decapsulateSharedKey(
+            wrappedKey = wrappedKey,
+            kemCiphertext = kemCiphertext,
+            mlKemCiphertext = mlKemCiphertext
+        )
+    }
+
     /**
      * Result of encapsulating a key for a recipient.
      */
