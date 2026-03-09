@@ -9,6 +9,7 @@ using SsdidDrive.Api.Features.Files;
 using SsdidDrive.Api.Features.Folders;
 using SsdidDrive.Api.Features.Health;
 using SsdidDrive.Api.Features.Devices;
+using SsdidDrive.Api.Features.Invitations;
 using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Services;
@@ -164,6 +165,7 @@ app.MapFolderFeature();
 app.MapFileFeature();
 app.MapShareFeature();
 app.MapDeviceFeature();
+app.MapInvitationFeature();
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||
