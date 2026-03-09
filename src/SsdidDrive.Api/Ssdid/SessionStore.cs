@@ -12,8 +12,14 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
     private record WaiterEntry(TaskCompletionSource<string> Tcs, DateTimeOffset CreatedAt);
     private readonly ConcurrentDictionary<string, WaiterEntry> _completionWaiters = new();
     private readonly ConcurrentDictionary<string, (string Secret, DateTimeOffset CreatedAt)> _subscriberSecrets = new();
+    private readonly TimeProvider _clock;
     private long _sessionCount;
     private Timer? _gcTimer;
+
+    public SessionStore(TimeProvider? clock = null)
+    {
+        _clock = clock ?? TimeProvider.System;
+    }
 
     private static readonly TimeSpan ChallengeTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(1);
@@ -27,7 +33,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
     public void CreateChallenge(string did, string purpose, string challenge, string keyId)
     {
         var key = $"{did}:{purpose}";
-        _challenges[key] = new ChallengeEntry(challenge, keyId, DateTimeOffset.UtcNow);
+        _challenges[key] = new ChallengeEntry(challenge, keyId, _clock.GetUtcNow());
     }
 
     public ChallengeEntry? ConsumeChallenge(string did, string purpose)
@@ -36,7 +42,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_challenges.TryRemove(key, out var entry))
             return null;
 
-        if (DateTimeOffset.UtcNow - entry.CreatedAt > ChallengeTtl)
+        if (_clock.GetUtcNow() - entry.CreatedAt > ChallengeTtl)
             return null;
 
         return entry;
@@ -53,7 +59,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 
         var token = SsdidCrypto.GenerateChallenge();
 
-        if (_sessions.TryAdd(token, new SessionEntry(did, DateTimeOffset.UtcNow)))
+        if (_sessions.TryAdd(token, new SessionEntry(did, _clock.GetUtcNow())))
         {
             Interlocked.Increment(ref _sessionCount);
             return token;
@@ -67,7 +73,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_sessions.TryGetValue(token, out var entry))
             return null;
 
-        if (DateTimeOffset.UtcNow - entry.CreatedAt > SessionTtl)
+        if (_clock.GetUtcNow() - entry.CreatedAt > SessionTtl)
         {
             if (_sessions.TryRemove(token, out _))
                 Interlocked.Decrement(ref _sessionCount);
@@ -83,9 +89,12 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
             Interlocked.Decrement(ref _sessionCount);
     }
 
+    public int ActiveSessionCount => _sessions.Count;
+    public int ActiveChallengeCount => _challenges.Count;
+
     internal void CreateSessionDirect(string did, string token)
     {
-        if (_sessions.TryAdd(token, new SessionEntry(did, DateTimeOffset.UtcNow)))
+        if (_sessions.TryAdd(token, new SessionEntry(did, _clock.GetUtcNow())))
             Interlocked.Increment(ref _sessionCount);
     }
 
@@ -94,7 +103,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
     public string CreateSubscriberSecret(string challengeId)
     {
         var secret = SsdidCrypto.GenerateChallenge();
-        _subscriberSecrets[challengeId] = (secret, DateTimeOffset.UtcNow);
+        _subscriberSecrets[challengeId] = (secret, _clock.GetUtcNow());
         return secret;
     }
 
@@ -103,7 +112,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_subscriberSecrets.TryGetValue(challengeId, out var entry))
             return false;
 
-        if (DateTimeOffset.UtcNow - entry.CreatedAt > ChallengeTtl)
+        if (_clock.GetUtcNow() - entry.CreatedAt > ChallengeTtl)
         {
             _subscriberSecrets.TryRemove(challengeId, out _);
             return false;
@@ -119,7 +128,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         var entry = _completionWaiters.GetOrAdd(challengeId,
             _ => new WaiterEntry(
                 new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously),
-                DateTimeOffset.UtcNow));
+                _clock.GetUtcNow()));
 
         var reg = ct.Register(() =>
         {
@@ -156,7 +165,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 
     private void CollectExpired(object? state)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.GetUtcNow();
 
         foreach (var (key, entry) in _challenges)
         {

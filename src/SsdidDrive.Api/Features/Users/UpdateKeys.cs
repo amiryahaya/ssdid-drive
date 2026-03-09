@@ -12,7 +12,7 @@ public static class UpdateKeys
         string? KeyDerivationSalt);
 
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPut("/me/keys", Handle);
+        group.MapPatch("/me/keys", Handle);
 
     private const int MaxKeyBlobLength = 65_536; // 64 KB Base64
 

@@ -11,4 +11,7 @@ public interface ISessionStore
     string? CreateSession(string did);
     string? GetSession(string token);
     void DeleteSession(string token);
+
+    int ActiveSessionCount { get; }
+    int ActiveChallengeCount { get; }
 }

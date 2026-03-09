@@ -1,0 +1,18 @@
+namespace SsdidDrive.Api.Data.Entities;
+
+public class RecoveryRequest
+{
+    public Guid Id { get; set; }
+    public Guid RequesterId { get; set; }
+    public Guid RecoveryConfigId { get; set; }
+    public RecoveryRequestStatus Status { get; set; } = RecoveryRequestStatus.Pending;
+    public int ApprovalsReceived { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public User Requester { get; set; } = null!;
+    public RecoveryConfig Config { get; set; } = null!;
+    public ICollection<RecoveryApproval> Approvals { get; set; } = [];
+}
+
+public enum RecoveryRequestStatus { Pending, Approved, Completed, Rejected, Expired }

@@ -40,23 +40,25 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         var entry = new ChallengeData(challenge, keyId, DateTimeOffset.UtcNow);
         var json = JsonSerializer.Serialize(entry);
 
-        _cache.SetString(key, json, new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = ChallengeTtl
-        });
+        // Use raw Redis StringSet (not IDistributedCache) so that ConsumeChallenge
+        // can use the atomic StringGetDelete to prevent TOCTOU races.
+        var db = _redis.GetDatabase();
+        db.StringSet(key, json, ChallengeTtl);
     }
 
     public SessionStore.ChallengeEntry? ConsumeChallenge(string did, string purpose)
     {
         var key = $"{ChallengePrefix}{did}:{purpose}";
-        var json = _cache.GetString(key);
+        var db = _redis.GetDatabase();
 
-        if (json is null)
+        // Atomic get-and-delete via Redis GETDEL (Redis 6.2+) — prevents TOCTOU race
+        // where two concurrent callers could both consume the same challenge.
+        var value = db.StringGetDelete(key);
+
+        if (value.IsNullOrEmpty)
             return null;
 
-        _cache.Remove(key);
-
-        var data = JsonSerializer.Deserialize<ChallengeData>(json);
+        var data = JsonSerializer.Deserialize<ChallengeData>(value.ToString());
         if (data is null)
             return null;
 
@@ -187,6 +189,11 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
             return false;
         }
     }
+
+    // Exact session/challenge count requires SCAN across all keys — return 0 as approximation.
+    // For production monitoring, use Redis INFO or external metrics.
+    public int ActiveSessionCount => 0;
+    public int ActiveChallengeCount => 0;
 
     // ── Internal DTOs ──
 

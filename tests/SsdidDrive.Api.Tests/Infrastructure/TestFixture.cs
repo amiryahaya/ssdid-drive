@@ -23,7 +23,8 @@ public static class TestFixture
     public static async Task<(HttpClient Client, Guid UserId, Guid TenantId)> CreateAuthenticatedClientAsync(
         SsdidDriveFactory factory,
         string? displayName = null,
-        string? did = null)
+        string? did = null,
+        string? systemRole = null)
     {
         did ??= $"did:ssdid:test-{Guid.NewGuid():N}";
         var sessionToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
@@ -53,6 +54,9 @@ public static class TestFixture
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
+        if (systemRole is not null)
+            user.SystemRole = Enum.Parse<SystemRole>(systemRole);
+
         db.Users.Add(user);
 
         var userTenant = new UserTenant
@@ -134,11 +138,11 @@ public static class TestFixture
 
         var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "file", fileName);
+        form.Add(new StringContent(encKey), "encrypted_file_key");
+        form.Add(new StringContent(nonce), "nonce");
+        form.Add(new StringContent("AES-256-GCM"), "encryption_algorithm");
 
-        var url = $"/api/folders/{folderId}/files"
-            + $"?encrypted_file_key={Uri.EscapeDataString(encKey)}"
-            + $"&nonce={Uri.EscapeDataString(nonce)}"
-            + $"&encryption_algorithm=AES-256-GCM";
+        var url = $"/api/folders/{folderId}/files";
 
         var response = await client.PostAsync(url, form);
         response.EnsureSuccessStatusCode();

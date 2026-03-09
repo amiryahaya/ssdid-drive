@@ -10,5 +10,6 @@ public static class FileFeature
         ListFiles.Map(group);
         DownloadFile.Map(group);
         DeleteFile.Map(group);
+        RenameFile.Map(group);
     }
 }

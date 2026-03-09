@@ -516,6 +516,48 @@ class FileEncryptor @Inject constructor(
         }
     }
 
+    // ==================== Stream-Based Encryption with Derived Key ====================
+
+    /**
+     * Encrypt an input stream using a folder key and file ID.
+     *
+     * Derives a per-file DEK from the folder key and file ID using HKDF,
+     * then encrypts the stream content using AES-256-GCM in chunks.
+     *
+     * This is a simplified API for cases where the file ID is known upfront
+     * and deterministic key derivation is acceptable.
+     *
+     * @param inputStream Source data stream
+     * @param folderKey The folder's KEK (32 bytes)
+     * @param fileId Unique file identifier (used for key derivation)
+     * @param outputStream Stream to write encrypted data
+     * @param onProgress Optional progress callback (bytesProcessed, totalBytes)
+     * @return Triple of (encryptedSize, blobHash, chunkCount)
+     */
+    fun encryptStream(
+        inputStream: InputStream,
+        folderKey: ByteArray,
+        fileId: String,
+        outputStream: OutputStream,
+        onProgress: ((Long, Long) -> Unit)? = null
+    ): Triple<Long, String, Int> {
+        // Derive per-file key from folder key + file ID
+        val dek = cryptoManager.deriveFileKey(folderKey, fileId)
+
+        try {
+            return encryptFileContent(
+                inputStream = inputStream,
+                outputStream = outputStream,
+                dek = dek,
+                totalSize = -1L, // Unknown total size for stream
+                onProgress = onProgress
+            )
+        } finally {
+            // SECURITY: Zeroize derived DEK
+            SecureMemory.zeroize(dek)
+        }
+    }
+
     private fun getFileSize(uri: Uri): Long {
         val resolver = context.contentResolver
         val descriptorSize = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length }

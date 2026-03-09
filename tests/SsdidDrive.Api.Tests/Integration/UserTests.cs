@@ -31,11 +31,11 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
     {
         var (client, userId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "OldName");
 
-        var putResponse = await client.PutAsJsonAsync("/api/me",
+        var patchResponse = await client.PatchAsJsonAsync("/api/me",
             new { display_name = "NewName" }, TestFixture.Json);
-        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
 
-        var putBody = await putResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var putBody = await patchResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal("NewName", putBody.GetProperty("display_name").GetString());
 
         // Verify change persisted via GET
@@ -57,14 +57,14 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
         var salt = Convert.ToBase64String("test-salt-bytes"u8.ToArray());
         var publicKeys = "{\"kem\":\"test-pub\",\"sign\":\"test-sign\"}";
 
-        var putResponse = await client.PutAsJsonAsync("/api/me/keys", new
+        var patchResponse = await client.PatchAsJsonAsync("/api/me/keys", new
         {
             public_keys = publicKeys,
             encrypted_master_key = masterKey,
             encrypted_private_keys = privateKeys,
             key_derivation_salt = salt
         }, TestFixture.Json);
-        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
 
         // Verify keys persisted via GET
         var getResponse = await client.GetAsync("/api/me/keys");
@@ -83,7 +83,7 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
         // Create a user and set their public keys
         var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Publisher");
         var publicKeys = "{\"kem\":\"pub-kem-key\"}";
-        await client1.PutAsJsonAsync("/api/me/keys", new { public_keys = publicKeys }, TestFixture.Json);
+        await client1.PatchAsJsonAsync("/api/me/keys", new { public_keys = publicKeys }, TestFixture.Json);
 
         // A different authenticated user can fetch the first user's public key
         var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Consumer");
@@ -101,6 +101,35 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
 
         var response = await client.GetAsync($"/api/users/{Guid.NewGuid()}/public-key");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublishAndGetKemKey_RoundTrips()
+    {
+        var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemPublisher");
+        var kemPk = Convert.ToBase64String(new byte[32]);
+
+        var publishResponse = await client1.PatchAsJsonAsync("/api/me/keys/kem",
+            new { kem_public_key = kemPk, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, publishResponse.StatusCode);
+
+        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemConsumer");
+        var getResponse = await client2.GetAsync($"/api/users/{userId1}/kem-public-key");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(kemPk, body.GetProperty("kem_public_key").GetString());
+        Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
+    }
+
+    [Fact]
+    public async Task GetKemPublicKey_NoKeySet_Returns404()
+    {
+        var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NoKemUser");
+        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemLooker");
+
+        var response = await client2.GetAsync($"/api/users/{userId1}/kem-public-key");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

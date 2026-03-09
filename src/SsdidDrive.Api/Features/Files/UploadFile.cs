@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -14,9 +15,9 @@ public static class UploadFile
     private static async Task<IResult> Handle(
         Guid folderId,
         IFormFile file,
-        string encrypted_file_key,
-        string nonce,
-        string encryption_algorithm,
+        [FromForm] string encrypted_file_key,
+        [FromForm] string nonce,
+        [FromForm] string encryption_algorithm,
         AppDbContext db,
         CurrentUserAccessor accessor,
         IStorageService storage,
@@ -56,6 +57,12 @@ public static class UploadFile
 
         if (string.IsNullOrWhiteSpace(encrypted_file_key))
             return AppError.BadRequest("Encrypted file key is required").ToProblemResult();
+
+        if (string.IsNullOrWhiteSpace(nonce))
+            return AppError.BadRequest("Nonce is required").ToProblemResult();
+
+        if (string.IsNullOrWhiteSpace(encryption_algorithm))
+            return AppError.BadRequest("Encryption algorithm is required").ToProblemResult();
 
         var fileId = Guid.NewGuid();
 

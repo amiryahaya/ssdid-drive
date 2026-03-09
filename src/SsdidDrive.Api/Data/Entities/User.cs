@@ -9,12 +9,15 @@ public class User
     public string? DisplayName { get; set; }
     public string? Email { get; set; }
     public UserStatus Status { get; set; } = UserStatus.Active;
+    public SystemRole? SystemRole { get; set; }
 
     // Zero-knowledge key storage (client-side encrypted)
     public string? PublicKeys { get; set; } // JSON
     public byte[]? EncryptedPrivateKeys { get; set; }
     public byte[]? EncryptedMasterKey { get; set; }
     public byte[]? KeyDerivationSalt { get; set; }
+    public byte[]? KemPublicKey { get; set; }
+    public string? KemAlgorithm { get; set; }
 
     public DateTimeOffset? LastLoginAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

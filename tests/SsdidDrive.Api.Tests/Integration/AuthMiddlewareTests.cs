@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -80,5 +83,22 @@ public class AuthMiddlewareTests : IClassFixture<SsdidDriveFactory>
 
         var after = await client.GetAsync("/api/me");
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    [Fact]
+    public async Task SuspendedUser_Returns403()
+    {
+        var (client, userId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "SuspendedUser");
+
+        // Suspend the user directly in DB
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Users.FindAsync(userId);
+        user!.Status = UserStatus.Suspended;
+        await db.SaveChangesAsync();
+
+        // Any API call should now return 403
+        var response = await client.GetAsync("/api/folders");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }

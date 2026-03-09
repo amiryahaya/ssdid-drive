@@ -9,16 +9,19 @@ public static class ListReceivedShares
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/received", Handle);
 
-    private static async Task<IResult> Handle(AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(AppDbContext db, CurrentUserAccessor accessor,
+        int page = 1, int pageSize = 50,
+        CancellationToken ct = default)
     {
         var user = accessor.User!;
+        var pagination = new PaginationParams(page, pageSize);
 
         // Fetch shares for the current user, then filter expired client-side
         // (SQLite cannot compare DateTimeOffset in LINQ).
         var now = DateTimeOffset.UtcNow;
         // Order client-side for cross-database compatibility
         // (SQLite cannot ORDER BY DateTimeOffset columns).
-        var shares = (await db.Shares
+        var allShares = (await db.Shares
             .Where(s => s.SharedWithId == user.Id)
             .Include(s => s.SharedBy)
             .Select(s => new
@@ -40,6 +43,12 @@ public static class ListReceivedShares
             .OrderByDescending(s => s.CreatedAt)
             .ToList();
 
-        return Results.Ok(shares);
+        var total = allShares.Count;
+        var items = allShares
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToList();
+
+        return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));
     }
 }

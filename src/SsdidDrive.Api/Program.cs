@@ -8,13 +8,23 @@ using SsdidDrive.Api.Features.Auth;
 using SsdidDrive.Api.Features.Files;
 using SsdidDrive.Api.Features.Folders;
 using SsdidDrive.Api.Features.Health;
+using SsdidDrive.Api.Features.Devices;
+using SsdidDrive.Api.Features.Invitations;
 using SsdidDrive.Api.Features.Shares;
+using SsdidDrive.Api.Features.Tenants;
+using SsdidDrive.Api.Features.Notifications;
+using SsdidDrive.Api.Features.Credentials;
+using SsdidDrive.Api.Features.Admin;
+using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
 using SsdidDrive.Api.Crypto;
 using SsdidDrive.Api.Crypto.Providers;
+using SsdidDrive.Api.Health;
+using Microsoft.Extensions.FileProviders;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,16 +70,22 @@ builder.Services.AddSingleton<SsdidIdentity>(sp =>
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 if (!string.IsNullOrEmpty(redisConnection))
 {
+    var redisOptions = ConfigurationOptions.Parse(redisConnection);
+    redisOptions.AbortOnConnectFail = false;
+    redisOptions.ConnectRetry = 3;
+    redisOptions.ReconnectRetryPolicy = new ExponentialRetry(5000);
+
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnection;
         options.InstanceName = "ssdid:";
     });
-    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
-        StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+        ConnectionMultiplexer.Connect(redisOptions));
     builder.Services.AddSingleton<RedisSessionStore>();
     builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<RedisSessionStore>());
     builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<RedisSessionStore>());
+    builder.Services.AddHealthChecks().AddCheck<RedisHealthCheck>("redis");
 }
 else
 {
@@ -77,6 +93,7 @@ else
     builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
     builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
+    builder.Services.AddHealthChecks();
 }
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
@@ -87,6 +104,9 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 });
 
 builder.Services.AddScoped<SsdidAuthService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddSingleton<WebAuthnChallengeStore>();
 builder.Services.AddHostedService<ServerRegistrationService>();
 
 // ── Rate Limiting ──
@@ -148,6 +168,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 app.UseRateLimiter();
+app.MapHealthChecks("/health/redis");
 
 // Auth middleware — endpoints marked [SsdidPublic] skip authentication.
 // All /api endpoints go through the middleware; it checks endpoint metadata.
@@ -162,6 +183,25 @@ app.MapUserFeature();
 app.MapFolderFeature();
 app.MapFileFeature();
 app.MapShareFeature();
+app.MapDeviceFeature();
+app.MapInvitationFeature();
+app.MapTenantFeature();
+app.MapNotificationFeature();
+app.MapRecoveryFeature();
+app.MapCredentialFeature();
+app.MapAdminFeature();
+
+// ── Serve admin SPA ──
+var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");
+if (Directory.Exists(adminPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(adminPath),
+        RequestPath = "/admin"
+    });
+    app.MapFallbackToFile("/admin/{**path}", "admin/index.html");
+}
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||

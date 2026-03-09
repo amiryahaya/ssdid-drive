@@ -362,6 +362,61 @@ class FileDecryptor @Inject constructor(
         return buffer
     }
 
+    // ==================== Stream-Based Decryption with Derived Key ====================
+
+    /**
+     * Decrypt an input stream using a folder key and file ID.
+     *
+     * Derives the per-file DEK from the folder key and file ID using HKDF
+     * (matching the derivation in [FileEncryptor.encryptStream]), then decrypts
+     * the stream content using AES-256-GCM in chunks.
+     *
+     * @param inputStream Stream of encrypted data
+     * @param folderKey The folder's KEK (32 bytes)
+     * @param fileId Unique file identifier (used for key derivation)
+     * @param plaintextSize Expected plaintext size (needed to compute chunk count)
+     * @param outputStream Stream to write decrypted data
+     * @param onProgress Optional progress callback (bytesProcessed, totalBytes)
+     * @return Total decrypted size in bytes
+     */
+    fun decryptStream(
+        inputStream: InputStream,
+        folderKey: ByteArray,
+        fileId: String,
+        plaintextSize: Long,
+        outputStream: OutputStream,
+        onProgress: ((Long, Long) -> Unit)? = null
+    ): Long {
+        // Derive per-file key from folder key + file ID
+        val dek = cryptoManager.deriveFileKey(folderKey, fileId)
+
+        try {
+            val encryptedSize = calculateEncryptedSize(plaintextSize)
+            return decryptFileContent(
+                inputStream = inputStream,
+                outputStream = outputStream,
+                dek = dek,
+                totalSize = encryptedSize,
+                plaintextSize = plaintextSize,
+                onProgress = onProgress
+            )
+        } finally {
+            // SECURITY: Zeroize derived DEK
+            cryptoManager.zeroize(dek)
+        }
+    }
+
+    /**
+     * Calculate the total encrypted size from a known plaintext size.
+     *
+     * Each chunk adds [ENCRYPTED_CHUNK_OVERHEAD] bytes (nonce + auth tag).
+     */
+    private fun calculateEncryptedSize(plaintextSize: Long): Long {
+        if (plaintextSize <= 0L) return 0L
+        val totalChunks = (plaintextSize + CHUNK_SIZE - 1) / CHUNK_SIZE
+        return plaintextSize + totalChunks * ENCRYPTED_CHUNK_OVERHEAD
+    }
+
     /**
      * Unwrap DEK directly (for file operations like move).
      *

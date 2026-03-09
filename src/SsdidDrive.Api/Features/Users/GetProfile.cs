@@ -17,6 +17,7 @@ public static class GetProfile
             user.DisplayName,
             user.Email,
             status = user.Status.ToString().ToLowerInvariant(),
+            system_role = user.SystemRole?.ToString(),
             user.CreatedAt
         });
     }

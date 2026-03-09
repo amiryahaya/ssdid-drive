@@ -9,7 +9,9 @@ public static class ListFolders
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/", Handle);
 
-    private static async Task<IResult> Handle(Guid? parentId, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid? parentId, AppDbContext db, CurrentUserAccessor accessor,
+        int page = 1, int pageSize = 50, string? search = null,
+        CancellationToken ct = default)
     {
         var user = accessor.User!;
 
@@ -18,6 +20,7 @@ public static class ListFolders
 
         var tenantId = user.TenantId.Value;
         var now = DateTimeOffset.UtcNow;
+        var pagination = new PaginationParams(page, pageSize, search);
 
         // Folder IDs shared with this user (active, non-expired shares).
         // Fetch candidates server-side, then filter expiry client-side for
@@ -30,10 +33,16 @@ public static class ListFolders
             .Select(s => s.ResourceId)
             .ToList();
 
-        var folders = await db.Folders
+        var query = db.Folders
             .Where(f => f.TenantId == tenantId
                 && f.ParentFolderId == parentId
-                && (f.OwnerId == user.Id || sharedFolderIds.Contains(f.Id)))
+                && (f.OwnerId == user.Id || sharedFolderIds.Contains(f.Id)));
+
+        if (!string.IsNullOrWhiteSpace(pagination.Search))
+            query = query.Where(f => f.Name.Contains(pagination.Search));
+
+        // Load into memory for client-side ordering (SQLite compatibility).
+        var allMatching = await query
             .Select(f => new
             {
                 f.Id,
@@ -46,9 +55,15 @@ public static class ListFolders
                 SubFolderCount = f.SubFolders.Count,
                 FileCount = f.Files.Count
             })
-            .OrderBy(f => f.Name)
             .ToListAsync(ct);
 
-        return Results.Ok(folders);
+        var total = allMatching.Count;
+        var items = allMatching
+            .OrderBy(f => f.Name)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToList();
+
+        return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));
     }
 }

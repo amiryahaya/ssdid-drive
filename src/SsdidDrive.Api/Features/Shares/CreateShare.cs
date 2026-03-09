@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Shares;
 
@@ -19,7 +20,7 @@ public static class CreateShare
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -91,6 +92,20 @@ public static class CreateShare
         };
 
         db.Shares.Add(share);
+
+        var resourceName = req.ResourceType == "folder"
+            ? (await db.Folders.Where(f => f.Id == req.ResourceId).Select(f => f.Name).FirstOrDefaultAsync(ct) ?? "a folder")
+            : (await db.Files.Where(f => f.Id == req.ResourceId).Select(f => f.Name).FirstOrDefaultAsync(ct) ?? "a file");
+
+        await notifications.CreateAsync(
+            req.SharedWithId,
+            "share_created",
+            "New Share",
+            $"{user.DisplayName ?? user.Did} shared {resourceName} with you",
+            actionType: "share",
+            actionResourceId: share.Id.ToString(),
+            ct: ct);
+
         await db.SaveChangesAsync(ct);
 
         return Results.Created($"/api/shares/{share.Id}", new

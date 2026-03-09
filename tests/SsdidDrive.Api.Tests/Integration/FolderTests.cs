@@ -90,7 +90,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var response = await client.GetAsync("/api/folders");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var folders = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folders = body.GetProperty("items");
         Assert.True(folders.GetArrayLength() >= 2);
 
         var names = Enumerable.Range(0, folders.GetArrayLength())
@@ -111,7 +112,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var response = await client2.GetAsync("/api/folders");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var folders = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folders = body.GetProperty("items");
         Assert.Equal(0, folders.GetArrayLength());
     }
 
@@ -163,12 +165,11 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task DeleteFolder_NonOwner_Returns403()
     {
-        var (client1, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Owner");
-        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NonOwner");
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DelFolderOwner");
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "DelFolderNonOwner");
 
         var folderId = await CreateFolderAndGetId(client1, "Protected Folder");
 
-        // DeleteFolder has no tenant filter — finds folder by ID, then checks OwnerId
         var response = await client2.DeleteAsync($"/api/folders/{folderId}");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -192,6 +193,42 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task CreateFolder_MissingEncryptedFolderKey_Returns400()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        var request = new
+        {
+            name = "No Key Folder",
+            encrypted_folder_key = "",
+            kem_algorithm = "ML-KEM-768"
+        };
+
+        var response = await client.PostAsJsonAsync("/api/folders", request, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteFolder_CascadesFiles()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        var folderId = await CreateFolderAndGetId(client, "CascadeFileFolder");
+        var fileId = await TestFixture.UploadFileAsync(client, folderId.ToString(), "cascade-file.bin");
+
+        var deleteResp = await client.DeleteAsync($"/api/folders/{folderId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResp.StatusCode);
+
+        // Verify folder is gone
+        var folderGet = await client.GetAsync($"/api/folders/{folderId}");
+        Assert.Equal(HttpStatusCode.NotFound, folderGet.StatusCode);
+
+        // Verify file is gone too
+        var fileGet = await client.GetAsync($"/api/files/{fileId}/download");
+        Assert.Equal(HttpStatusCode.NotFound, fileGet.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateFolder_WithoutAuth_Returns401()
     {
         var client = _factory.CreateClient();
@@ -200,4 +237,171 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    #region GetFolderKey
+
+    [Fact]
+    public async Task GetFolderKey_Owner_ReturnsEncryptedKey()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "FolderKeyOwner");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client.PostAsJsonAsync("/api/folders",
+            new { name = "KeyFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        var keyResponse = await client.GetAsync($"/api/folders/{folderId}/key");
+        Assert.Equal(HttpStatusCode.OK, keyResponse.StatusCode);
+
+        var body = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(encKey, body.GetProperty("encrypted_folder_key").GetString());
+        Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
+        Assert.Equal(1, body.GetProperty("folder_key_version").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetFolderKey_NonOwnerNoShare_Returns403()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KeyOwner2");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client1.PostAsJsonAsync("/api/folders",
+            new { name = "PrivateFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        // Different user in same tenant
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "NoShareUser");
+        var response = await client2.GetAsync($"/api/folders/{folderId}/key");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetFolderKey_SharedUser_ReturnsShareEncryptedKey()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareKeyOwner");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client1.PostAsJsonAsync("/api/folders",
+            new { name = "SharedKeyFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        // Create a second user in same tenant and share with them
+        var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "SharedKeyUser");
+
+        var (shareStatus, _) = await TestFixture.CreateShareAsync(client1, folderId.ToString(), userId2);
+        Assert.Equal(HttpStatusCode.Created, shareStatus);
+
+        var keyResponse = await client2.GetAsync($"/api/folders/{folderId}/key");
+        Assert.Equal(HttpStatusCode.OK, keyResponse.StatusCode);
+
+        var body = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.NotNull(body.GetProperty("encrypted_folder_key").GetString());
+        Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
+        Assert.Equal(1, body.GetProperty("folder_key_version").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetFolderKey_NonExistentFolder_Returns404()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KeyNotFoundUser");
+
+        var response = await client.GetAsync($"/api/folders/{Guid.NewGuid()}/key");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    #endregion
+
+    #region RotateFolderKey
+
+    [Fact]
+    public async Task RotateFolderKey_Owner_IncrementsVersion()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateKeyOwner");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client.PostAsJsonAsync("/api/folders",
+            new { name = "RotateFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        var newKey = Convert.ToBase64String(new byte[48]);
+        var rotateResponse = await client.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
+        {
+            encrypted_folder_key = newKey,
+            kem_algorithm = "ML-KEM-1024",
+            member_keys = Array.Empty<object>()
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
+
+        var rotateBody = await rotateResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(2, rotateBody.GetProperty("folder_key_version").GetInt32());
+
+        // Verify the key was updated
+        var keyResponse = await client.GetAsync($"/api/folders/{folderId}/key");
+        var keyBody = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(newKey, keyBody.GetProperty("encrypted_folder_key").GetString());
+        Assert.Equal("ML-KEM-1024", keyBody.GetProperty("kem_algorithm").GetString());
+        Assert.Equal(2, keyBody.GetProperty("folder_key_version").GetInt32());
+    }
+
+    [Fact]
+    public async Task RotateFolderKey_NonOwner_Returns403()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateOwner2");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client1.PostAsJsonAsync("/api/folders",
+            new { name = "RotateProtected", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RotateNonOwner");
+        var response = await client2.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
+        {
+            encrypted_folder_key = Convert.ToBase64String(new byte[32]),
+            kem_algorithm = "ML-KEM-768",
+            member_keys = Array.Empty<object>()
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RotateFolderKey_UpdatesMemberShareKeys()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateMemberOwner");
+        var encKey = Convert.ToBase64String(new byte[32]);
+
+        var createResponse = await client1.PostAsJsonAsync("/api/folders",
+            new { name = "RotateMemberFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folderId = created.GetProperty("id").GetGuid();
+
+        // Create member and share
+        var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RotateMember");
+        var (shareStatus, _) = await TestFixture.CreateShareAsync(client1, folderId.ToString(), userId2);
+        Assert.Equal(HttpStatusCode.Created, shareStatus);
+
+        // Rotate with member keys
+        var newMemberKey = Convert.ToBase64String(new byte[64]);
+        var rotateResponse = await client1.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
+        {
+            encrypted_folder_key = Convert.ToBase64String(new byte[48]),
+            kem_algorithm = "ML-KEM-1024",
+            member_keys = new[] { new { user_id = userId2, encrypted_key = newMemberKey } }
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
+
+        // Verify member gets the updated key
+        var keyResponse = await client2.GetAsync($"/api/folders/{folderId}/key");
+        Assert.Equal(HttpStatusCode.OK, keyResponse.StatusCode);
+        var keyBody = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(newMemberKey, keyBody.GetProperty("encrypted_folder_key").GetString());
+        Assert.Equal("ML-KEM-1024", keyBody.GetProperty("kem_algorithm").GetString());
+        Assert.Equal(2, keyBody.GetProperty("folder_key_version").GetInt32());
+    }
+
+    #endregion
 }

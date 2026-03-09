@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import tauriService from '../services/tauri';
 
 interface FilePreview {
   file_id: string;
@@ -172,6 +173,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   uploadFile: async (path, folderId) => {
     const uploadId = crypto.randomUUID();
+    const fileId = crypto.randomUUID();
 
     // Listen for progress events
     let unlisten: UnlistenFn | null = null;
@@ -182,10 +184,47 @@ export const useFileStore = create<FileState>((set, get) => ({
         }));
       });
 
+      // Encrypt the file before upload if we have a folder context
+      let uploadPath = path;
+      let encryptionMeta: { file_key: string; nonce: string; algorithm: string } | null = null;
+
+      const targetFolderId = folderId ?? get().currentFolder?.id ?? null;
+      if (targetFolderId) {
+        try {
+          // 1. Get folder encryption metadata (KEM ciphertext + wrapped folder key)
+          const folderMeta = await tauriService.getFolderEncryptionMetadata(targetFolderId);
+
+          // 2. Decapsulate the folder key using user's KEM secret keys
+          const { folder_key: folderKey } = await tauriService.decapsulateFolderKey(
+            folderMeta.kem_ciphertext,
+            folderMeta.wrapped_folder_key,
+            folderMeta.encrypted_ml_kem_sk,
+            folderMeta.encrypted_kaz_kem_sk,
+          );
+
+          // 3. Encrypt the file: derives file key via HKDF(folder_key, file_id),
+          //    then encrypts content with AES-256-GCM
+          const encryptResult = await tauriService.encryptFile(path, folderKey, fileId);
+          uploadPath = encryptResult.ciphertext_path;
+          encryptionMeta = {
+            file_key: encryptResult.file_key,
+            nonce: encryptResult.nonce,
+            algorithm: 'AES-256-GCM',
+          };
+        } catch (encryptError) {
+          // Log but don't block upload — graceful fallback to unencrypted
+          console.warn('File encryption failed, uploading without encryption:', encryptError);
+        }
+      }
+
       await invoke('upload_file', {
-        filePath: path,
-        folderId: folderId ?? null,
+        filePath: uploadPath,
+        folderId: targetFolderId,
         fileName: null,
+        fileId,
+        encryptedFileKey: encryptionMeta?.file_key ?? null,
+        nonce: encryptionMeta?.nonce ?? null,
+        algorithm: encryptionMeta?.algorithm ?? null,
       });
 
       // Refresh file list
@@ -206,6 +245,21 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   downloadFile: async (fileId, destination, fileName) => {
     const downloadId = crypto.randomUUID();
+
+    const updateProgress = (update: Partial<DownloadProgress>) => {
+      set((state) => {
+        const progress = state.downloadProgress.get(downloadId);
+        if (progress) {
+          return {
+            downloadProgress: new Map(state.downloadProgress).set(downloadId, {
+              ...progress,
+              ...update,
+            }),
+          };
+        }
+        return state;
+      });
+    };
 
     // Initialize progress
     set((state) => ({
@@ -228,22 +282,55 @@ export const useFileStore = create<FileState>((set, get) => ({
         }));
       });
 
+      // Download the (possibly encrypted) file from the server
       await invoke('download_file', { fileId, destination });
 
-      // Mark as complete
-      set((state) => {
-        const progress = state.downloadProgress.get(downloadId);
-        if (progress) {
-          return {
-            downloadProgress: new Map(state.downloadProgress).set(downloadId, {
-              ...progress,
-              phase: 'complete',
-              progress_percent: 100,
-            }),
-          };
+      // Check if the file is encrypted by fetching its metadata
+      let decrypted = false;
+      try {
+        const metadata = await tauriService.getFileMetadata(fileId);
+        const isEncrypted = !!(metadata.encrypted_file_key && metadata.nonce && metadata.algorithm);
+
+        if (isEncrypted && metadata.folder_id) {
+          updateProgress({ phase: 'decrypting' });
+
+          // 1. Get folder encryption metadata (KEM ciphertext + wrapped folder key)
+          const folderMeta = await tauriService.getFolderEncryptionMetadata(metadata.folder_id);
+
+          // 2. Decapsulate the folder key using user's KEM secret keys
+          const { folder_key: folderKey } = await tauriService.decapsulateFolderKey(
+            folderMeta.kem_ciphertext,
+            folderMeta.wrapped_folder_key,
+            folderMeta.encrypted_ml_kem_sk,
+            folderMeta.encrypted_kaz_kem_sk,
+          );
+
+          // 3. Decrypt: derives file key via HKDF(folder_key, file_id),
+          //    then decrypts content with AES-256-GCM using nonce from metadata
+          updateProgress({ phase: 'writing' });
+          await tauriService.decryptFile(destination, folderKey, fileId);
+          decrypted = true;
         }
-        return state;
+      } catch (decryptError) {
+        // Graceful fallback: keep the encrypted file and warn
+        console.warn(
+          'File decryption failed, keeping encrypted file at destination:',
+          decryptError,
+        );
+        set({
+          error: `Downloaded file "${fileName}" but decryption failed. The file may be encrypted.`,
+        });
+      }
+
+      // Mark as complete
+      updateProgress({
+        phase: 'complete',
+        progress_percent: 100,
       });
+
+      if (decrypted) {
+        console.info(`File "${fileName}" downloaded and decrypted successfully.`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // Mark as error

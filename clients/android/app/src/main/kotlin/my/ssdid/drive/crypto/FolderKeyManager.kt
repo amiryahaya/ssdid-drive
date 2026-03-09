@@ -36,6 +36,49 @@ class FolderKeyManager @Inject constructor(
         private const val MAX_CACHED_KEKS = 100
         private const val METADATA_NONCE_SIZE = 12
         private val FOLDER_METADATA_AAD = "folder-metadata".toByteArray(Charsets.UTF_8)
+        private const val FOLDER_KEY_SIZE = 32 // 256 bits
+    }
+
+    // ==================== Key Generation & Derivation ====================
+
+    /**
+     * Generate a new random 256-bit folder KEK.
+     *
+     * This key is used to wrap file DEKs within the folder and child folder KEKs.
+     *
+     * @return A cryptographically random 32-byte key
+     */
+    fun generateFolderKey(): ByteArray {
+        return cryptoManager.generateKey()
+    }
+
+    /**
+     * Derive a per-file key from a folder KEK and file ID using HKDF.
+     *
+     * This provides deterministic key derivation for scenarios where a file's
+     * encryption key needs to be reproducible from the folder key and file identity
+     * (e.g., re-encryption after metadata update without storing the DEK).
+     *
+     * Note: The primary encryption flow uses random DEKs wrapped by the folder KEK
+     * (see [FileEncryptor]). This derivation method is an alternative for specific
+     * use cases that benefit from deterministic key derivation.
+     *
+     * @param folderKey The folder's KEK (32 bytes)
+     * @param fileId The file's unique identifier
+     * @return A derived 32-byte key unique to this folder + file combination
+     */
+    fun deriveFileKey(folderKey: ByteArray, fileId: String): ByteArray {
+        require(folderKey.size == FOLDER_KEY_SIZE) {
+            "Folder key must be $FOLDER_KEY_SIZE bytes, got ${folderKey.size}"
+        }
+        require(fileId.isNotBlank()) { "File ID must not be blank" }
+
+        return cryptoManager.hkdfProvider.deriveKey(
+            ikm = folderKey,
+            salt = "SsdidDrive-FileKey".toByteArray(),
+            info = "file:$fileId".toByteArray(),
+            length = FOLDER_KEY_SIZE
+        )
     }
 
     /**

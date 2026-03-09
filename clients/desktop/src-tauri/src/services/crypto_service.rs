@@ -419,6 +419,156 @@ impl CryptoService {
         Ok(generate_key())
     }
 
+    /// Derive a deterministic file key from a folder key and file ID using HKDF-SHA256.
+    ///
+    /// This allows deriving a unique per-file key without storing it separately.
+    /// The folder key acts as the input keying material (IKM), and the file ID
+    /// is used as the info parameter for domain separation.
+    pub fn derive_file_key(&self, folder_key: &[u8], file_id: &str) -> AppResult<Vec<u8>> {
+        if folder_key.len() != KEY_SIZE {
+            return Err(AppError::Crypto(format!(
+                "Invalid folder key size: expected {}, got {}",
+                KEY_SIZE,
+                folder_key.len()
+            )));
+        }
+
+        let info = format!("ssdid-drive:file-key:{}", file_id);
+        hkdf_derive(folder_key, None, info.as_bytes(), KEY_SIZE)
+            .map_err(|e| AppError::Crypto(format!("File key derivation failed: {}", e)))
+    }
+
+    /// Encrypt a file on disk using a folder key and file ID.
+    ///
+    /// 1. Derives a file-specific key from the folder key via HKDF
+    /// 2. Reads the plaintext file
+    /// 3. Encrypts with AES-256-GCM
+    /// 4. Writes ciphertext to `<file_path>.enc`
+    /// 5. Returns the ciphertext path, encrypted file key, and nonce
+    pub fn encrypt_file_to_path(
+        &self,
+        file_path: &str,
+        folder_key_b64: &str,
+        file_id: &str,
+    ) -> AppResult<crate::commands::crypto::FileEncryptionResult> {
+        use std::io::{Read, Write};
+
+        let folder_key = BASE64
+            .decode(folder_key_b64)
+            .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?;
+
+        // Derive a file-specific key from the folder key
+        let mut file_key = self.derive_file_key(&folder_key, file_id)?;
+
+        // Read plaintext file
+        let path = std::path::Path::new(file_path);
+        if !path.exists() {
+            return Err(AppError::File(format!("File not found: {}", file_path)));
+        }
+        let mut plaintext = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|e| AppError::File(format!("Failed to open file: {}", e)))?
+            .read_to_end(&mut plaintext)
+            .map_err(|e| AppError::File(format!("Failed to read file: {}", e)))?;
+
+        // Encrypt with AES-256-GCM (returns nonce || ciphertext || tag)
+        let ciphertext = encrypt_aes_gcm(&plaintext, &file_key)
+            .map_err(|e| AppError::Crypto(format!("File encryption failed: {}", e)))?;
+
+        // Extract nonce from the ciphertext (first 12 bytes)
+        let nonce = &ciphertext[..12];
+        let nonce_b64 = BASE64.encode(nonce);
+
+        // Wrap the file key with the folder key for storage
+        let encrypted_file_key = self.wrap_key(&file_key, &folder_key)?;
+
+        // Zeroize the plaintext file key
+        file_key.zeroize();
+
+        // Write ciphertext to <file_path>.enc
+        let ciphertext_path = format!("{}.enc", file_path);
+        let mut output = std::fs::File::create(&ciphertext_path)
+            .map_err(|e| AppError::File(format!("Failed to create encrypted file: {}", e)))?;
+        output
+            .write_all(&ciphertext)
+            .map_err(|e| AppError::File(format!("Failed to write encrypted file: {}", e)))?;
+        output
+            .flush()
+            .map_err(|e| AppError::File(format!("Failed to flush encrypted file: {}", e)))?;
+
+        Ok(crate::commands::crypto::FileEncryptionResult {
+            ciphertext_path,
+            encrypted_file_key,
+            nonce: nonce_b64,
+        })
+    }
+
+    /// Decrypt a file on disk using a folder key and file ID.
+    ///
+    /// 1. Derives the file-specific key from the folder key via HKDF
+    /// 2. Reads the ciphertext file
+    /// 3. Decrypts with AES-256-GCM
+    /// 4. Writes plaintext to disk (strips `.enc` extension or appends `.dec`)
+    /// 5. Returns the plaintext path
+    pub fn decrypt_file_from_path(
+        &self,
+        ciphertext_path: &str,
+        folder_key_b64: &str,
+        file_id: &str,
+    ) -> AppResult<crate::commands::crypto::FileDecryptionResult> {
+        use std::io::{Read, Write};
+
+        let folder_key = BASE64
+            .decode(folder_key_b64)
+            .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?;
+
+        // Derive the same file-specific key from the folder key
+        let mut file_key = self.derive_file_key(&folder_key, file_id)?;
+
+        // Read ciphertext file
+        let path = std::path::Path::new(ciphertext_path);
+        if !path.exists() {
+            return Err(AppError::File(format!(
+                "Ciphertext file not found: {}",
+                ciphertext_path
+            )));
+        }
+        let mut ciphertext = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|e| AppError::File(format!("Failed to open ciphertext file: {}", e)))?
+            .read_to_end(&mut ciphertext)
+            .map_err(|e| AppError::File(format!("Failed to read ciphertext file: {}", e)))?;
+
+        // Decrypt with AES-256-GCM (expects nonce || ciphertext || tag)
+        let mut plaintext = decrypt_aes_gcm(&ciphertext, &file_key)
+            .map_err(|e| AppError::Crypto(format!("File decryption failed: {}", e)))?;
+
+        // Zeroize the file key
+        file_key.zeroize();
+
+        // Determine output path: strip .enc extension or append .dec
+        let plaintext_path = if ciphertext_path.ends_with(".enc") {
+            ciphertext_path[..ciphertext_path.len() - 4].to_string()
+        } else {
+            format!("{}.dec", ciphertext_path)
+        };
+
+        // Write plaintext to disk
+        let mut output = std::fs::File::create(&plaintext_path)
+            .map_err(|e| AppError::File(format!("Failed to create output file: {}", e)))?;
+        output
+            .write_all(&plaintext)
+            .map_err(|e| AppError::File(format!("Failed to write output file: {}", e)))?;
+        output
+            .flush()
+            .map_err(|e| AppError::File(format!("Failed to flush output file: {}", e)))?;
+
+        // Zeroize plaintext in memory
+        plaintext.zeroize();
+
+        Ok(crate::commands::crypto::FileDecryptionResult { plaintext_path })
+    }
+
     /// Encrypt a file's content with AES-256-GCM using a file key.
     /// Returns (nonce || ciphertext_with_tag).
     pub fn encrypt_file_content(&self, plaintext: &[u8], key: &[u8]) -> AppResult<Vec<u8>> {

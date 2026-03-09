@@ -394,6 +394,30 @@ class CryptoManager @Inject constructor(
         )
     }
 
+    // ==================== File Key Derivation ====================
+
+    /**
+     * Derive a per-file encryption key from a folder key and file ID using HKDF.
+     *
+     * Uses HKDF-SHA384 with domain-separated salt and info parameters to produce
+     * a deterministic 32-byte key unique to the folder key + file ID combination.
+     *
+     * @param folderKey The folder's KEK (32 bytes)
+     * @param fileId The file's unique identifier
+     * @return A derived 32-byte AES-256 key
+     */
+    fun deriveFileKey(folderKey: ByteArray, fileId: String): ByteArray {
+        require(folderKey.size == 32) { "Folder key must be 32 bytes" }
+        require(fileId.isNotBlank()) { "File ID must not be blank" }
+
+        return hkdfProvider.deriveKey(
+            ikm = folderKey,
+            salt = "SsdidDrive-FileKey".toByteArray(),
+            info = "file:$fileId".toByteArray(),
+            length = 32
+        )
+    }
+
     // ==================== AES-GCM with Separate Nonce ====================
 
     /**

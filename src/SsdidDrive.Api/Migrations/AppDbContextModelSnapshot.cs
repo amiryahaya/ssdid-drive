@@ -22,6 +22,113 @@ namespace SsdidDrive.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.AuditLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("CreatedAt")
+                        .IsDescending();
+
+                    b.ToTable("audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Device", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DeviceFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<string>("DeviceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("KeyAlgorithm")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<byte[]>("PublicKey")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("active");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "DeviceFingerprint")
+                        .IsUnique();
+
+                    b.ToTable("devices", (string)null);
+                });
+
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -97,6 +204,9 @@ namespace SsdidDrive.Api.Migrations
                     b.Property<byte[]>("EncryptedFolderKey")
                         .HasColumnType("bytea");
 
+                    b.Property<int>("FolderKeyVersion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("KemAlgorithm")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -129,6 +239,275 @@ namespace SsdidDrive.Api.Migrations
                     b.HasIndex("TenantId", "ParentFolderId");
 
                     b.ToTable("folders", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Invitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InvitedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InvitedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("member");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvitedById");
+
+                    b.HasIndex("InvitedUserId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("invitations", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("ActionResourceId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActionType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "IsRead");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("ApprovedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<byte[]>("EncryptedShare")
+                        .HasColumnType("bytea");
+
+                    b.Property<Guid>("RecoveryRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TrusteeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrusteeId");
+
+                    b.HasIndex("RecoveryRequestId", "TrusteeId")
+                        .IsUnique();
+
+                    b.ToTable("recovery_approvals", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Threshold")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalShares")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("recovery_configs", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("ApprovalsReceived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("RecoveryConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("pending");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecoveryConfigId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.ToTable("recovery_requests", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<byte[]>("EncryptedShare")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<Guid>("RecoveryConfigId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<Guid>("TrusteeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecoveryConfigId");
+
+                    b.HasIndex("TrusteeId");
+
+                    b.HasIndex("RecoveryConfigId", "TrusteeId")
+                        .IsUnique();
+
+                    b.ToTable("recovery_shares", (string)null);
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Share", b =>
@@ -197,6 +576,11 @@ namespace SsdidDrive.Api.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<bool>("Disabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -206,6 +590,9 @@ namespace SsdidDrive.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<long?>("StorageQuotaBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
@@ -251,6 +638,12 @@ namespace SsdidDrive.Api.Migrations
                     b.Property<byte[]>("EncryptedPrivateKeys")
                         .HasColumnType("bytea");
 
+                    b.Property<string>("KemAlgorithm")
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("KemPublicKey")
+                        .HasColumnType("bytea");
+
                     b.Property<byte[]>("KeyDerivationSalt")
                         .HasColumnType("bytea");
 
@@ -266,6 +659,10 @@ namespace SsdidDrive.Api.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasDefaultValue("active");
+
+                    b.Property<string>("SystemRole")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
@@ -314,6 +711,72 @@ namespace SsdidDrive.Api.Migrations
                     b.ToTable("user_tenants", (string)null);
                 });
 
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.WebAuthnCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("webauthn_credentials", (string)null);
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.AuditLogEntry", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Device", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileItem", b =>
                 {
                     b.HasOne("SsdidDrive.Api.Data.Entities.Folder", "Folder")
@@ -357,6 +820,111 @@ namespace SsdidDrive.Api.Migrations
                     b.Navigation("ParentFolder");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Invitation", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "InvitedBy")
+                        .WithMany()
+                        .HasForeignKey("InvitedById")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "InvitedUser")
+                        .WithMany()
+                        .HasForeignKey("InvitedUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SsdidDrive.Api.Data.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InvitedBy");
+
+                    b.Navigation("InvitedUser");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Notification", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryApproval", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryRequest", "RecoveryRequest")
+                        .WithMany("Approvals")
+                        .HasForeignKey("RecoveryRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Trustee")
+                        .WithMany()
+                        .HasForeignKey("TrusteeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RecoveryRequest");
+
+                    b.Navigation("Trustee");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryConfig", "Config")
+                        .WithMany()
+                        .HasForeignKey("RecoveryConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Requester")
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Config");
+
+                    b.Navigation("Requester");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryShare", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryConfig", "Config")
+                        .WithMany("Shares")
+                        .HasForeignKey("RecoveryConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Trustee")
+                        .WithMany()
+                        .HasForeignKey("TrusteeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Config");
+
+                    b.Navigation("Trustee");
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Share", b =>
@@ -407,11 +975,32 @@ namespace SsdidDrive.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.WebAuthnCredential", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Folder", b =>
                 {
                     b.Navigation("Files");
 
                     b.Navigation("SubFolders");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
+                {
+                    b.Navigation("Shares");
+                });
+
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
+                {
+                    b.Navigation("Approvals");
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Tenant", b =>

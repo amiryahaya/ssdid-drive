@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Tests.Ssdid;
@@ -89,5 +90,129 @@ public class SessionStoreTests
 
         Assert.True(store.NotifyCompletion(challengeId, "token1"));
         Assert.False(store.NotifyCompletion(challengeId, "token2"));
+    }
+
+    // ── TTL tests ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetSession_ExpiredSession_ReturnsNull()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = new SessionStore(clock);
+        var did = "did:ssdid:expired-session";
+        var token = store.CreateSession(did);
+        Assert.NotNull(token);
+
+        // Advance past the 1-hour session TTL
+        clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
+
+        var result = store.GetSession(token!);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ConsumeChallenge_ExpiredChallenge_ReturnsNull()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = new SessionStore(clock);
+        var did = "did:ssdid:expired-challenge";
+        var purpose = "register";
+
+        store.CreateChallenge(did, purpose, "challenge-data", "key-1");
+
+        // Advance past the 5-minute challenge TTL
+        clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        var result = store.ConsumeChallenge(did, purpose);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CreateSession_MaxSessionsCap_ReturnsNull()
+    {
+        var store = new SessionStore();
+
+        // Fill up to MaxSessions (10,000) using the internal direct method
+        for (var i = 0; i < 10_000; i++)
+            store.CreateSessionDirect($"did:ssdid:cap-{i}", $"token-{i}");
+
+        // The next session should be rejected
+        var result = store.CreateSession("did:ssdid:one-too-many");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetSession_ValidSession_ReturnsDid()
+    {
+        var store = new SessionStore();
+        var did = "did:ssdid:ttl-test";
+        var token = store.CreateSession(did);
+
+        Assert.NotNull(token);
+
+        var result = store.GetSession(token!);
+        Assert.Equal(did, result);
+    }
+
+    [Fact]
+    public void GetSession_DeletedSession_ReturnsNull()
+    {
+        var store = new SessionStore();
+        var did = "did:ssdid:deleted-session";
+        var token = store.CreateSession(did);
+        Assert.NotNull(token);
+
+        store.DeleteSession(token!);
+
+        var result = store.GetSession(token!);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ConsumeChallenge_ValidChallenge_ReturnsEntry()
+    {
+        var store = new SessionStore();
+        var did = "did:ssdid:challenge-ttl";
+        var purpose = "register";
+
+        store.CreateChallenge(did, purpose, "test-challenge-data", "key-1");
+
+        var result = store.ConsumeChallenge(did, purpose);
+        Assert.NotNull(result);
+        Assert.Equal("test-challenge-data", result!.Challenge);
+        Assert.Equal("key-1", result.KeyId);
+    }
+
+    [Fact]
+    public void ConsumeChallenge_AlreadyConsumed_ReturnsNull()
+    {
+        var store = new SessionStore();
+        var did = "did:ssdid:challenge-double";
+        var purpose = "register";
+
+        store.CreateChallenge(did, purpose, "one-time-challenge", "key-1");
+
+        var first = store.ConsumeChallenge(did, purpose);
+        Assert.NotNull(first);
+
+        // Second consume should return null (already consumed)
+        var second = store.ConsumeChallenge(did, purpose);
+        Assert.Null(second);
+    }
+
+    [Fact]
+    public void GetSession_NonExistentToken_ReturnsNull()
+    {
+        var store = new SessionStore();
+        var result = store.GetSession("nonexistent-token");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ConsumeChallenge_NonExistent_ReturnsNull()
+    {
+        var store = new SessionStore();
+        var result = store.ConsumeChallenge("did:ssdid:nonexistent", "register");
+        Assert.Null(result);
     }
 }

@@ -8,7 +8,7 @@ public static class UpdateProfile
     public record Request(string? DisplayName, string? Email);
 
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPut("/me", Handle);
+        group.MapPatch("/me", Handle);
 
     private static async Task<IResult> Handle(CurrentUserAccessor accessor, AppDbContext db, Request req)
     {

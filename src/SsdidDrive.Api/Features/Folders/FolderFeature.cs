@@ -9,6 +9,9 @@ public static class FolderFeature
         CreateFolder.Map(group);
         ListFolders.Map(group);
         GetFolder.Map(group);
+        RenameFolder.Map(group);
         DeleteFolder.Map(group);
+        GetFolderKey.Map(group);
+        RotateFolderKey.Map(group);
     }
 }
