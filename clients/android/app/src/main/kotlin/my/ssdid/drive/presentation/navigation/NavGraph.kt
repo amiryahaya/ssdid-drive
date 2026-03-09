@@ -2,6 +2,8 @@ package my.ssdid.drive.presentation.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -57,7 +59,7 @@ fun NavGraph(
     val analyticsManager = entryPoint.analyticsManager()
 
     DisposableEffect(navController) {
-        val listener = NavHostController.OnDestinationChangedListener { _, destination, _ ->
+        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
             val route = destination.route?.substringBefore("/")?.substringBefore("?") ?: "unknown"
             analyticsManager.trackNavigation(
                 from = navController.previousBackStackEntry?.destination?.route
