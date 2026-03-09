@@ -7,6 +7,17 @@ export function formatDate(iso: string | null): string {
   })
 }
 
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return '\u2014'
+  return new Date(iso).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function formatStorageQuota(bytes: number | null): string {
   if (bytes === null || bytes === 0) return 'Unlimited'
   const gb = bytes / (1024 * 1024 * 1024)

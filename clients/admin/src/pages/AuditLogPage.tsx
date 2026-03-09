@@ -3,7 +3,7 @@ import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
 import { useAdminStore } from '../stores/adminStore'
 import type { AuditLogEntry } from '../stores/adminStore'
-import { formatDate } from '../utils/format'
+import { formatDateTime } from '../utils/format'
 
 const PAGE_SIZE = 20
 
@@ -84,7 +84,7 @@ export default function AuditLogPage() {
     {
       key: 'created_at',
       header: 'Timestamp',
-      render: (entry) => formatDate(entry.created_at),
+      render: (entry) => formatDateTime(entry.created_at),
     },
   ]
 

@@ -24,7 +24,7 @@ public static class ListAuditLog
         var total = await query.CountAsync(ct);
 
         var items = await query
-            .OrderByDescending(e => e.Id)
+            .OrderByDescending(e => e.CreatedAt)
             .Skip((p - 1) * ps)
             .Take(ps)
             .Select(e => new
