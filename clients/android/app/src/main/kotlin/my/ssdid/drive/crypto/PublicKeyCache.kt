@@ -1,6 +1,6 @@
 package my.ssdid.drive.crypto
 
-import android.util.LruCache
+import androidx.collection.LruCache
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -1,7 +1,7 @@
 package my.ssdid.drive.crypto
 
 import android.util.Base64
-import android.util.LruCache
+import androidx.collection.LruCache
 import com.google.gson.Gson
 import my.ssdid.drive.domain.model.FolderMetadata
 import java.security.MessageDigest
