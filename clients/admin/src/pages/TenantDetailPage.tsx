@@ -4,28 +4,7 @@ import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
 import { useAdminStore } from '../stores/adminStore'
 import type { Tenant, TenantMember } from '../stores/adminStore'
-
-function formatStorageQuota(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return 'Unlimited'
-  const gb = bytes / (1024 * 1024 * 1024)
-  if (gb >= 1) return `${gb.toFixed(gb % 1 === 0 ? 0 : 1)} GB`
-  const mb = bytes / (1024 * 1024)
-  if (mb >= 1) return `${mb.toFixed(mb % 1 === 0 ? 0 : 1)} MB`
-  return `${bytes} B`
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function truncateDid(did: string): string {
-  if (did.length <= 24) return did
-  return `${did.slice(0, 16)}...${did.slice(-8)}`
-}
+import { formatDate, formatStorageQuota, truncateDid } from '../utils/format'
 
 function RoleBadge({ role }: { role: string }) {
   const colors: Record<string, string> = {

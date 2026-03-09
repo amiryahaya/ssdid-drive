@@ -3,22 +3,9 @@ import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
 import { useAdminStore } from '../stores/adminStore'
 import type { User } from '../stores/adminStore'
+import { formatDate, truncateDid } from '../utils/format'
 
 const PAGE_SIZE = 20
-
-function truncateDid(did: string): string {
-  if (did.length <= 24) return did
-  return `${did.slice(0, 16)}...${did.slice(-8)}`
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 function StatusBadge({ status }: { status: string }) {
   const isActive = status === 'active'

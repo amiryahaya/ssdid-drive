@@ -3,27 +3,12 @@ import { Link } from 'react-router-dom'
 import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
 import CreateTenantDialog from '../components/CreateTenantDialog'
+import EditTenantDialog from '../components/EditTenantDialog'
 import { useAdminStore } from '../stores/adminStore'
 import type { Tenant } from '../stores/adminStore'
+import { formatDate, formatStorageQuota } from '../utils/format'
 
 const PAGE_SIZE = 20
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function formatStorageQuota(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return 'Unlimited'
-  const gb = bytes / (1024 * 1024 * 1024)
-  if (gb >= 1) return `${gb.toFixed(gb % 1 === 0 ? 0 : 1)} GB`
-  const mb = bytes / (1024 * 1024)
-  if (mb >= 1) return `${mb.toFixed(mb % 1 === 0 ? 0 : 1)} MB`
-  return `${bytes} B`
-}
 
 function StatusBadge({ disabled }: { disabled: boolean }) {
   return (
@@ -53,6 +38,7 @@ export default function TenantsPage() {
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadTenants = useCallback(
@@ -143,17 +129,25 @@ export default function TenantsPage() {
       render: (t) => {
         const isUpdating = updatingId === t.id
         return (
-          <button
-            onClick={() => handleToggleDisabled(t)}
-            disabled={isUpdating}
-            className={`text-xs font-medium px-3 py-1 rounded ${
-              t.disabled
-                ? 'bg-green-50 text-green-700 hover:bg-green-100'
-                : 'bg-red-50 text-red-700 hover:bg-red-100'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {isUpdating ? '...' : t.disabled ? 'Enable' : 'Disable'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditingTenant(t)}
+              className="text-xs font-medium px-3 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => handleToggleDisabled(t)}
+              disabled={isUpdating}
+              className={`text-xs font-medium px-3 py-1 rounded ${
+                t.disabled
+                  ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                  : 'bg-red-50 text-red-700 hover:bg-red-100'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {isUpdating ? '...' : t.disabled ? 'Enable' : 'Disable'}
+            </button>
+          </div>
         )
       },
     },
@@ -222,6 +216,12 @@ export default function TenantsPage() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={() => loadTenants(page, search)}
+      />
+
+      <EditTenantDialog
+        tenant={editingTenant}
+        onClose={() => setEditingTenant(null)}
+        onUpdated={() => loadTenants(page, search)}
       />
     </div>
   )
