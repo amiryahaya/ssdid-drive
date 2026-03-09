@@ -21,5 +21,7 @@ public static class AdminFeature
             });
 
         GetStats.Map(group);
+        ListUsers.Map(group);
+        UpdateUser.Map(group);
     }
 }
