@@ -49,7 +49,8 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
         // Step 5: Bob sees share in /shares/received with encrypted_key
         var receivedResp = await bob.GetAsync("/api/shares/received");
         Assert.Equal(HttpStatusCode.OK, receivedResp.StatusCode);
-        var receivedShares = await receivedResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var receivedBody = await receivedResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var receivedShares = receivedBody.GetProperty("items");
         var bobShare = Enumerable.Range(0, receivedShares.GetArrayLength())
             .Select(i => receivedShares[i])
             .First(s => s.GetProperty("resource_id").GetString() == folderId);
@@ -62,7 +63,8 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
 
         var bobFilesResp = await bob.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, bobFilesResp.StatusCode);
-        var bobFiles = await bobFilesResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var bobFilesBody = await bobFilesResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var bobFiles = bobFilesBody.GetProperty("items");
         Assert.True(bobFiles.GetArrayLength() >= 1, "Bob should see at least one file");
         var fileNames = Enumerable.Range(0, bobFiles.GetArrayLength())
             .Select(i => bobFiles[i].GetProperty("name").GetString())
@@ -125,11 +127,12 @@ public class SecureFileSharingE2eTests : IClassFixture<SsdidDriveFactory>
         // Step 4: Alice can see Bob's file in the folder listing
         var aliceFilesResp = await alice.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, aliceFilesResp.StatusCode);
-        var aliceFiles = await aliceFilesResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var fileNames = Enumerable.Range(0, aliceFiles.GetArrayLength())
+        var aliceFilesBody = await aliceFilesResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var aliceFiles = aliceFilesBody.GetProperty("items");
+        var fileNames2 = Enumerable.Range(0, aliceFiles.GetArrayLength())
             .Select(i => aliceFiles[i].GetProperty("name").GetString())
             .ToList();
-        Assert.Contains("bob-file.bin", fileNames);
+        Assert.Contains("bob-file.bin", fileNames2);
     }
 
     // ── Test 3: Read ShareHolder Cannot Upload to Shared Folder ─────────

@@ -96,7 +96,8 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
         var response = await client.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var files = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var files = body.GetProperty("items");
         Assert.Equal(2, files.GetArrayLength());
     }
 

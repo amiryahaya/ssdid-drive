@@ -9,13 +9,16 @@ public static class ListCreatedShares
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/created", Handle);
 
-    private static async Task<IResult> Handle(AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(AppDbContext db, CurrentUserAccessor accessor,
+        int page = 1, int pageSize = 50,
+        CancellationToken ct = default)
     {
         var user = accessor.User!;
+        var pagination = new PaginationParams(page, pageSize);
 
         // Order client-side for cross-database compatibility
         // (SQLite cannot ORDER BY DateTimeOffset columns).
-        var shares = (await db.Shares
+        var allShares = (await db.Shares
             .Where(s => s.SharedById == user.Id)
             .Include(s => s.SharedWith)
             .Select(s => new
@@ -35,6 +38,12 @@ public static class ListCreatedShares
             .OrderByDescending(s => s.CreatedAt)
             .ToList();
 
-        return Results.Ok(shares);
+        var total = allShares.Count;
+        var items = allShares
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToList();
+
+        return Results.Ok(new PagedResponse<object>(items, total, pagination.Page, pagination.Take));
     }
 }

@@ -96,7 +96,8 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
         var response = await client1.GetAsync("/api/shares/created");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var shares = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var sharesBody = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var shares = sharesBody.GetProperty("items");
         Assert.True(shares.GetArrayLength() >= 1);
 
         var resourceIds = Enumerable.Range(0, shares.GetArrayLength())
@@ -120,7 +121,8 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
         var response = await client2.GetAsync("/api/shares/received");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var shares = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var sharesBody = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var shares = sharesBody.GetProperty("items");
         Assert.True(shares.GetArrayLength() >= 1);
 
         // Find the share for our folder
@@ -151,9 +153,10 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
 
         // Verify it's gone from created shares
         var listResp = await client1.GetAsync("/api/shares/created");
-        var shares = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var shareIds = Enumerable.Range(0, shares.GetArrayLength())
-            .Select(i => shares[i].GetProperty("id").GetString())
+        var sharesBody2 = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var shares2 = sharesBody2.GetProperty("items");
+        var shareIds = Enumerable.Range(0, shares2.GetArrayLength())
+            .Select(i => shares2[i].GetProperty("id").GetString())
             .ToList();
         Assert.DoesNotContain(shareId, shareIds);
     }
@@ -196,7 +199,8 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
         var response = await client2.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var files = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var filesBody = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var files = filesBody.GetProperty("items");
         Assert.True(files.GetArrayLength() >= 1);
 
         var names = Enumerable.Range(0, files.GetArrayLength())

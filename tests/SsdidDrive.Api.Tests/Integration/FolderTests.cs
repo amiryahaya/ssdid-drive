@@ -90,7 +90,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var response = await client.GetAsync("/api/folders");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var folders = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folders = body.GetProperty("items");
         Assert.True(folders.GetArrayLength() >= 2);
 
         var names = Enumerable.Range(0, folders.GetArrayLength())
@@ -111,7 +112,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var response = await client2.GetAsync("/api/folders");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var folders = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var folders = body.GetProperty("items");
         Assert.Equal(0, folders.GetArrayLength());
     }
 

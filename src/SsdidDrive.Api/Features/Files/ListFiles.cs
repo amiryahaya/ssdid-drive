@@ -9,7 +9,9 @@ public static class ListFiles
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/folders/{folderId:guid}/files", Handle);
 
-    private static async Task<IResult> Handle(Guid folderId, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid folderId, AppDbContext db, CurrentUserAccessor accessor,
+        int page = 1, int pageSize = 50, string? search = null,
+        CancellationToken ct = default)
     {
         var user = accessor.User!;
 
@@ -36,8 +38,15 @@ public static class ListFiles
         if (!hasAccess)
             return AppError.Forbidden("You do not have access to this folder").ToProblemResult();
 
-        var files = await db.Files
-            .Where(f => f.FolderId == folderId)
+        var pagination = new PaginationParams(page, pageSize, search);
+
+        var query = db.Files.Where(f => f.FolderId == folderId);
+
+        if (!string.IsNullOrWhiteSpace(pagination.Search))
+            query = query.Where(f => f.Name.Contains(pagination.Search));
+
+        // Load into memory for client-side ordering (SQLite compatibility).
+        var allMatching = await query
             .Select(f => new
             {
                 f.Id,
@@ -50,9 +59,15 @@ public static class ListFiles
                 f.CreatedAt,
                 f.UpdatedAt
             })
-            .OrderBy(f => f.Name)
             .ToListAsync(ct);
 
-        return Results.Ok(files);
+        var total = allMatching.Count;
+        var items = allMatching
+            .OrderBy(f => f.Name)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToList();
+
+        return Results.Ok(new PagedResponse<object>(items, total, pagination.Page, pagination.Take));
     }
 }
