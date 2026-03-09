@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -213,6 +214,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(i => i.InvitedUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Notification>(e =>
+        {
+            e.ToTable("notifications");
+            e.HasKey(n => n.Id);
+            e.Property(n => n.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(n => n.Type).HasMaxLength(64).IsRequired();
+            e.Property(n => n.Title).HasMaxLength(256).IsRequired();
+            e.Property(n => n.Message).HasMaxLength(1024).IsRequired();
+            e.Property(n => n.IsRead).HasDefaultValue(false);
+            e.Property(n => n.ActionType).HasMaxLength(64);
+            e.Property(n => n.ActionResourceId).HasMaxLength(256);
+            e.Property(n => n.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(n => new { n.UserId, n.IsRead });
+            e.HasIndex(n => new { n.UserId, n.CreatedAt });
+
+            e.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
