@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using SsdidDrive.Api.Crypto;
+using SsdidDrive.Api.Crypto.Providers;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Ssdid;
@@ -167,6 +169,99 @@ public static class TestFixture
         var response = await client.PostAsJsonAsync("/api/shares", request, Json);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
         return (response.StatusCode, body);
+    }
+
+    // ── Wallet Identity Helpers ──
+
+    public static (SsdidIdentity Identity, CryptoProviderFactory CryptoFactory) CreateWalletIdentity()
+    {
+        var providers = new ICryptoProvider[] { new Ed25519Provider() };
+        var cryptoFactory = new CryptoProviderFactory(providers);
+        var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
+        return (identity, cryptoFactory);
+    }
+
+    public static async Task<JsonElement> RegisterWalletAsync(
+        SsdidDriveFactory factory, SsdidIdentity walletIdentity)
+    {
+        var client = factory.CreateClient();
+
+        var regResp = await client.PostAsJsonAsync("/api/auth/ssdid/register",
+            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId }, Json);
+        regResp.EnsureSuccessStatusCode();
+        var regBody = await regResp.Content.ReadFromJsonAsync<JsonElement>();
+        var challenge = regBody.GetProperty("challenge").GetString()!;
+
+        var signedChallenge = walletIdentity.SignChallenge(challenge);
+        var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
+            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge },
+            Json);
+        verifyResp.EnsureSuccessStatusCode();
+        var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
+        return verifyBody.GetProperty("credential");
+    }
+
+    private static readonly TimeSpan SseTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Reads the first SSE data event, or throws <see cref="TimeoutException"/> with a diagnostic message.
+    /// </summary>
+    public static async Task<JsonElement> ReadSseEventOrFail(
+        HttpClient client, string challengeId, string subscriberSecret,
+        CancellationToken ct, string context = "")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get,
+            $"/api/auth/ssdid/events?challenge_id={challengeId}&subscriber_secret={Uri.EscapeDataString(subscriberSecret)}");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        while (!ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line is null) break;
+            if (line.StartsWith("data: "))
+            {
+                var json = line["data: ".Length..];
+                return JsonSerializer.Deserialize<JsonElement>(json);
+            }
+        }
+
+        throw new TimeoutException(
+            $"SSE event not received within timeout{(context.Length > 0 ? $" ({context})" : "")}");
+    }
+
+    /// <summary>
+    /// Full SSE-based wallet authentication: initiate → subscribe SSE → wallet authenticates → returns session token.
+    /// </summary>
+    public static async Task<string> AuthenticateWalletViaSseAsync(
+        SsdidDriveFactory factory, SsdidIdentity walletIdentity, JsonElement credential)
+    {
+        var client = factory.CreateClient();
+
+        // Initiate login
+        var initResp = await client.PostAsync("/api/auth/ssdid/login/initiate", null);
+        initResp.EnsureSuccessStatusCode();
+        var initBody = await initResp.Content.ReadFromJsonAsync<JsonElement>();
+        var challengeId = initBody.GetProperty("challenge_id").GetString()!;
+        var subscriberSecret = initBody.GetProperty("subscriber_secret").GetString()!;
+
+        // Subscribe to SSE (background) — use a separate client to avoid header mutation
+        var sseClient = factory.CreateClient();
+        using var cts = new CancellationTokenSource(SseTimeout);
+        var sseTask = ReadSseEventOrFail(sseClient, challengeId, subscriberSecret, cts.Token, "wallet auth SSE");
+
+        // Wallet authenticates
+        var walletClient = factory.CreateClient();
+        var authResp = await walletClient.PostAsJsonAsync("/api/auth/ssdid/authenticate",
+            new { credential, challenge_id = challengeId }, Json);
+        authResp.EnsureSuccessStatusCode();
+
+        // Receive session token via SSE
+        var sseData = await sseTask;
+        return sseData.GetProperty("session_token").GetString()!;
     }
 
     /// <summary>
