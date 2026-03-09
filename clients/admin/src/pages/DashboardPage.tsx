@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [errors, setErrors] = useState<string[]>([])
 
   useEffect(() => {
+    let mounted = true
     async function fetchData() {
       const errs: string[] = []
 
@@ -30,6 +31,8 @@ export default function DashboardPage() {
         api.get<StatsResponse>('/api/admin/stats'),
         api.get<SessionsResponse>('/api/admin/sessions'),
       ])
+
+      if (!mounted) return
 
       if (statsResult.status === 'fulfilled') {
         setStats(statsResult.value)
@@ -47,6 +50,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     fetchData()
+    return () => { mounted = false }
   }, [])
 
   if (loading) {

@@ -144,11 +144,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   },
 
   fetchTenantById: async (id: string) => {
-    const res = await api.get<TenantsResponse>(`/api/admin/tenants?page=1&page_size=1&search=${id}`)
-    if (res.items.length === 0) {
-      throw new Error('Tenant not found')
-    }
-    return res.items[0]
+    return api.get<Tenant>(`/api/admin/tenants/${id}`)
   },
 
   createTenant: async (name: string, slug: string) => {
@@ -177,6 +173,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const res = await api.get<TenantMembersResponse>(`/api/admin/tenants/${tenantId}/members`)
       set({ tenantMembers: res.items })
+    } catch (err) {
+      set({ tenantMembers: [] })
+      throw err
     } finally {
       set({ tenantMembersLoading: false })
     }

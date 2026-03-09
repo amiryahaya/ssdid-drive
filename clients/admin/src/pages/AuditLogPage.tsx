@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
+import Pagination from '../components/Pagination'
 import { useAdminStore } from '../stores/adminStore'
 import type { AuditLogEntry } from '../stores/adminStore'
 import { formatDateTime } from '../utils/format'
@@ -105,29 +106,13 @@ export default function AuditLogPage() {
         rowKey={(entry) => entry.id}
       />
 
-      {!auditLogLoading && auditLogTotal > 0 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        loading={auditLogLoading}
+        total={auditLogTotal}
+        onChange={setPage}
+      />
     </div>
   )
 }

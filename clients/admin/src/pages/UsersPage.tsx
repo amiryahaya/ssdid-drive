@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
+import Pagination from '../components/Pagination'
 import { useAdminStore } from '../stores/adminStore'
 import type { User } from '../stores/adminStore'
 import { formatDate, truncateDid } from '../utils/format'
@@ -32,6 +33,13 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   const loadUsers = useCallback(
     (currentPage: number, currentSearch: string) => {
@@ -154,29 +162,13 @@ export default function UsersPage() {
 
       <DataTable columns={columns} data={users} loading={usersLoading} rowKey={(u) => u.id} />
 
-      {!usersLoading && usersTotal > 0 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        loading={usersLoading}
+        total={usersTotal}
+        onChange={setPage}
+      />
     </div>
   )
 }

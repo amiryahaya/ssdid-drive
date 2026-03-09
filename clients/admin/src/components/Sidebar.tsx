@@ -98,8 +98,8 @@ export default function Sidebar({ collapsed, onToggle, onClose }: SidebarProps) 
               onClick={handleNavClick}
               className={`flex items-center h-10 mx-2 my-0.5 rounded-md transition-colors duration-150 ${
                 active
-                  ? 'border-l-3 border-blue-600 bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-50 border-l-3 border-transparent'
+                  ? 'border-l-4 border-blue-600 bg-blue-50 text-blue-700'
+                  : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
               }`}
               title={collapsed ? item.label : undefined}
             >
