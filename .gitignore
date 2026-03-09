@@ -47,6 +47,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+## Native runtime binaries (fetched by CD pipeline)
+src/SsdidDrive.Api/runtimes/linux-arm64/
+
 ## Environment & Secrets
 .env
 .env.*
