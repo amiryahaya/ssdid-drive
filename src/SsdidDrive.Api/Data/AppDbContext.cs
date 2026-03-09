@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FileItem> Files => Set<FileItem>();
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -171,6 +172,47 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Invitation>(e =>
+        {
+            e.ToTable("invitations");
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(i => i.Email).HasMaxLength(160);
+            e.Property(i => i.Token).HasMaxLength(256).IsRequired();
+            e.Property(i => i.Message).HasMaxLength(1024);
+            e.Property(i => i.Role).HasMaxLength(32)
+                .HasDefaultValue(TenantRole.Member)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<TenantRole>(v, true));
+            e.Property(i => i.Status).HasMaxLength(32)
+                .HasDefaultValue(InvitationStatus.Pending)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<InvitationStatus>(v, true));
+            e.Property(i => i.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(i => i.UpdatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(i => i.Token).IsUnique();
+            e.HasIndex(i => new { i.TenantId, i.Status });
+            e.HasIndex(i => i.InvitedUserId);
+
+            e.HasOne(i => i.Tenant)
+                .WithMany()
+                .HasForeignKey(i => i.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(i => i.InvitedBy)
+                .WithMany()
+                .HasForeignKey(i => i.InvitedById)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(i => i.InvitedUser)
+                .WithMany()
+                .HasForeignKey(i => i.InvitedUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
