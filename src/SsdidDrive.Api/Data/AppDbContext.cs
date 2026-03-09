@@ -295,6 +295,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     v => v.ToString().ToLowerInvariant(),
                     v => Enum.Parse<RecoveryRequestStatus>(v, true));
             e.Property(rr => rr.ApprovalsReceived).HasDefaultValue(0);
+            e.Property(rr => rr.ApprovedBy).HasMaxLength(2048);
             e.Property(rr => rr.CreatedAt).HasDefaultValueSql("now()");
 
             e.HasIndex(rr => rr.RequesterId);

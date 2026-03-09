@@ -213,6 +213,6 @@ public class DeviceTests : IClassFixture<SsdidDriveFactory>
             .Select(i => devices[i])
             .FirstOrDefault(d => d.GetProperty("id").GetString() == deviceId);
 
-        Assert.Equal("Revoked", revokedDevice.GetProperty("status").GetString());
+        Assert.Equal("revoked", revokedDevice.GetProperty("status").GetString());
     }
 }

@@ -35,7 +35,7 @@ public static class UpdateDevice
             device.DeviceName,
             device.Platform,
             device.DeviceInfo,
-            Status = device.Status.ToString(),
+            Status = device.Status.ToString().ToLowerInvariant(),
             device.KeyAlgorithm,
             PublicKey = device.PublicKey is not null ? Convert.ToBase64String(device.PublicKey) : null,
             device.LastUsedAt,

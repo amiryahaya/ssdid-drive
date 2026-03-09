@@ -27,7 +27,7 @@ public static class ListDevices
                 d.DeviceName,
                 d.Platform,
                 d.DeviceInfo,
-                Status = d.Status.ToString(),
+                Status = d.Status.ToString().ToLowerInvariant(),
                 d.KeyAlgorithm,
                 PublicKey = d.PublicKey != null ? Convert.ToBase64String(d.PublicKey) : null,
                 d.LastUsedAt,

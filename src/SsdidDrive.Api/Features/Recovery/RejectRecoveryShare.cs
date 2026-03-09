@@ -36,7 +36,7 @@ public static class RejectRecoveryShare
         return Results.Ok(new
         {
             share.Id,
-            Status = share.Status.ToString()
+            Status = share.Status.ToString().ToLowerInvariant()
         });
     }
 }

@@ -72,7 +72,7 @@ public static class DistributeShare
             share.RecoveryConfigId,
             share.TrusteeId,
             EncryptedShare = Convert.ToBase64String(share.EncryptedShare),
-            Status = share.Status.ToString(),
+            Status = share.Status.ToString().ToLowerInvariant(),
             share.CreatedAt
         });
     }

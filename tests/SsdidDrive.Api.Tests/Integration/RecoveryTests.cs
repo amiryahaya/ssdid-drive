@@ -85,7 +85,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal(trusteeId, body.GetProperty("trustee_id").GetGuid());
-        Assert.Equal("Pending", body.GetProperty("status").GetString());
+        Assert.Equal("pending", body.GetProperty("status").GetString());
     }
 
     // ── 4. ListTrusteeShares_ReturnsShares ────────────────────────────
@@ -122,7 +122,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.Equal("Accepted", body.GetProperty("status").GetString());
+        Assert.Equal("accepted", body.GetProperty("status").GetString());
     }
 
     // ── 6. RejectShare_ReturnsOk ──────────────────────────────────────
@@ -140,7 +140,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.Equal("Rejected", body.GetProperty("status").GetString());
+        Assert.Equal("rejected", body.GetProperty("status").GetString());
     }
 
     // ── 7. InitiateRecovery_ReturnsCreated ────────────────────────────
@@ -160,7 +160,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.Equal("Pending", body.GetProperty("status").GetString());
+        Assert.Equal("pending", body.GetProperty("status").GetString());
         Assert.Equal(0, body.GetProperty("approvals_received").GetInt32());
     }
 
@@ -206,7 +206,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, approve1.StatusCode);
         var approve1Body = await approve1.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal(1, approve1Body.GetProperty("approvals_received").GetInt32());
-        Assert.Equal("Pending", approve1Body.GetProperty("status").GetString());
+        Assert.Equal("pending", approve1Body.GetProperty("status").GetString());
 
         // Second trustee approves — should reach threshold
         var approve2 = await trustee2Client.PostAsJsonAsync($"/api/recovery/requests/{requestId}/approve", new
@@ -216,7 +216,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, approve2.StatusCode);
         var approve2Body = await approve2.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal(2, approve2Body.GetProperty("approvals_received").GetInt32());
-        Assert.Equal("Approved", approve2Body.GetProperty("status").GetString());
+        Assert.Equal("approved", approve2Body.GetProperty("status").GetString());
     }
 
     // ── 9. GetRecoveryStatus_ReturnsConfig ────────────────────────────
@@ -271,7 +271,7 @@ public class RecoveryTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.Equal("Pending", body.GetProperty("status").GetString());
+        Assert.Equal("pending", body.GetProperty("status").GetString());
         Assert.Equal(0, body.GetProperty("approvals_received").GetInt32());
     }
 

@@ -31,7 +31,7 @@ public static class GetRecoveryStatus
                     s.Id,
                     s.TrusteeId,
                     TrusteeDisplayName = s.Trustee.DisplayName,
-                    Status = s.Status.ToString(),
+                    Status = s.Status.ToString().ToLowerInvariant(),
                     s.CreatedAt
                 }).ToList()
             })

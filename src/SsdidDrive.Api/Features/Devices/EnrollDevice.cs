@@ -33,6 +33,19 @@ public static class EnrollDevice
         if (exists)
             return AppError.Conflict("A device with this fingerprint is already enrolled").ToProblemResult();
 
+        byte[]? publicKeyBytes = null;
+        if (!string.IsNullOrEmpty(req.PublicKey))
+        {
+            try
+            {
+                publicKeyBytes = Convert.FromBase64String(req.PublicKey);
+            }
+            catch (FormatException)
+            {
+                return AppError.BadRequest("Public key is not valid base64").ToProblemResult();
+            }
+        }
+
         var now = DateTimeOffset.UtcNow;
         var device = new Device
         {
@@ -42,7 +55,7 @@ public static class EnrollDevice
             DeviceName = req.DeviceName,
             DeviceInfo = req.DeviceInfo,
             KeyAlgorithm = req.KeyAlgorithm,
-            PublicKey = string.IsNullOrEmpty(req.PublicKey) ? null : Convert.FromBase64String(req.PublicKey),
+            PublicKey = publicKeyBytes,
             Status = DeviceStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
@@ -59,7 +72,7 @@ public static class EnrollDevice
             device.DeviceName,
             device.Platform,
             device.DeviceInfo,
-            Status = device.Status.ToString(),
+            Status = device.Status.ToString().ToLowerInvariant(),
             device.KeyAlgorithm,
             PublicKey = device.PublicKey is not null ? Convert.ToBase64String(device.PublicKey) : null,
             device.LastUsedAt,

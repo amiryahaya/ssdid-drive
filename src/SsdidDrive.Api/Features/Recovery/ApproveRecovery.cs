@@ -44,6 +44,16 @@ public static class ApproveRecovery
         if (string.IsNullOrWhiteSpace(req.EncryptedShare))
             return AppError.BadRequest("Encrypted share is required").ToProblemResult();
 
+        // Prevent duplicate approval from the same trustee
+        var approvedIds = (recoveryRequest.ApprovedBy ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet();
+
+        if (approvedIds.Contains(user.Id.ToString()))
+            return AppError.BadRequest("You have already approved this recovery request").ToProblemResult();
+
+        approvedIds.Add(user.Id.ToString());
+        recoveryRequest.ApprovedBy = string.Join(",", approvedIds);
         recoveryRequest.ApprovalsReceived++;
 
         if (recoveryRequest.ApprovalsReceived >= recoveryRequest.Config.Threshold)
@@ -57,7 +67,7 @@ public static class ApproveRecovery
         return Results.Ok(new
         {
             recoveryRequest.Id,
-            Status = recoveryRequest.Status.ToString(),
+            Status = recoveryRequest.Status.ToString().ToLowerInvariant(),
             recoveryRequest.ApprovalsReceived,
             Threshold = recoveryRequest.Config.Threshold,
             recoveryRequest.CompletedAt

@@ -50,7 +50,7 @@ public static class InitiateRecovery
             request.Id,
             request.RequesterId,
             request.RecoveryConfigId,
-            Status = request.Status.ToString(),
+            Status = request.Status.ToString().ToLowerInvariant(),
             request.ApprovalsReceived,
             request.CreatedAt
         });

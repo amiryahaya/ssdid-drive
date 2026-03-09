@@ -29,7 +29,7 @@ public static class ListTrusteeShares
             rs.RecoveryConfigId,
             rs.TrusteeId,
             EncryptedShare = Convert.ToBase64String(rs.EncryptedShare),
-            Status = rs.Status.ToString(),
+            Status = rs.Status.ToString().ToLowerInvariant(),
             rs.CreatedAt,
             ConfigOwnerDisplayName = rs.Config.User.DisplayName
         });

@@ -24,12 +24,16 @@ public static class GetRecoveryRequest
         if (request is null)
             return AppError.NotFound("Recovery request not found").ToProblemResult();
 
+        // Authorization: only the requester or the config owner may view this request
+        if (request.RequesterId != user.Id && request.Config.UserId != user.Id)
+            return AppError.NotFound("Recovery request not found").ToProblemResult();
+
         return Results.Ok(new
         {
             request.Id,
             request.RequesterId,
             request.RecoveryConfigId,
-            Status = request.Status.ToString(),
+            Status = request.Status.ToString().ToLowerInvariant(),
             request.ApprovalsReceived,
             Threshold = request.Config.Threshold,
             request.CreatedAt,
