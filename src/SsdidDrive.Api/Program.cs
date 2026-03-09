@@ -92,6 +92,7 @@ else
     builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
     builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
+    builder.Services.AddHealthChecks();
 }
 
 builder.Services.AddHttpClient<RegistryClient>(client =>

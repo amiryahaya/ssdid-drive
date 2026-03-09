@@ -190,6 +190,11 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         }
     }
 
+    // Exact session/challenge count requires SCAN across all keys — return 0 as approximation.
+    // For production monitoring, use Redis INFO or external metrics.
+    public int ActiveSessionCount => 0;
+    public int ActiveChallengeCount => 0;
+
     // ── Internal DTOs ──
 
     private record ChallengeData(string Challenge, string KeyId, DateTimeOffset CreatedAt);

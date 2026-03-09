@@ -89,6 +89,9 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
             Interlocked.Decrement(ref _sessionCount);
     }
 
+    public int ActiveSessionCount => _sessions.Count;
+    public int ActiveChallengeCount => _challenges.Count;
+
     internal void CreateSessionDirect(string did, string token)
     {
         if (_sessions.TryAdd(token, new SessionEntry(did, _clock.GetUtcNow())))

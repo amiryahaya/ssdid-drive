@@ -34,6 +34,18 @@ public class AdminTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task AdminSessions_ReturnsSessionCounts()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "SessionAdmin", systemRole: "SuperAdmin");
+        var response = await client.GetAsync("/api/admin/sessions");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.TryGetProperty("active_sessions", out _));
+        Assert.True(body.TryGetProperty("active_challenges", out _));
+    }
+
+    [Fact]
     public async Task AdminListUsers_ReturnsAllUsers()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "AdminLister", systemRole: "SuperAdmin");
