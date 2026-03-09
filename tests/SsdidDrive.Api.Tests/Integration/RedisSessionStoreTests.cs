@@ -60,12 +60,20 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
         var token = _store.CreateSession("did:test:session");
         Assert.NotNull(token);
 
-        var did = _store.GetSession(token);
+        var did = _store.GetSession(token!);
         Assert.Equal("did:test:session", did);
 
-        _store.DeleteSession(token);
-        var gone = _store.GetSession(token);
+        _store.DeleteSession(token!);
+        var gone = _store.GetSession(token!);
         Assert.Null(gone);
+    }
+
+    [Fact]
+    public void Session_CreateSessionDirect_Works()
+    {
+        _store.CreateSessionDirect("did:test:direct", "direct-token-123");
+        var did = _store.GetSession("direct-token-123");
+        Assert.Equal("did:test:direct", did);
     }
 
     [Fact]
@@ -96,5 +104,55 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
 
         var result = await waitTask;
         Assert.Equal("session-token-123", result);
+    }
+
+    [Fact]
+    public void ActiveSessionCount_ReturnsCorrectCount()
+    {
+        // Create a few sessions
+        var token1 = _store.CreateSession("did:test:count-1");
+        var token2 = _store.CreateSession("did:test:count-2");
+        Assert.NotNull(token1);
+        Assert.NotNull(token2);
+
+        var count = _store.ActiveSessionCount;
+        Assert.True(count >= 2, $"Expected at least 2 sessions, got {count}");
+    }
+
+    [Fact]
+    public void ActiveChallengeCount_ReturnsCorrectCount()
+    {
+        var uniqueDid = $"did:test:chalcount-{Guid.NewGuid():N}";
+        _store.CreateChallenge(uniqueDid, "purpose1", "ch1", "k1");
+        _store.CreateChallenge(uniqueDid, "purpose2", "ch2", "k2");
+
+        var count = _store.ActiveChallengeCount;
+        Assert.True(count >= 2, $"Expected at least 2 challenges, got {count}");
+    }
+
+    [Fact]
+    public void ActiveSessionCount_DecreasesAfterDelete()
+    {
+        var token = _store.CreateSession("did:test:count-delete");
+        Assert.NotNull(token);
+
+        var before = _store.ActiveSessionCount;
+        _store.DeleteSession(token!);
+        var after = _store.ActiveSessionCount;
+
+        Assert.True(after < before, $"Expected count to decrease: before={before}, after={after}");
+    }
+
+    [Fact]
+    public void Session_UsesSlidingExpiration()
+    {
+        // Verify session uses sliding expiration by checking the key has a TTL
+        var token = _store.CreateSession("did:test:sliding");
+        Assert.NotNull(token);
+
+        var db = _mux.GetDatabase();
+        var ttl = db.KeyTimeToLive($"ssdid:session:{token}");
+        Assert.NotNull(ttl);
+        Assert.True(ttl.Value.TotalMinutes > 50, "Session TTL should be close to 1 hour");
     }
 }

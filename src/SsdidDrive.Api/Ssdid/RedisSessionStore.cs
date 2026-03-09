@@ -40,32 +40,44 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         var entry = new ChallengeData(challenge, keyId, DateTimeOffset.UtcNow);
         var json = JsonSerializer.Serialize(entry);
 
-        // Use raw Redis StringSet (not IDistributedCache) so that ConsumeChallenge
-        // can use the atomic StringGetDelete to prevent TOCTOU races.
-        var db = _redis.GetDatabase();
-        db.StringSet(key, json, ChallengeTtl);
+        try
+        {
+            var db = _redis.GetDatabase();
+            db.StringSet(key, json, ChallengeTtl);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for CreateChallenge");
+            throw;
+        }
     }
 
     public SessionStore.ChallengeEntry? ConsumeChallenge(string did, string purpose)
     {
         var key = $"{ChallengePrefix}{did}:{purpose}";
-        var db = _redis.GetDatabase();
 
-        // Atomic get-and-delete via Redis GETDEL (Redis 6.2+) — prevents TOCTOU race
-        // where two concurrent callers could both consume the same challenge.
-        var value = db.StringGetDelete(key);
+        try
+        {
+            var db = _redis.GetDatabase();
+            var value = db.StringGetDelete(key);
 
-        if (value.IsNullOrEmpty)
+            if (value.IsNullOrEmpty)
+                return null;
+
+            var data = JsonSerializer.Deserialize<ChallengeData>(value.ToString());
+            if (data is null)
+                return null;
+
+            if (DateTimeOffset.UtcNow - data.CreatedAt > ChallengeTtl)
+                return null;
+
+            return new SessionStore.ChallengeEntry(data.Challenge, data.KeyId, data.CreatedAt);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for ConsumeChallenge");
             return null;
-
-        var data = JsonSerializer.Deserialize<ChallengeData>(value.ToString());
-        if (data is null)
-            return null;
-
-        if (DateTimeOffset.UtcNow - data.CreatedAt > ChallengeTtl)
-            return null;
-
-        return new SessionStore.ChallengeEntry(data.Challenge, data.KeyId, data.CreatedAt);
+        }
     }
 
     // ── Sessions ──
@@ -77,10 +89,18 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         var entry = new SessionData(did, DateTimeOffset.UtcNow);
         var json = JsonSerializer.Serialize(entry);
 
-        _cache.SetString(key, json, new DistributedCacheEntryOptions
+        try
         {
-            AbsoluteExpirationRelativeToNow = SessionTtl
-        });
+            _cache.SetString(key, json, new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = SessionTtl
+            });
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for CreateSession");
+            return null;
+        }
 
         return token;
     }
@@ -88,19 +108,35 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
     public string? GetSession(string token)
     {
         var key = $"{SessionPrefix}{token}";
-        var json = _cache.GetString(key);
 
-        if (json is null)
+        try
+        {
+            var json = _cache.GetString(key);
+            if (json is null)
+                return null;
+
+            var data = JsonSerializer.Deserialize<SessionData>(json);
+            return data?.Did;
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for GetSession");
             return null;
-
-        var data = JsonSerializer.Deserialize<SessionData>(json);
-        return data?.Did;
+        }
     }
 
     public void DeleteSession(string token)
     {
         var key = $"{SessionPrefix}{token}";
-        _cache.Remove(key);
+
+        try
+        {
+            _cache.Remove(key);
+        }
+        catch (RedisConnectionException ex)
+        {
+            _logger.LogError(ex, "Redis unavailable for DeleteSession");
+        }
     }
 
     // ── SSE subscriber secrets ──
@@ -190,10 +226,65 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         }
     }
 
-    // Exact session/challenge count requires SCAN across all keys — return 0 as approximation.
-    // For production monitoring, use Redis INFO or external metrics.
-    public int ActiveSessionCount => 0;
-    public int ActiveChallengeCount => 0;
+    // ── Metrics ──
+
+    public int ActiveSessionCount
+    {
+        get
+        {
+            try
+            {
+                return CountKeysByPattern($"{SessionPrefix}*");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to count active sessions");
+                return -1;
+            }
+        }
+    }
+
+    public int ActiveChallengeCount
+    {
+        get
+        {
+            try
+            {
+                return CountKeysByPattern($"{ChallengePrefix}*");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to count active challenges");
+                return -1;
+            }
+        }
+    }
+
+    private int CountKeysByPattern(string pattern)
+    {
+        var count = 0;
+        foreach (var endpoint in _redis.GetEndPoints())
+        {
+            var server = _redis.GetServer(endpoint);
+            foreach (var _ in server.Keys(pattern: pattern, pageSize: 250))
+                count++;
+        }
+        return count;
+    }
+
+    // ── Internal method for test setup ──
+
+    internal void CreateSessionDirect(string did, string token)
+    {
+        var key = $"{SessionPrefix}{token}";
+        var entry = new SessionData(did, DateTimeOffset.UtcNow);
+        var json = JsonSerializer.Serialize(entry);
+
+        _cache.SetString(key, json, new DistributedCacheEntryOptions
+        {
+            SlidingExpiration = SessionTtl
+        });
+    }
 
     // ── Internal DTOs ──
 

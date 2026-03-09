@@ -31,7 +31,7 @@ public static class TestFixture
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sessionStore = scope.ServiceProvider.GetRequiredService<SessionStore>();
+        var sessionStore = (SessionStore)scope.ServiceProvider.GetRequiredService<ISessionStore>();
 
         var tenant = new Tenant
         {
@@ -85,7 +85,7 @@ public static class TestFixture
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sessionStore = scope.ServiceProvider.GetRequiredService<SessionStore>();
+        var sessionStore = (SessionStore)scope.ServiceProvider.GetRequiredService<ISessionStore>();
 
         var user = new User
         {
