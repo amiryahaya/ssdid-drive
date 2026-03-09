@@ -213,6 +213,27 @@ EOF
 
 ## 6. Build & Deploy
 
+Two options: pull a pre-built image from GHCR (recommended), or build on the VPS.
+
+### Option A: Pull from GHCR (Recommended)
+
+The CD pipeline automatically builds and pushes container images on every push to `main`.
+
+```bash
+# Log in to GHCR (use a GitHub Personal Access Token with read:packages scope)
+echo $GITHUB_TOKEN | podman login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+
+# Pull the latest image
+podman pull ghcr.io/amiryahaya/ssdid-drive/api:latest
+
+# Tag for local use in compose
+podman tag ghcr.io/amiryahaya/ssdid-drive/api:latest ssdid-drive-api:latest
+```
+
+Then skip to [6.5 Start Services](#65-start-services).
+
+### Option B: Build on VPS
+
 Everything is compiled on the VPS — no pre-built binaries needed (except `libkazsign.so` which is built from source).
 
 ### 6.1 Install Build Dependencies
@@ -248,25 +269,37 @@ mkdir -p ~/ssdid-drive/repo/src/SsdidDrive.Api/runtimes/linux-${ARCH}/native
 cp lib/libkazsign.so ~/ssdid-drive/repo/src/SsdidDrive.Api/runtimes/linux-${ARCH}/native/
 ```
 
-### 6.4 Build Container Image
+### 6.4 Build Admin SPA
+
+```bash
+cd ~/ssdid-drive/repo/clients/admin
+npm ci
+npm run build
+# Output goes to src/SsdidDrive.Api/wwwroot/admin/
+```
+
+### 6.5 Build Container Image
 
 The .NET API is compiled inside the container (multi-stage build — SDK for build, runtime-only for deploy):
 
 ```bash
 cd ~/ssdid-drive/repo
-podman build -t ssdid-drive-api:latest -f src/SsdidDrive.Api/Containerfile src/SsdidDrive.Api/
+ARCH=$(dpkg --print-architecture)
+podman build --build-arg TARGETARCH=${ARCH} \
+  -t ssdid-drive-api:latest \
+  -f src/SsdidDrive.Api/Containerfile src/SsdidDrive.Api/
 ```
 
 This downloads the .NET 10 SDK (~800 MB, cached after first build), compiles the API, and produces a slim runtime image.
 
-### 6.5 Start Services
+### 6.6 Start Services
 
 ```bash
 cd ~/ssdid-drive
 podman compose up -d
 ```
 
-### 6.6 Verify
+### 6.7 Verify
 
 ```bash
 # Check containers are running
