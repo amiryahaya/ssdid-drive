@@ -15,9 +15,6 @@ public static class SetShareExpiry
     {
         var user = accessor.User!;
 
-        if (req.ExpiresAt.HasValue && req.ExpiresAt.Value <= DateTimeOffset.UtcNow)
-            return AppError.BadRequest("Expiry date must be in the future").ToProblemResult();
-
         var share = await db.Shares.FirstOrDefaultAsync(s => s.Id == id, ct);
 
         if (share is null)
@@ -25,6 +22,9 @@ public static class SetShareExpiry
 
         if (share.SharedById != user.Id)
             return AppError.Forbidden("Only the share owner can update expiry").ToProblemResult();
+
+        if (req.ExpiresAt.HasValue && req.ExpiresAt.Value <= DateTimeOffset.UtcNow)
+            return AppError.BadRequest("Expiry date must be in the future").ToProblemResult();
 
         share.ExpiresAt = req.ExpiresAt;
         await db.SaveChangesAsync(ct);

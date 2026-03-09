@@ -164,7 +164,22 @@ public class ShareManagementTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ── 9. SetExpiry with null (remove expiry) → 200 ───────────────────
+    // ── 9. SetExpiry as recipient → 403 ─────────────────────────────────
+
+    [Fact]
+    public async Task SetExpiry_AsRecipient_Returns403()
+    {
+        var (_, recipientClient, _, shareId, _) = await SetupShareAsync("ExpiryOwner4", "ExpiryRecip4");
+
+        var response = await recipientClient.PatchAsJsonAsync(
+            $"/api/shares/{shareId}/expiry",
+            new { expires_at = DateTimeOffset.UtcNow.AddDays(7) },
+            TestFixture.Json);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ── 10. SetExpiry with null (remove expiry) → 200 ──────────────────
 
     [Fact]
     public async Task SetExpiry_Null_RemovesExpiry_Returns200()

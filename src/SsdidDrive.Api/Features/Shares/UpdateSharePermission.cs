@@ -15,9 +15,6 @@ public static class UpdateSharePermission
     {
         var user = accessor.User!;
 
-        if (req.Permission is not ("read" or "write"))
-            return AppError.BadRequest("Permission must be 'read' or 'write'").ToProblemResult();
-
         var share = await db.Shares.FirstOrDefaultAsync(s => s.Id == id, ct);
 
         if (share is null)
@@ -25,6 +22,9 @@ public static class UpdateSharePermission
 
         if (share.SharedById != user.Id)
             return AppError.Forbidden("Only the share owner can update permission").ToProblemResult();
+
+        if (req.Permission is not ("read" or "write"))
+            return AppError.BadRequest("Permission must be 'read' or 'write'").ToProblemResult();
 
         share.Permission = req.Permission;
         await db.SaveChangesAsync(ct);
