@@ -126,11 +126,16 @@ pids/
 docker-compose.override.yml
 compose.override.yml
 
+## Claude Code
+.claude/settings.local.json
+
 ## Test artifacts
 *.coverage
 *.coveragexml
 lcov.info
 .nyc_output/
+test-results/
+playwright-report/
 
 ## Backup files
 *.bak
