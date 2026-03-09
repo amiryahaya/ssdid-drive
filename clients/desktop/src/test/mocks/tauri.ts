@@ -192,10 +192,6 @@ export function createTauriMocks() {
     getNotifications: vi.fn().mockResolvedValue(mockNotifications),
     markNotificationRead: vi.fn().mockResolvedValue(undefined),
     markAllNotificationsRead: vi.fn().mockResolvedValue(undefined),
-    // Credential mocks
-    listCredentials: vi.fn().mockResolvedValue([]),
-    // OIDC mocks
-    oidcGetProviders: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -261,12 +257,6 @@ export async function setupTauriMocks(mocks = createTauriMocks()) {
         return mocks.markNotificationRead(typedArgs?.notificationId as string);
       case 'mark_all_notifications_read':
         return mocks.markAllNotificationsRead();
-      // Credential commands
-      case 'list_credentials':
-        return mocks.listCredentials();
-      // OIDC commands
-      case 'oidc_get_providers':
-        return mocks.oidcGetProviders();
       default:
         console.warn(`Unhandled mock command: ${cmd}`);
         return undefined;
