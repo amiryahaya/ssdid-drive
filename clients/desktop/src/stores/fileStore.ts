@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import tauriService from '../services/tauri';
 
 interface FilePreview {
   file_id: string;
@@ -172,6 +173,7 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   uploadFile: async (path, folderId) => {
     const uploadId = crypto.randomUUID();
+    const fileId = crypto.randomUUID();
 
     // Listen for progress events
     let unlisten: UnlistenFn | null = null;
@@ -182,10 +184,47 @@ export const useFileStore = create<FileState>((set, get) => ({
         }));
       });
 
+      // Encrypt the file before upload if we have a folder context
+      let uploadPath = path;
+      let encryptionMeta: { file_key: string; nonce: string; algorithm: string } | null = null;
+
+      const targetFolderId = folderId ?? get().currentFolder?.id ?? null;
+      if (targetFolderId) {
+        try {
+          // 1. Get folder encryption metadata (KEM ciphertext + wrapped folder key)
+          const folderMeta = await tauriService.getFolderEncryptionMetadata(targetFolderId);
+
+          // 2. Decapsulate the folder key using user's KEM secret keys
+          const { folder_key: folderKey } = await tauriService.decapsulateFolderKey(
+            folderMeta.kem_ciphertext,
+            folderMeta.wrapped_folder_key,
+            folderMeta.encrypted_ml_kem_sk,
+            folderMeta.encrypted_kaz_kem_sk,
+          );
+
+          // 3. Encrypt the file: derives file key via HKDF(folder_key, file_id),
+          //    then encrypts content with AES-256-GCM
+          const encryptResult = await tauriService.encryptFile(path, folderKey, fileId);
+          uploadPath = encryptResult.ciphertext_path;
+          encryptionMeta = {
+            file_key: encryptResult.file_key,
+            nonce: encryptResult.nonce,
+            algorithm: 'AES-256-GCM',
+          };
+        } catch (encryptError) {
+          // Log but don't block upload — graceful fallback to unencrypted
+          console.warn('File encryption failed, uploading without encryption:', encryptError);
+        }
+      }
+
       await invoke('upload_file', {
-        filePath: path,
-        folderId: folderId ?? null,
+        filePath: uploadPath,
+        folderId: targetFolderId,
         fileName: null,
+        fileId,
+        encryptedFileKey: encryptionMeta?.file_key ?? null,
+        nonce: encryptionMeta?.nonce ?? null,
+        algorithm: encryptionMeta?.algorithm ?? null,
       });
 
       // Refresh file list

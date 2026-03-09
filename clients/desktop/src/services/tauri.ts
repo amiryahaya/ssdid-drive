@@ -118,12 +118,20 @@ export const tauriService = {
   async uploadFile(
     filePath: string,
     folderId?: string,
-    fileName?: string
+    fileName?: string,
+    fileId?: string,
+    encryptedFileKey?: string,
+    nonce?: string,
+    algorithm?: string
   ): Promise<FileItem> {
     return invoke('upload_file', {
       filePath,
       folderId: folderId ?? null,
       fileName: fileName ?? null,
+      fileId: fileId ?? null,
+      encryptedFileKey: encryptedFileKey ?? null,
+      nonce: nonce ?? null,
+      algorithm: algorithm ?? null,
     });
   },
 
@@ -309,6 +317,49 @@ export const tauriService = {
 
   async piiClearKemKeys(): Promise<void> {
     return invoke('pii_clear_kem_keys');
+  },
+
+  // ==================== Crypto Commands ====================
+
+  async encryptFile(
+    filePath: string,
+    folderKey: string,
+    fileId: string
+  ): Promise<{ ciphertext_path: string; file_key: string; nonce: string }> {
+    return invoke('encrypt_file', { filePath, folderKey, fileId });
+  },
+
+  async decryptFile(
+    ciphertextPath: string,
+    folderKey: string,
+    fileId: string
+  ): Promise<{ plaintext_path: string }> {
+    return invoke('decrypt_file', { ciphertextPath, folderKey, fileId });
+  },
+
+  async decapsulateFolderKey(
+    kemCiphertext: string,
+    wrappedFolderKey: string,
+    encryptedMlKemSk: string,
+    encryptedKazKemSk: string
+  ): Promise<{ folder_key: string }> {
+    return invoke('decapsulate_folder_key', {
+      kemCiphertext,
+      wrappedFolderKey,
+      encryptedMlKemSk,
+      encryptedKazKemSk,
+    });
+  },
+
+  async getFolderEncryptionMetadata(
+    folderId: string
+  ): Promise<{
+    kem_ciphertext: string;
+    wrapped_folder_key: string;
+    encrypted_ml_kem_sk: string;
+    encrypted_kaz_kem_sk: string;
+  }> {
+    return invoke('get_folder_encryption_metadata', { folderId });
   },
 };
 
