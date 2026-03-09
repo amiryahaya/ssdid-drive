@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
 
 namespace SsdidDrive.Api.Ssdid;
 
-// TODO: Replace with IDistributedCache or Redis-backed implementation
-// for horizontal scaling. The current in-memory store is single-instance only.
-
+/// <summary>
+/// In-memory session and challenge store for single-instance deployments.
+/// Uses sliding expiration for sessions (matching Redis store semantics).
+/// </summary>
 public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 {
     private readonly ConcurrentDictionary<string, ChallengeEntry> _challenges = new();
@@ -13,22 +15,19 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
     private readonly ConcurrentDictionary<string, WaiterEntry> _completionWaiters = new();
     private readonly ConcurrentDictionary<string, (string Secret, DateTimeOffset CreatedAt)> _subscriberSecrets = new();
     private readonly TimeProvider _clock;
+    private readonly SessionStoreOptions _options;
     private long _sessionCount;
     private Timer? _gcTimer;
 
-    public SessionStore(TimeProvider? clock = null)
+    private static readonly TimeSpan GcInterval = TimeSpan.FromMinutes(1);
+
+    public SessionStore(IOptions<SessionStoreOptions>? options = null, TimeProvider? clock = null)
     {
         _clock = clock ?? TimeProvider.System;
+        _options = options?.Value ?? new SessionStoreOptions();
     }
 
-    private static readonly TimeSpan ChallengeTtl = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(1);
-    private static readonly TimeSpan GcInterval = TimeSpan.FromMinutes(1);
-    private const int MaxSessions = 10_000;
-
     // ── Challenges ──
-
-    public record ChallengeEntry(string Challenge, string KeyId, DateTimeOffset CreatedAt);
 
     public void CreateChallenge(string did, string purpose, string challenge, string keyId)
     {
@@ -42,30 +41,50 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_challenges.TryRemove(key, out var entry))
             return null;
 
-        if (_clock.GetUtcNow() - entry.CreatedAt > ChallengeTtl)
+        if (_clock.GetUtcNow() - entry.CreatedAt > _options.ChallengeTtl)
             return null;
 
         return entry;
     }
 
-    // ── Sessions ──
+    // ── Sessions (sliding expiration) ──
 
-    private record SessionEntry(string Did, DateTimeOffset CreatedAt);
+    private class SessionEntry
+    {
+        public string Did { get; }
+        private long _lastAccessedTicks;
+
+        public SessionEntry(string did, DateTimeOffset lastAccessed)
+        {
+            Did = did;
+            _lastAccessedTicks = lastAccessed.UtcTicks;
+        }
+
+        public DateTimeOffset LastAccessedAt =>
+            new(Interlocked.Read(ref _lastAccessedTicks), TimeSpan.Zero);
+
+        public void Touch(DateTimeOffset now) =>
+            Interlocked.Exchange(ref _lastAccessedTicks, now.UtcTicks);
+    }
 
     public string? CreateSession(string did)
     {
-        if (Interlocked.Read(ref _sessionCount) >= MaxSessions)
+        // Pre-increment to reserve a slot, then roll back if TryAdd fails.
+        var count = Interlocked.Increment(ref _sessionCount);
+        if (count > _options.MaxSessions)
+        {
+            Interlocked.Decrement(ref _sessionCount);
             return null;
+        }
 
         var token = SsdidCrypto.GenerateChallenge();
 
         if (_sessions.TryAdd(token, new SessionEntry(did, _clock.GetUtcNow())))
-        {
-            Interlocked.Increment(ref _sessionCount);
             return token;
-        }
 
-        return null; // Token collision (astronomically unlikely with 32 random bytes)
+        // Token collision (astronomically unlikely with 32 random bytes) — release slot.
+        Interlocked.Decrement(ref _sessionCount);
+        return null;
     }
 
     public string? GetSession(string token)
@@ -73,13 +92,16 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_sessions.TryGetValue(token, out var entry))
             return null;
 
-        if (_clock.GetUtcNow() - entry.CreatedAt > SessionTtl)
+        var now = _clock.GetUtcNow();
+        if (now - entry.LastAccessedAt > _options.SessionTtl)
         {
             if (_sessions.TryRemove(token, out _))
                 Interlocked.Decrement(ref _sessionCount);
             return null;
         }
 
+        // Slide the expiration window forward on each access.
+        entry.Touch(now);
         return entry.Did;
     }
 
@@ -112,7 +134,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
         if (!_subscriberSecrets.TryGetValue(challengeId, out var entry))
             return false;
 
-        if (_clock.GetUtcNow() - entry.CreatedAt > ChallengeTtl)
+        if (_clock.GetUtcNow() - entry.CreatedAt > _options.ChallengeTtl)
         {
             _subscriberSecrets.TryRemove(challengeId, out _);
             return false;
@@ -169,13 +191,13 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 
         foreach (var (key, entry) in _challenges)
         {
-            if (now - entry.CreatedAt > ChallengeTtl)
+            if (now - entry.CreatedAt > _options.ChallengeTtl)
                 _challenges.TryRemove(key, out _);
         }
 
         foreach (var (key, entry) in _sessions)
         {
-            if (now - entry.CreatedAt > SessionTtl)
+            if (now - entry.LastAccessedAt > _options.SessionTtl)
             {
                 if (_sessions.TryRemove(key, out _))
                     Interlocked.Decrement(ref _sessionCount);
@@ -184,7 +206,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 
         foreach (var (key, entry) in _completionWaiters)
         {
-            if (now - entry.CreatedAt > ChallengeTtl)
+            if (now - entry.CreatedAt > _options.ChallengeTtl)
             {
                 if (_completionWaiters.TryRemove(key, out var removed))
                     removed.Tcs.TrySetCanceled();
@@ -193,7 +215,7 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
 
         foreach (var (key, entry) in _subscriberSecrets)
         {
-            if (now - entry.CreatedAt > ChallengeTtl)
+            if (now - entry.CreatedAt > _options.ChallengeTtl)
                 _subscriberSecrets.TryRemove(key, out _);
         }
     }

@@ -66,6 +66,10 @@ builder.Services.AddSingleton<SsdidIdentity>(sp =>
     return SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
 });
 
+// ── Session Store Options ──
+builder.Services.Configure<SessionStoreOptions>(
+    builder.Configuration.GetSection(SessionStoreOptions.SectionName));
+
 // ── Session Store (Redis or in-memory) ──
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 if (!string.IsNullOrEmpty(redisConnection))
@@ -75,10 +79,15 @@ if (!string.IsNullOrEmpty(redisConnection))
     redisOptions.ConnectRetry = 3;
     redisOptions.ReconnectRetryPolicy = new ExponentialRetry(5000);
 
+    // InstanceName must be empty: RedisSessionStore already namespaces all keys
+    // with "ssdid:session:" and "ssdid:challenge:" prefixes. Setting InstanceName
+    // here would cause IDistributedCache to prepend an additional "ssdid:" prefix,
+    // producing keys like "ssdid:ssdid:session:{token}" that server.Keys() and
+    // direct db.StringGet() calls would never match.
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnection;
-        options.InstanceName = "ssdid:";
+        options.InstanceName = "";
     });
     builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
         ConnectionMultiplexer.Connect(redisOptions));

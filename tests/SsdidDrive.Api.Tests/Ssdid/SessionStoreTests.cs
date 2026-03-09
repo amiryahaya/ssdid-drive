@@ -98,7 +98,7 @@ public class SessionStoreTests
     public void GetSession_ExpiredSession_ReturnsNull()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var store = new SessionStore(clock);
+        var store = new SessionStore(clock: clock);
         var did = "did:ssdid:expired-session";
         var token = store.CreateSession(did);
         Assert.NotNull(token);
@@ -111,10 +111,35 @@ public class SessionStoreTests
     }
 
     [Fact]
+    public void GetSession_SlidingExpiration_ExtendsLifetime()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = new SessionStore(clock: clock);
+        var did = "did:ssdid:sliding-test";
+        var token = store.CreateSession(did);
+        Assert.NotNull(token);
+
+        // Advance 50 minutes (within the 60-min window) and access — should slide the window.
+        clock.Advance(TimeSpan.FromMinutes(50));
+        var mid = store.GetSession(token!);
+        Assert.Equal(did, mid);
+
+        // Advance another 50 minutes (100 min total from creation, but only 50 from last access).
+        clock.Advance(TimeSpan.FromMinutes(50));
+        var still = store.GetSession(token!);
+        Assert.Equal(did, still);
+
+        // Now advance past the sliding window without accessing.
+        clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
+        var expired = store.GetSession(token!);
+        Assert.Null(expired);
+    }
+
+    [Fact]
     public void ConsumeChallenge_ExpiredChallenge_ReturnsNull()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var store = new SessionStore(clock);
+        var store = new SessionStore(clock: clock);
         var did = "did:ssdid:expired-challenge";
         var purpose = "register";
 

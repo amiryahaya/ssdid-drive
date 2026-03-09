@@ -31,7 +31,7 @@ public static class TestFixture
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sessionStore = scope.ServiceProvider.GetRequiredService<SessionStore>();
+        var sessionStore = scope.ServiceProvider.GetRequiredService<ISessionStore>();
 
         var tenant = new Tenant
         {
@@ -69,7 +69,7 @@ public static class TestFixture
         db.UserTenants.Add(userTenant);
         await db.SaveChangesAsync();
 
-        sessionStore.CreateSessionDirect(did, sessionToken);
+        CreateSessionDirect(sessionStore, did, sessionToken);
 
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken);
@@ -85,7 +85,7 @@ public static class TestFixture
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sessionStore = scope.ServiceProvider.GetRequiredService<SessionStore>();
+        var sessionStore = scope.ServiceProvider.GetRequiredService<ISessionStore>();
 
         var user = new User
         {
@@ -109,7 +109,7 @@ public static class TestFixture
         db.UserTenants.Add(userTenant);
         await db.SaveChangesAsync();
 
-        sessionStore.CreateSessionDirect(did, sessionToken);
+        CreateSessionDirect(sessionStore, did, sessionToken);
 
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken);
@@ -167,5 +167,26 @@ public static class TestFixture
         var response = await client.PostAsJsonAsync("/api/shares", request, Json);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
         return (response.StatusCode, body);
+    }
+
+    /// <summary>
+    /// Dispatches CreateSessionDirect to whichever concrete session store is registered,
+    /// avoiding a hard cast that breaks when RedisSessionStore is in use.
+    /// </summary>
+    private static void CreateSessionDirect(ISessionStore store, string did, string token)
+    {
+        switch (store)
+        {
+            case SessionStore inMemory:
+                inMemory.CreateSessionDirect(did, token);
+                break;
+            case RedisSessionStore redis:
+                redis.CreateSessionDirect(did, token);
+                break;
+            default:
+                throw new InvalidOperationException(
+                    $"TestFixture does not know how to inject a session into {store.GetType().Name}. " +
+                    "Add a case above or expose CreateSessionDirect on ISessionStore.");
+        }
     }
 }
