@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
+import UsersPage from './pages/UsersPage'
 
 function AuthenticatedApp() {
   const user = useAuthStore((s) => s.user)
@@ -17,6 +18,9 @@ function AuthenticatedApp() {
             <nav className="flex gap-4 text-sm">
               <Link to="/" className="text-gray-600 hover:text-gray-900">
                 Dashboard
+              </Link>
+              <Link to="/users" className="text-gray-600 hover:text-gray-900">
+                Users
               </Link>
             </nav>
             <div className="flex items-center gap-3 text-sm">
@@ -36,6 +40,7 @@ function AuthenticatedApp() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/users" element={<UsersPage />} />
         </Routes>
       </main>
     </div>
