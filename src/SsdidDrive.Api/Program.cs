@@ -14,6 +14,7 @@ using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Tenants;
 using SsdidDrive.Api.Features.Notifications;
 using SsdidDrive.Api.Features.Credentials;
+using SsdidDrive.Api.Features.Admin;
 using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Services;
@@ -176,6 +177,7 @@ app.MapTenantFeature();
 app.MapNotificationFeature();
 app.MapRecoveryFeature();
 app.MapCredentialFeature();
+app.MapAdminFeature();
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||

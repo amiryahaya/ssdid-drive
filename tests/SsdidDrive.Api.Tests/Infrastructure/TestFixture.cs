@@ -23,7 +23,8 @@ public static class TestFixture
     public static async Task<(HttpClient Client, Guid UserId, Guid TenantId)> CreateAuthenticatedClientAsync(
         SsdidDriveFactory factory,
         string? displayName = null,
-        string? did = null)
+        string? did = null,
+        string? systemRole = null)
     {
         did ??= $"did:ssdid:test-{Guid.NewGuid():N}";
         var sessionToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
@@ -53,6 +54,9 @@ public static class TestFixture
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
+        if (systemRole is not null)
+            user.SystemRole = Enum.Parse<SystemRole>(systemRole);
+
         db.Users.Add(user);
 
         var userTenant = new UserTenant

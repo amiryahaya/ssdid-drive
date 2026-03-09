@@ -8,4 +8,5 @@ public class CurrentUserAccessor
     public string Did { get; set; } = default!;
     public User? User { get; set; }
     public string? SessionToken { get; set; }
+    public Data.Entities.SystemRole? SystemRole { get; set; }
 }

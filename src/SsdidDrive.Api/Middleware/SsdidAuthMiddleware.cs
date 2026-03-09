@@ -58,6 +58,7 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         accessor.Did = user.Did;
         accessor.User = user;
         accessor.SessionToken = token;
+        accessor.SystemRole = user.SystemRole;
 
         await next(context);
     }
