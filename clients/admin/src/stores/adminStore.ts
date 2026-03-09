@@ -16,15 +16,15 @@ export interface User {
 interface UsersResponse {
   items: User[]
   total: number
-  offset: number
-  limit: number
+  page: number
+  page_size: number
 }
 
 interface AdminState {
   users: User[]
   usersTotal: number
   usersLoading: boolean
-  fetchUsers: (offset: number, limit: number, search?: string) => Promise<void>
+  fetchUsers: (page: number, pageSize: number, search?: string) => Promise<void>
   updateUser: (id: string, patch: Partial<Pick<User, 'status' | 'system_role'>>) => Promise<void>
 }
 
@@ -33,10 +33,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   usersTotal: 0,
   usersLoading: false,
 
-  fetchUsers: async (offset: number, limit: number, search?: string) => {
+  fetchUsers: async (page: number, pageSize: number, search?: string) => {
     set({ usersLoading: true })
     try {
-      let path = `/api/admin/users?offset=${offset}&limit=${limit}`
+      let path = `/api/admin/users?page=${page}&page_size=${pageSize}`
       if (search) {
         path += `&search=${encodeURIComponent(search)}`
       }

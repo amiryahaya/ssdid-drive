@@ -11,6 +11,7 @@ interface DataTableProps<T> {
   data: T[]
   loading?: boolean
   skeletonRows?: number
+  rowKey?: (item: T, index: number) => string | number
 }
 
 export default function DataTable<T>({
@@ -18,6 +19,7 @@ export default function DataTable<T>({
   data,
   loading = false,
   skeletonRows = 5,
+  rowKey,
 }: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto bg-white rounded-lg shadow">
@@ -46,7 +48,7 @@ export default function DataTable<T>({
                 </tr>
               ))
             : data.map((item, i) => (
-                <tr key={i} className="hover:bg-gray-50">
+                <tr key={rowKey ? rowKey(item, i) : i} className="hover:bg-gray-50">
                   {columns.map((col) => (
                     <td key={col.key} className="px-4 py-3 text-gray-700">
                       {col.render

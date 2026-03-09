@@ -39,16 +39,16 @@ export default function UsersPage() {
   const { users, usersTotal, usersLoading, fetchUsers, updateUser } =
     useAdminStore()
 
-  const [offset, setOffset] = useState(0)
+  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadUsers = useCallback(
-    (currentOffset: number, currentSearch: string) => {
+    (currentPage: number, currentSearch: string) => {
       setError(null)
-      fetchUsers(currentOffset, PAGE_SIZE, currentSearch || undefined).catch(
+      fetchUsers(currentPage, PAGE_SIZE, currentSearch || undefined).catch(
         (err) => setError(err instanceof Error ? err.message : 'Failed to load users'),
       )
     },
@@ -56,13 +56,13 @@ export default function UsersPage() {
   )
 
   useEffect(() => {
-    loadUsers(offset, search)
-  }, [offset, loadUsers, search])
+    loadUsers(page, search)
+  }, [page, loadUsers, search])
 
   const handleSearchChange = (value: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      setOffset(0)
+      setPage(1)
       setSearch(value)
     }, 300)
   }
@@ -143,10 +143,7 @@ export default function UsersPage() {
     },
   ]
 
-  const page = Math.floor(offset / PAGE_SIZE) + 1
   const totalPages = Math.ceil(usersTotal / PAGE_SIZE)
-  const rangeStart = usersTotal === 0 ? 0 : offset + 1
-  const rangeEnd = Math.min(offset + PAGE_SIZE, usersTotal)
 
   return (
     <div>
@@ -166,23 +163,23 @@ export default function UsersPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={users} loading={usersLoading} />
+      <DataTable columns={columns} data={users} loading={usersLoading} rowKey={(u) => u.id} />
 
       {!usersLoading && usersTotal > 0 && (
         <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
           <span>
-            {rangeStart}–{rangeEnd} of {usersTotal}
+            Page {page} of {totalPages}
           </span>
           <div className="flex gap-2">
             <button
-              onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
               className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
-              onClick={() => setOffset((o) => o + PAGE_SIZE)}
+              onClick={() => setPage((p) => p + 1)}
               disabled={page >= totalPages}
               className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
