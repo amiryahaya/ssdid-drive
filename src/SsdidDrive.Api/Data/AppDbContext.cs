@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecoveryConfig> RecoveryConfigs => Set<RecoveryConfig>();
     public DbSet<RecoveryShare> RecoveryShares => Set<RecoveryShare>();
     public DbSet<RecoveryRequest> RecoveryRequests => Set<RecoveryRequest>();
+    public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -307,6 +308,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(rr => rr.Config)
                 .WithMany()
                 .HasForeignKey(rr => rr.RecoveryConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WebAuthnCredential>(e =>
+        {
+            e.ToTable("webauthn_credentials");
+            e.HasKey(w => w.Id);
+            e.Property(w => w.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(w => w.CredentialId).HasMaxLength(512).IsRequired();
+            e.Property(w => w.PublicKey).IsRequired();
+            e.Property(w => w.Name).HasMaxLength(256);
+            e.Property(w => w.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(w => w.CredentialId).IsUnique();
+            e.HasIndex(w => w.UserId);
+
+            e.HasOne(w => w.User)
+                .WithMany()
+                .HasForeignKey(w => w.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
