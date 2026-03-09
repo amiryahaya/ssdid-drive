@@ -23,6 +23,7 @@ using SsdidDrive.Api.Ssdid;
 using SsdidDrive.Api.Crypto;
 using SsdidDrive.Api.Crypto.Providers;
 using SsdidDrive.Api.Health;
+using Microsoft.Extensions.FileProviders;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -189,6 +190,18 @@ app.MapNotificationFeature();
 app.MapRecoveryFeature();
 app.MapCredentialFeature();
 app.MapAdminFeature();
+
+// ── Serve admin SPA ──
+var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");
+if (Directory.Exists(adminPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(adminPath),
+        RequestPath = "/admin"
+    });
+    app.MapFallbackToFile("/admin/{**path}", "admin/index.html");
+}
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||

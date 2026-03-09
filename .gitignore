@@ -50,6 +50,9 @@ Desktop.ini
 ## Native runtime binaries (fetched by CD pipeline)
 src/SsdidDrive.Api/runtimes/linux-arm64/
 
+## SPA build artifacts served by ASP.NET Core
+src/SsdidDrive.Api/wwwroot/admin/
+
 ## Environment & Secrets
 .env
 .env.*
