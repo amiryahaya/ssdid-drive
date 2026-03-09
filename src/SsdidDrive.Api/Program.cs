@@ -56,10 +56,28 @@ builder.Services.AddSingleton<SsdidIdentity>(sp =>
     return SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
 });
 
-builder.Services.AddSingleton<SessionStore>();
-builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
-builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
+// ── Session Store (Redis or in-memory) ──
+var redisConnection = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+        options.InstanceName = "ssdid:";
+    });
+    builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+        StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
+    builder.Services.AddSingleton<RedisSessionStore>();
+    builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<RedisSessionStore>());
+    builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<RedisSessionStore>());
+}
+else
+{
+    builder.Services.AddSingleton<SessionStore>();
+    builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
+    builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
+}
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
@@ -113,9 +131,10 @@ if (!app.Environment.IsDevelopment())
             "Server identity private key is stored in plaintext at {Path}. " +
             "Consider using a key vault or HSM for production.", keyPath);
 
-    app.Logger.LogWarning(
-        "SessionStore is in-memory only (single-instance). " +
-        "Configure a Redis-backed ISessionStore for horizontal scaling.");
+    if (string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
+        app.Logger.LogWarning(
+            "SessionStore is in-memory only (single-instance). " +
+            "Set ConnectionStrings:Redis for horizontal scaling.");
 }
 
 // ── Pipeline ──
