@@ -6,11 +6,15 @@ on:
     paths:
       - 'src/SsdidDrive.Api/**'
       - 'tests/SsdidDrive.Api.Tests/**'
+      - '.github/workflows/api-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'src/SsdidDrive.Api/**'
       - 'tests/SsdidDrive.Api.Tests/**'
+
+env:
+  KAZSIGN_VERSION: v2.0.0
 
 jobs:
   build-and-test:
@@ -18,7 +22,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: ssdid
           POSTGRES_PASSWORD: ssdid_test
@@ -31,14 +35,34 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download libkazsign (linux-x64)
+        run: |
+          mkdir -p src/SsdidDrive.Api/runtimes/linux-amd64/native
+          gh release download ${{ env.KAZSIGN_VERSION }} \
+            --repo amiryahaya/pqc-kaz \
+            --pattern 'kaz-sign-linux-x64.tar.gz' \
+            --dir /tmp
+          tar xzf /tmp/kaz-sign-linux-x64.tar.gz -C src/SsdidDrive.Api/runtimes/linux-amd64/native
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
 
       - name: Restore
         run: dotnet restore src/SsdidDrive.Api/SsdidDrive.Api.csproj
@@ -50,3 +74,5 @@ jobs:
         run: dotnet test tests/SsdidDrive.Api.Tests/ --no-restore -c Release --logger "trx;LogFileName=results.trx"
         env:
           ConnectionStrings__Default: "Host=localhost;Database=ssdid_drive_test;Username=ssdid;Password=ssdid_test"
+          ConnectionStrings__Redis: "localhost:6379"
+          LD_LIBRARY_PATH: ${{ github.workspace }}/src/SsdidDrive.Api/runtimes/linux-amd64/native
