@@ -12,6 +12,7 @@ using SsdidDrive.Api.Features.Devices;
 using SsdidDrive.Api.Features.Invitations;
 using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Tenants;
+using SsdidDrive.Api.Features.Notifications;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
@@ -90,6 +91,7 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 });
 
 builder.Services.AddScoped<SsdidAuthService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<ServerRegistrationService>();
 
 // ── Rate Limiting ──
@@ -168,6 +170,7 @@ app.MapShareFeature();
 app.MapDeviceFeature();
 app.MapInvitationFeature();
 app.MapTenantFeature();
+app.MapNotificationFeature();
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||
