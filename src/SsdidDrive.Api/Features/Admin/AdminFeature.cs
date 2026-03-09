@@ -23,5 +23,9 @@ public static class AdminFeature
         GetStats.Map(group);
         ListUsers.Map(group);
         UpdateUser.Map(group);
+        ListTenants.Map(group);
+        CreateTenant.Map(group);
+        UpdateTenant.Map(group);
+        GetTenantMembers.Map(group);
     }
 }

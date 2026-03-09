@@ -58,6 +58,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(t => t.Name).HasMaxLength(256).IsRequired();
             e.Property(t => t.Slug).HasMaxLength(256).IsRequired();
+            e.Property(t => t.Disabled).HasDefaultValue(false);
             e.Property(t => t.CreatedAt).HasDefaultValueSql("now()");
             e.Property(t => t.UpdatedAt).HasDefaultValueSql("now()");
 

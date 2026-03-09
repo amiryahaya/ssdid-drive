@@ -120,4 +120,119 @@ public class AdminTests : IClassFixture<SsdidDriveFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal("SuperAdmin", body.GetProperty("system_role").GetString());
     }
+
+    [Fact]
+    public async Task AdminCreateTenant_CreatesAndLists()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TenantAdmin", systemRole: "SuperAdmin");
+        var slug = "testcorp-" + Guid.NewGuid().ToString("N")[..8];
+
+        var createResponse = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "TestCorp", slug }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal("TestCorp", created.GetProperty("name").GetString());
+        Assert.Equal(slug, created.GetProperty("slug").GetString());
+
+        var listResponse = await client.GetAsync("/api/admin/tenants");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var body = await listResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.TryGetProperty("items", out var items));
+        Assert.True(items.GetArrayLength() >= 1);
+    }
+
+    [Fact]
+    public async Task AdminUpdateTenant_DisablesTenant()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DisableAdmin", systemRole: "SuperAdmin");
+        var slug = "disable-" + Guid.NewGuid().ToString("N")[..8];
+
+        var createResponse = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "ToDisable", slug }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var tenantId = created.GetProperty("id").GetGuid();
+
+        var patchResponse = await client.PatchAsJsonAsync($"/api/admin/tenants/{tenantId}",
+            new { disabled = true }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
+
+        var body = await patchResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.GetProperty("disabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AdminCreateTenant_DuplicateSlug_ReturnsConflict()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DupAdmin", systemRole: "SuperAdmin");
+        var slug = "dup-" + Guid.NewGuid().ToString("N")[..8];
+
+        await client.PostAsJsonAsync("/api/admin/tenants", new { name = "First", slug }, TestFixture.Json);
+        var response = await client.PostAsJsonAsync("/api/admin/tenants", new { name = "Second", slug }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateTenant_MissingName_Returns400()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NoNameAdmin", systemRole: "SuperAdmin");
+        var response = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "", slug = "valid-slug" }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminGetTenantMembers_NotFound_Returns404()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "MemberAdmin", systemRole: "SuperAdmin");
+        var response = await client.GetAsync($"/api/admin/tenants/{Guid.NewGuid()}/members");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminGetTenantMembers_ReturnsMembers()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "MemberListAdmin", systemRole: "SuperAdmin");
+        var slug = "members-" + Guid.NewGuid().ToString("N")[..8];
+
+        var createResponse = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "MembersCorp", slug }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var tenantId = created.GetProperty("id").GetGuid();
+
+        var response = await client.GetAsync($"/api/admin/tenants/{tenantId}/members");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.TryGetProperty("members", out var members));
+        Assert.Equal(JsonValueKind.Array, members.ValueKind);
+    }
+
+    [Fact]
+    public async Task AdminUpdateTenant_NotFound_Returns404()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TenantNotFoundAdmin", systemRole: "SuperAdmin");
+        var response = await client.PatchAsJsonAsync($"/api/admin/tenants/{Guid.NewGuid()}",
+            new { name = "Updated" }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminListTenants_SearchFilters()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TenantSearchAdmin", systemRole: "SuperAdmin");
+        var uniqueName = "UniqueSearch-" + Guid.NewGuid().ToString("N")[..8];
+        var slug = "search-" + Guid.NewGuid().ToString("N")[..8];
+
+        await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = uniqueName, slug }, TestFixture.Json);
+
+        var response = await client.GetAsync($"/api/admin/tenants?search={uniqueName}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+        Assert.True(items.GetArrayLength() >= 1);
+    }
 }

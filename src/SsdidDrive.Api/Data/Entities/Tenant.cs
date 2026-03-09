@@ -5,6 +5,8 @@ public class Tenant
     public Guid Id { get; set; }
     public string Name { get; set; } = default!;
     public string Slug { get; set; } = default!;
+    public bool Disabled { get; set; }
+    public long? StorageQuotaBytes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
