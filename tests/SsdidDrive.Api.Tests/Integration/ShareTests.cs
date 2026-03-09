@@ -288,7 +288,69 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ── 13. CreateShare_WithoutAuth_Returns401 ────────────────────────
+    // ── 13. CreateShare_NotifiesRecipient ──────────────────────────
+
+    [Fact]
+    public async Task CreateShare_NotifiesRecipient()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareNotifOwner");
+        var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "ShareNotifRecipient");
+
+        var folderId = await TestFixture.CreateFolderAsync(client1, "Notify Folder");
+
+        var (status, _) = await TestFixture.CreateShareAsync(client1, folderId, userId2);
+        Assert.Equal(HttpStatusCode.Created, status);
+
+        // Recipient should have a share_created notification
+        var notifResp = await client2.GetAsync("/api/notifications");
+        Assert.Equal(HttpStatusCode.OK, notifResp.StatusCode);
+
+        var notifBody = await notifResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = notifBody.GetProperty("items");
+
+        var shareNotif = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i])
+            .FirstOrDefault(n => n.GetProperty("type").GetString() == "share_created");
+
+        Assert.NotEqual(default, shareNotif);
+        Assert.Equal("New Share", shareNotif.GetProperty("title").GetString());
+        Assert.Contains("Notify Folder", shareNotif.GetProperty("message").GetString());
+    }
+
+    // ── 14. RevokeShare_NotifiesRecipient ────────────────────────
+
+    [Fact]
+    public async Task RevokeShare_NotifiesRecipient()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RevokeNotifOwner");
+        var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RevokeNotifRecipient");
+
+        var folderId = await TestFixture.CreateFolderAsync(client1, "Revoke Notify Folder");
+
+        var (createStatus, createBody) = await TestFixture.CreateShareAsync(client1, folderId, userId2);
+        Assert.Equal(HttpStatusCode.Created, createStatus);
+
+        var shareId = createBody.GetProperty("id").GetString();
+
+        var revokeResp = await client1.DeleteAsync($"/api/shares/{shareId}");
+        Assert.Equal(HttpStatusCode.NoContent, revokeResp.StatusCode);
+
+        // Recipient should have a share_revoked notification
+        var notifResp = await client2.GetAsync("/api/notifications");
+        Assert.Equal(HttpStatusCode.OK, notifResp.StatusCode);
+
+        var notifBody = await notifResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = notifBody.GetProperty("items");
+
+        var revokeNotif = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i])
+            .FirstOrDefault(n => n.GetProperty("type").GetString() == "share_revoked");
+
+        Assert.NotEqual(default, revokeNotif);
+        Assert.Equal("Share Revoked", revokeNotif.GetProperty("title").GetString());
+    }
+
+    // ── 15. CreateShare_WithoutAuth_Returns401 ────────────────────────
 
     [Fact]
     public async Task CreateShare_WithoutAuth_Returns401()

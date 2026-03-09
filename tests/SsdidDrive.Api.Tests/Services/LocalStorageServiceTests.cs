@@ -109,4 +109,18 @@ public class LocalStorageServiceTests : IDisposable
         await retrieved.CopyToAsync(ms, ct);
         Assert.Equal("overwritten", Encoding.UTF8.GetString(ms.ToArray()));
     }
+
+    [Fact]
+    public async Task RetrieveAsync_PathTraversal_ThrowsUnauthorizedAccess()
+    {
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.RetrieveAsync("../../etc/passwd", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_PathTraversal_ThrowsUnauthorizedAccess()
+    {
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _sut.DeleteAsync("../../etc/passwd", TestContext.Current.CancellationToken));
+    }
 }

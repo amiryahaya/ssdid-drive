@@ -235,4 +235,43 @@ public class DeviceTests : IClassFixture<SsdidDriveFactory>
 
         Assert.Equal("revoked", revokedDevice.GetProperty("status").GetString());
     }
+
+    // ── 12. Revoked devices filtered from default list ───────────────
+
+    [Fact]
+    public async Task ListDevices_RevokedDevice_FilteredByDefault_IncludedWithParam()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DeviceRevokeFilter");
+
+        // Enroll a device
+        var fingerprint = $"fp-filter-{Guid.NewGuid():N}";
+        var enrollResp = await client.PostAsJsonAsync("/api/devices", MakeEnrollRequest(fingerprint: fingerprint, deviceName: "FilterTest"), TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Created, enrollResp.StatusCode);
+        var enrollBody = await enrollResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var deviceId = enrollBody.GetProperty("id").GetString();
+
+        // Revoke it
+        var revokeResp = await client.DeleteAsync($"/api/devices/{deviceId}");
+        Assert.Equal(HttpStatusCode.NoContent, revokeResp.StatusCode);
+
+        // Default list (no include_revoked) should NOT contain the revoked device
+        var defaultListResp = await client.GetAsync("/api/devices");
+        Assert.Equal(HttpStatusCode.OK, defaultListResp.StatusCode);
+        var defaultBody = await defaultListResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var defaultDevices = defaultBody.GetProperty("items");
+        var defaultIds = Enumerable.Range(0, defaultDevices.GetArrayLength())
+            .Select(i => defaultDevices[i].GetProperty("id").GetString())
+            .ToList();
+        Assert.DoesNotContain(deviceId, defaultIds);
+
+        // List with include_revoked=true SHOULD contain the revoked device
+        var revokedListResp = await client.GetAsync("/api/devices?include_revoked=true");
+        Assert.Equal(HttpStatusCode.OK, revokedListResp.StatusCode);
+        var revokedBody = await revokedListResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var revokedDevices = revokedBody.GetProperty("items");
+        var revokedIds = Enumerable.Range(0, revokedDevices.GetArrayLength())
+            .Select(i => revokedDevices[i].GetProperty("id").GetString())
+            .ToList();
+        Assert.Contains(deviceId, revokedIds);
+    }
 }

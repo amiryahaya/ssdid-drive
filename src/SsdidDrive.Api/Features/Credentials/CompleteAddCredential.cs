@@ -1,6 +1,7 @@
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Credentials;
 
@@ -11,7 +12,7 @@ public static class CompleteAddCredential
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/webauthn/complete", Handle);
 
-    private static async Task<IResult> Handle(Request request, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Request request, AppDbContext db, CurrentUserAccessor accessor, WebAuthnChallengeStore challengeStore, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -21,13 +22,10 @@ public static class CompleteAddCredential
         if (string.IsNullOrWhiteSpace(request.PublicKey))
             return AppError.BadRequest("public_key is required").ToProblemResult();
 
-        // For MVP, verify that a challenge was issued (don't do full attestation)
-        if (!BeginAddCredential.PendingChallenges.TryRemove(user.Id, out var pending))
+        // Consume the pending challenge atomically
+        var challenge = challengeStore.ConsumeChallenge(user.Id);
+        if (challenge is null)
             return AppError.BadRequest("No pending WebAuthn challenge. Call begin first.").ToProblemResult();
-
-        var elapsed = DateTimeOffset.UtcNow - pending.CreatedAt;
-        if (elapsed > TimeSpan.FromMinutes(5))
-            return AppError.BadRequest("WebAuthn challenge expired").ToProblemResult();
 
         byte[] publicKeyBytes;
         try

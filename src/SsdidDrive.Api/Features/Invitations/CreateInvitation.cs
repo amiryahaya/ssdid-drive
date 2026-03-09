@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Invitations;
 
@@ -12,7 +13,7 @@ public static class CreateInvitation
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -66,6 +67,19 @@ public static class CreateInvitation
         };
 
         db.Invitations.Add(invitation);
+
+        if (invitedUserId is not null)
+        {
+            await notifications.CreateAsync(
+                invitedUserId.Value,
+                "invitation_received",
+                "New Invitation",
+                "You've been invited to join a tenant",
+                actionType: "invitation",
+                actionResourceId: invitation.Id.ToString(),
+                ct: ct);
+        }
+
         await db.SaveChangesAsync(ct);
 
         return Results.Created($"/api/invitations/{invitation.Id}", new

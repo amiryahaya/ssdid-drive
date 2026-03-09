@@ -31,11 +31,11 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
     {
         var (client, userId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "OldName");
 
-        var putResponse = await client.PutAsJsonAsync("/api/me",
+        var patchResponse = await client.PatchAsJsonAsync("/api/me",
             new { display_name = "NewName" }, TestFixture.Json);
-        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
 
-        var putBody = await putResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var putBody = await patchResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal("NewName", putBody.GetProperty("display_name").GetString());
 
         // Verify change persisted via GET
@@ -57,14 +57,14 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
         var salt = Convert.ToBase64String("test-salt-bytes"u8.ToArray());
         var publicKeys = "{\"kem\":\"test-pub\",\"sign\":\"test-sign\"}";
 
-        var putResponse = await client.PutAsJsonAsync("/api/me/keys", new
+        var patchResponse = await client.PatchAsJsonAsync("/api/me/keys", new
         {
             public_keys = publicKeys,
             encrypted_master_key = masterKey,
             encrypted_private_keys = privateKeys,
             key_derivation_salt = salt
         }, TestFixture.Json);
-        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
 
         // Verify keys persisted via GET
         var getResponse = await client.GetAsync("/api/me/keys");
@@ -83,7 +83,7 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
         // Create a user and set their public keys
         var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Publisher");
         var publicKeys = "{\"kem\":\"pub-kem-key\"}";
-        await client1.PutAsJsonAsync("/api/me/keys", new { public_keys = publicKeys }, TestFixture.Json);
+        await client1.PatchAsJsonAsync("/api/me/keys", new { public_keys = publicKeys }, TestFixture.Json);
 
         // A different authenticated user can fetch the first user's public key
         var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Consumer");

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Tests.Ssdid;
@@ -92,11 +93,53 @@ public class SessionStoreTests
     }
 
     // ── TTL tests ──────────────────────────────────────────────────────
-    // NOTE: SessionStore uses DateTimeOffset.UtcNow internally with no clock
-    // abstraction, so we cannot easily backdate sessions or challenges in unit
-    // tests without refactoring. The tests below verify correctness for the
-    // non-expired path (which is still valuable). True TTL testing would require
-    // injecting a TimeProvider/IClock into SessionStore.
+
+    [Fact]
+    public void GetSession_ExpiredSession_ReturnsNull()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = new SessionStore(clock);
+        var did = "did:ssdid:expired-session";
+        var token = store.CreateSession(did);
+        Assert.NotNull(token);
+
+        // Advance past the 1-hour session TTL
+        clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
+
+        var result = store.GetSession(token!);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ConsumeChallenge_ExpiredChallenge_ReturnsNull()
+    {
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = new SessionStore(clock);
+        var did = "did:ssdid:expired-challenge";
+        var purpose = "register";
+
+        store.CreateChallenge(did, purpose, "challenge-data", "key-1");
+
+        // Advance past the 5-minute challenge TTL
+        clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+
+        var result = store.ConsumeChallenge(did, purpose);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CreateSession_MaxSessionsCap_ReturnsNull()
+    {
+        var store = new SessionStore();
+
+        // Fill up to MaxSessions (10,000) using the internal direct method
+        for (var i = 0; i < 10_000; i++)
+            store.CreateSessionDirect($"did:ssdid:cap-{i}", $"token-{i}");
+
+        // The next session should be rejected
+        var result = store.CreateSession("did:ssdid:one-too-many");
+        Assert.Null(result);
+    }
 
     [Fact]
     public void GetSession_ValidSession_ReturnsDid()

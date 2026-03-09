@@ -3,11 +3,14 @@ using SsdidDrive.Api.Data.Entities;
 
 namespace SsdidDrive.Api.Services;
 
-// TODO: Wire into share creation, invitation events, recovery requests, device registration,
-// and other domain events that should notify users.
+/// <summary>
+/// Creates notification entities and adds them to the DbContext.
+/// The caller is responsible for calling <see cref="AppDbContext.SaveChangesAsync(CancellationToken)"/>
+/// to persist the notification (typically as part of the same transaction as the triggering operation).
+/// </summary>
 public class NotificationService(AppDbContext db)
 {
-    public async Task CreateAsync(Guid userId, string type, string title, string message,
+    public Task CreateAsync(Guid userId, string type, string title, string message,
         string? actionType = null, string? actionResourceId = null, CancellationToken ct = default)
     {
         var notification = new Notification
@@ -21,6 +24,6 @@ public class NotificationService(AppDbContext db)
             CreatedAt = DateTimeOffset.UtcNow
         };
         db.Notifications.Add(notification);
-        await db.SaveChangesAsync(ct);
+        return Task.CompletedTask;
     }
 }

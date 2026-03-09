@@ -319,6 +319,35 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // ── 14. AcceptInvitation_NotifiesInviter ────────────────────────────
+
+    [Fact]
+    public async Task AcceptInvitation_NotifiesInviter()
+    {
+        var (ownerClient, ownerId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvNotifOwner");
+        var (acceptClient, acceptUserId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvNotifAcceptee");
+
+        var invitationId = await CreateInvitationForUser(_factory, tenantId, ownerClient, acceptUserId);
+
+        var response = await acceptClient.PostAsync($"/api/invitations/{invitationId}/accept", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Inviter should have an invitation_accepted notification
+        var notifResp = await ownerClient.GetAsync("/api/notifications");
+        Assert.Equal(HttpStatusCode.OK, notifResp.StatusCode);
+
+        var notifBody = await notifResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = notifBody.GetProperty("items");
+
+        var acceptNotif = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i])
+            .FirstOrDefault(n => n.GetProperty("type").GetString() == "invitation_accepted");
+
+        Assert.NotEqual(default, acceptNotif);
+        Assert.Equal("Invitation Accepted", acceptNotif.GetProperty("title").GetString());
+        Assert.Contains("InvNotifAcceptee", acceptNotif.GetProperty("message").GetString());
+    }
+
     // ── Helper: Create invitation targeting a specific user ────────────
 
     private static async Task<string> CreateInvitationForUser(

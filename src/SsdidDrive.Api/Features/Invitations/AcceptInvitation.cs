@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Invitations;
 
@@ -10,7 +11,7 @@ public static class AcceptInvitation
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/{id:guid}/accept", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -57,6 +58,16 @@ public static class AcceptInvitation
         };
 
         db.UserTenants.Add(userTenant);
+
+        await notifications.CreateAsync(
+            invitation.InvitedById,
+            "invitation_accepted",
+            "Invitation Accepted",
+            $"{user.DisplayName ?? user.Did} accepted your invitation",
+            actionType: "invitation",
+            actionResourceId: invitation.Id.ToString(),
+            ct: ct);
+
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(new

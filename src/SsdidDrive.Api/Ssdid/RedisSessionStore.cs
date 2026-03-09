@@ -49,17 +49,16 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
     public SessionStore.ChallengeEntry? ConsumeChallenge(string did, string purpose)
     {
         var key = $"{ChallengePrefix}{did}:{purpose}";
-        // TODO: TOCTOU limitation — GET + DELETE is not atomic via IDistributedCache.
-        // For true atomicity, use a Lua script or Redis GETDEL command directly via IConnectionMultiplexer.
-        // Acceptable for MVP since challenges are single-use with short TTL and scoped per DID+purpose.
-        var json = _cache.GetString(key);
+        var db = _redis.GetDatabase();
 
-        if (json is null)
+        // Atomic get-and-delete via Redis GETDEL (Redis 6.2+) — prevents TOCTOU race
+        // where two concurrent callers could both consume the same challenge.
+        var value = db.StringGetDelete(key);
+
+        if (value.IsNullOrEmpty)
             return null;
 
-        _cache.Remove(key);
-
-        var data = JsonSerializer.Deserialize<ChallengeData>(json);
+        var data = JsonSerializer.Deserialize<ChallengeData>(value.ToString());
         if (data is null)
             return null;
 
