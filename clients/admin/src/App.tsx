@@ -2,15 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
-
-function DashboardPage() {
-  return (
-    <div>
-      <h2 className="text-2xl font-semibold mb-4">Dashboard</h2>
-      <p className="text-gray-600">Admin dashboard — coming soon.</p>
-    </div>
-  )
-}
+import DashboardPage from './pages/DashboardPage'
 
 function AuthenticatedApp() {
   const user = useAuthStore((s) => s.user)
