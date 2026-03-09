@@ -9,6 +9,7 @@ public class Folder
     public Guid TenantId { get; set; }
     public byte[]? EncryptedFolderKey { get; set; }
     public string? KemAlgorithm { get; set; }
+    public int FolderKeyVersion { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

@@ -11,5 +11,7 @@ public static class FolderFeature
         GetFolder.Map(group);
         RenameFolder.Map(group);
         DeleteFolder.Map(group);
+        GetFolderKey.Map(group);
+        RotateFolderKey.Map(group);
     }
 }
