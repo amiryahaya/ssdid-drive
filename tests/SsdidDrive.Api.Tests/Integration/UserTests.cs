@@ -105,6 +105,35 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task PublishAndGetKemKey_RoundTrips()
+    {
+        var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemPublisher");
+        var kemPk = Convert.ToBase64String(new byte[32]);
+
+        var publishResponse = await client1.PatchAsJsonAsync("/api/me/keys/kem",
+            new { kem_public_key = kemPk, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, publishResponse.StatusCode);
+
+        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemConsumer");
+        var getResponse = await client2.GetAsync($"/api/users/{userId1}/kem-public-key");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(kemPk, body.GetProperty("kem_public_key").GetString());
+        Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
+    }
+
+    [Fact]
+    public async Task GetKemPublicKey_NoKeySet_Returns404()
+    {
+        var (client1, userId1, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NoKemUser");
+        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KemLooker");
+
+        var response = await client2.GetAsync($"/api/users/{userId1}/kem-public-key");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ListTenantUsers_ReturnsUsersInSameTenant()
     {
         var (client, userId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TenantUser");

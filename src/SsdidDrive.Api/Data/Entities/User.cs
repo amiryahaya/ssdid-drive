@@ -16,6 +16,8 @@ public class User
     public byte[]? EncryptedPrivateKeys { get; set; }
     public byte[]? EncryptedMasterKey { get; set; }
     public byte[]? KeyDerivationSalt { get; set; }
+    public byte[]? KemPublicKey { get; set; }
+    public string? KemAlgorithm { get; set; }
 
     public DateTimeOffset? LastLoginAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

@@ -12,5 +12,7 @@ public static class UserFeature
         UpdateKeys.Map(group);
         ListTenantUsers.Map(group);
         GetPublicKey.Map(group);
+        PublishKemKey.Map(group);
+        GetKemPublicKey.Map(group);
     }
 }
