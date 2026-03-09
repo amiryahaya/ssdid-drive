@@ -48,6 +48,12 @@ public class SsdidAuthMiddleware(RequestDelegate next)
             return;
         }
 
+        if (user.Status == Data.Entities.UserStatus.Suspended)
+        {
+            await WriteProblem(context, 403, "Account is suspended");
+            return;
+        }
+
         accessor.UserId = user.Id;
         accessor.Did = user.Did;
         accessor.User = user;

@@ -13,34 +13,49 @@ public static class ListInvitations
         group.MapGet("/sent", HandleSent);
     }
 
-    private static async Task<IResult> HandleReceived(AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> HandleReceived(
+        AppDbContext db,
+        CurrentUserAccessor accessor,
+        [AsParameters] PaginationParams pagination,
+        CancellationToken ct)
     {
         var user = accessor.User!;
 
-        var invitations = (await db.Invitations
-            .Where(i => i.Status == InvitationStatus.Pending
-                && (i.InvitedUserId == user.Id
-                    || (user.Email != null && i.Email == user.Email)))
-            .ToListAsync(ct))
+        var query = db.Invitations
+            .Where(i => i.Status == InvitationStatus.Pending && i.InvitedUserId == user.Id);
+
+        var total = await query.CountAsync(ct);
+
+        var invitations = (await query.ToListAsync(ct))
             .OrderByDescending(i => i.CreatedAt)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
             .Select(ToDto)
             .ToList();
 
-        return Results.Ok(invitations);
+        return Results.Ok(new PagedResponse<object>(invitations, total, pagination.NormalizedPage, pagination.Take));
     }
 
-    private static async Task<IResult> HandleSent(AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> HandleSent(
+        AppDbContext db,
+        CurrentUserAccessor accessor,
+        [AsParameters] PaginationParams pagination,
+        CancellationToken ct)
     {
         var user = accessor.User!;
 
-        var invitations = (await db.Invitations
-            .Where(i => i.InvitedById == user.Id)
-            .ToListAsync(ct))
+        var query = db.Invitations.Where(i => i.InvitedById == user.Id);
+
+        var total = await query.CountAsync(ct);
+
+        var invitations = (await query.ToListAsync(ct))
             .OrderByDescending(i => i.CreatedAt)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
             .Select(ToDto)
             .ToList();
 
-        return Results.Ok(invitations);
+        return Results.Ok(new PagedResponse<object>(invitations, total, pagination.NormalizedPage, pagination.Take));
     }
 
     private static object ToDto(Invitation i) => new
@@ -52,7 +67,6 @@ public static class ListInvitations
         i.InvitedUserId,
         Role = i.Role.ToString().ToLowerInvariant(),
         Status = i.Status.ToString().ToLowerInvariant(),
-        i.Token,
         i.Message,
         i.ExpiresAt,
         i.CreatedAt

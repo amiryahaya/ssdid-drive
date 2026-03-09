@@ -165,12 +165,11 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task DeleteFolder_NonOwner_Returns403()
     {
-        var (client1, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Owner");
-        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NonOwner");
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DelFolderOwner");
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "DelFolderNonOwner");
 
         var folderId = await CreateFolderAndGetId(client1, "Protected Folder");
 
-        // DeleteFolder has no tenant filter — finds folder by ID, then checks OwnerId
         var response = await client2.DeleteAsync($"/api/folders/{folderId}");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -191,6 +190,42 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
 
         var childGet = await client.GetAsync($"/api/folders/{childId}");
         Assert.Equal(HttpStatusCode.NotFound, childGet.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateFolder_MissingEncryptedFolderKey_Returns400()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        var request = new
+        {
+            name = "No Key Folder",
+            encrypted_folder_key = "",
+            kem_algorithm = "ML-KEM-768"
+        };
+
+        var response = await client.PostAsJsonAsync("/api/folders", request, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteFolder_CascadesFiles()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        var folderId = await CreateFolderAndGetId(client, "CascadeFileFolder");
+        var fileId = await TestFixture.UploadFileAsync(client, folderId.ToString(), "cascade-file.bin");
+
+        var deleteResp = await client.DeleteAsync($"/api/folders/{folderId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResp.StatusCode);
+
+        // Verify folder is gone
+        var folderGet = await client.GetAsync($"/api/folders/{folderId}");
+        Assert.Equal(HttpStatusCode.NotFound, folderGet.StatusCode);
+
+        // Verify file is gone too
+        var fileGet = await client.GetAsync($"/api/files/{fileId}/download");
+        Assert.Equal(HttpStatusCode.NotFound, fileGet.StatusCode);
     }
 
     [Fact]

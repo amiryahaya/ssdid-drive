@@ -45,16 +45,24 @@ public static class ApproveRecovery
             return AppError.BadRequest("Encrypted share is required").ToProblemResult();
 
         // Prevent duplicate approval from the same trustee
-        var approvedIds = (recoveryRequest.ApprovedBy ?? "")
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .ToHashSet();
+        var alreadyApproved = await db.RecoveryApprovals
+            .AnyAsync(ra => ra.RecoveryRequestId == id && ra.TrusteeId == user.Id, ct);
 
-        if (approvedIds.Contains(user.Id.ToString()))
+        if (alreadyApproved)
             return AppError.BadRequest("You have already approved this recovery request").ToProblemResult();
 
-        approvedIds.Add(user.Id.ToString());
-        recoveryRequest.ApprovedBy = string.Join(",", approvedIds);
-        recoveryRequest.ApprovalsReceived++;
+        var approval = new RecoveryApproval
+        {
+            RecoveryRequestId = id,
+            TrusteeId = user.Id,
+            EncryptedShare = Convert.FromBase64String(req.EncryptedShare),
+            ApprovedAt = DateTimeOffset.UtcNow
+        };
+        db.RecoveryApprovals.Add(approval);
+
+        var approvalCount = await db.RecoveryApprovals
+            .CountAsync(ra => ra.RecoveryRequestId == id, ct) + 1;
+        recoveryRequest.ApprovalsReceived = approvalCount;
 
         if (recoveryRequest.ApprovalsReceived >= recoveryRequest.Config.Threshold)
         {

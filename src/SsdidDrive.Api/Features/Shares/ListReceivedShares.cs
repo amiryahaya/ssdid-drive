@@ -49,6 +49,6 @@ public static class ListReceivedShares
             .Take(pagination.Take)
             .ToList();
 
-        return Results.Ok(new PagedResponse<object>(items, total, pagination.Page, pagination.Take));
+        return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));
     }
 }

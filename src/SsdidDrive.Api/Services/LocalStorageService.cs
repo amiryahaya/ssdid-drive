@@ -30,7 +30,10 @@ public class LocalStorageService : IStorageService
 
     public Task<Stream> RetrieveAsync(string storagePath, CancellationToken ct)
     {
-        var fullPath = Path.Combine(_basePath, storagePath);
+        var fullPath = Path.GetFullPath(Path.Combine(_basePath, storagePath));
+        if (!fullPath.StartsWith(Path.GetFullPath(_basePath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Invalid storage path");
+
         if (!File.Exists(fullPath))
             throw new FileNotFoundException("Stored file not found", fullPath);
 
@@ -40,7 +43,10 @@ public class LocalStorageService : IStorageService
 
     public Task DeleteAsync(string storagePath, CancellationToken ct)
     {
-        var fullPath = Path.Combine(_basePath, storagePath);
+        var fullPath = Path.GetFullPath(Path.Combine(_basePath, storagePath));
+        if (!fullPath.StartsWith(Path.GetFullPath(_basePath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Invalid storage path");
+
         if (File.Exists(fullPath))
             File.Delete(fullPath);
 

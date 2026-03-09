@@ -17,7 +17,7 @@ public static class DeleteFolder
         var folder = await db.Folders
             .Include(f => f.Files)
             .Include(f => f.SubFolders)
-            .FirstOrDefaultAsync(f => f.Id == id, ct);
+            .FirstOrDefaultAsync(f => f.Id == id && f.TenantId == user.TenantId, ct);
 
         if (folder is null)
             return AppError.NotFound("Folder not found").ToProblemResult();
@@ -25,14 +25,20 @@ public static class DeleteFolder
         if (folder.OwnerId != user.Id)
             return AppError.Forbidden("Only the folder owner can delete it").ToProblemResult();
 
-        // Recursively collect all descendant folders and their files
-        await DeleteFolderRecursive(folder.Id, db, storage, ct);
+        // Recursively collect all descendant folders and their files, track storage paths
+        var storagePaths = new List<string>();
+        await DeleteFolderRecursive(folder.Id, db, storagePaths, ct);
 
         await db.SaveChangesAsync(ct);
+
+        // Best-effort physical file deletion after DB commit
+        foreach (var path in storagePaths)
+            await storage.DeleteAsync(path, ct);
+
         return Results.NoContent();
     }
 
-    private static async Task DeleteFolderRecursive(Guid folderId, AppDbContext db, IStorageService storage, CancellationToken ct)
+    private static async Task DeleteFolderRecursive(Guid folderId, AppDbContext db, List<string> storagePaths, CancellationToken ct)
     {
         var childFolders = await db.Folders
             .Where(f => f.ParentFolderId == folderId)
@@ -40,12 +46,21 @@ public static class DeleteFolder
             .ToListAsync(ct);
 
         foreach (var childId in childFolders)
-            await DeleteFolderRecursive(childId, db, storage, ct);
+            await DeleteFolderRecursive(childId, db, storagePaths, ct);
 
-        // Delete files on disk
+        // Collect files and their storage paths
         var files = await db.Files.Where(f => f.FolderId == folderId).ToListAsync(ct);
-        foreach (var file in files)
-            await storage.DeleteAsync(file.StoragePath, ct);
+        storagePaths.AddRange(files.Select(f => f.StoragePath));
+
+        // Delete file-level shares
+        var fileIds = files.Select(f => f.Id).ToList();
+        if (fileIds.Count > 0)
+        {
+            var fileShares = await db.Shares
+                .Where(s => fileIds.Contains(s.ResourceId) && s.ResourceType == "file")
+                .ToListAsync(ct);
+            db.Shares.RemoveRange(fileShares);
+        }
 
         // Delete shares for this folder
         var shares = await db.Shares

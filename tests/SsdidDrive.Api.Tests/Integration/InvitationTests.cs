@@ -70,7 +70,8 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         var response = await memberClient.GetAsync("/api/invitations");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var invitations = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitations = body.GetProperty("items");
         Assert.True(invitations.GetArrayLength() >= 1);
     }
 
@@ -91,7 +92,8 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         var response = await ownerClient.GetAsync("/api/invitations/sent");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var invitations = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitations = body.GetProperty("items");
         Assert.True(invitations.GetArrayLength() >= 1);
     }
 
@@ -211,6 +213,72 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         // Another user tries to revoke
         var response = await otherClient.DeleteAsync($"/api/invitations/{invitationId}");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ── 11. AcceptInvitation_Expired_Returns400 ────────────────────────
+
+    [Fact]
+    public async Task AcceptInvitation_Expired_Returns400()
+    {
+        var (ownerClient, ownerId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvExpiredOwner");
+        var (acceptClient, acceptUserId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvExpiredAcceptee");
+
+        // Insert an invitation with ExpiresAt in the past
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var invitation = new Invitation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            InvitedById = ownerId,
+            InvitedUserId = acceptUserId,
+            Role = TenantRole.Member,
+            Status = InvitationStatus.Pending,
+            Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1), // Expired yesterday
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-8),
+            UpdatedAt = DateTimeOffset.UtcNow.AddDays(-8)
+        };
+        db.Invitations.Add(invitation);
+        await db.SaveChangesAsync();
+
+        var response = await acceptClient.PostAsync($"/api/invitations/{invitation.Id}/accept", null);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ── 12. AcceptInvitation_AlreadyMember_Returns409 ────────────────
+
+    [Fact]
+    public async Task AcceptInvitation_AlreadyMember_Returns409()
+    {
+        var (ownerClient, ownerId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InvAlreadyOwner");
+
+        // Create a user who is already a member of the tenant
+        var (memberClient, memberId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "InvAlreadyMember");
+
+        // Insert an invitation for the already-member user
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var invitation = new Invitation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            InvitedById = ownerId,
+            InvitedUserId = memberId,
+            Role = TenantRole.Member,
+            Status = InvitationStatus.Pending,
+            Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Invitations.Add(invitation);
+        await db.SaveChangesAsync();
+
+        var response = await memberClient.PostAsync($"/api/invitations/{invitation.Id}/accept", null);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
     // ── Helper: Create invitation targeting a specific user ────────────

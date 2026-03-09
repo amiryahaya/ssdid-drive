@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecoveryConfig> RecoveryConfigs => Set<RecoveryConfig>();
     public DbSet<RecoveryShare> RecoveryShares => Set<RecoveryShare>();
     public DbSet<RecoveryRequest> RecoveryRequests => Set<RecoveryRequest>();
+    public DbSet<RecoveryApproval> RecoveryApprovals => Set<RecoveryApproval>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -272,6 +273,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasIndex(rs => rs.RecoveryConfigId);
             e.HasIndex(rs => rs.TrusteeId);
+            e.HasIndex(rs => new { rs.RecoveryConfigId, rs.TrusteeId }).IsUnique();
 
             e.HasOne(rs => rs.Config)
                 .WithMany(rc => rc.Shares)
@@ -295,7 +297,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     v => v.ToString().ToLowerInvariant(),
                     v => Enum.Parse<RecoveryRequestStatus>(v, true));
             e.Property(rr => rr.ApprovalsReceived).HasDefaultValue(0);
-            e.Property(rr => rr.ApprovedBy).HasMaxLength(2048);
             e.Property(rr => rr.CreatedAt).HasDefaultValueSql("now()");
 
             e.HasIndex(rr => rr.RequesterId);
@@ -309,6 +310,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(rr => rr.Config)
                 .WithMany()
                 .HasForeignKey(rr => rr.RecoveryConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecoveryApproval>(e =>
+        {
+            e.ToTable("recovery_approvals");
+            e.HasKey(ra => ra.Id);
+            e.Property(ra => ra.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(ra => ra.ApprovedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(ra => new { ra.RecoveryRequestId, ra.TrusteeId }).IsUnique();
+
+            e.HasOne(ra => ra.RecoveryRequest)
+                .WithMany(rr => rr.Approvals)
+                .HasForeignKey(ra => ra.RecoveryRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(ra => ra.Trustee)
+                .WithMany()
+                .HasForeignKey(ra => ra.TrusteeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

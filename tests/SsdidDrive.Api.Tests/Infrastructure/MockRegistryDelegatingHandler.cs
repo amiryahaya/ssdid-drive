@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -9,7 +10,7 @@ namespace SsdidDrive.Api.Tests.Infrastructure;
 /// </summary>
 public class MockRegistryDelegatingHandler : HttpMessageHandler
 {
-    private readonly Dictionary<string, object> _documents = new();
+    private readonly ConcurrentDictionary<string, object> _documents = new();
 
     public void RegisterDid(string did, Dictionary<string, object> didDocument)
     {

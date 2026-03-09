@@ -38,11 +38,11 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
 
         var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "file", fileName);
+        form.Add(new StringContent(encKey), "encrypted_file_key");
+        form.Add(new StringContent(nonce), "nonce");
+        form.Add(new StringContent("AES-256-GCM"), "encryption_algorithm");
 
-        var url = $"/api/folders/{folderId}/files"
-            + $"?encrypted_file_key={Uri.EscapeDataString(encKey)}"
-            + $"&nonce={Uri.EscapeDataString(nonce)}"
-            + $"&encryption_algorithm=AES-256-GCM";
+        var url = $"/api/folders/{folderId}/files";
 
         var response = await client.PostAsync(url, form);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
@@ -150,8 +150,8 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task DeleteFile_NonOwner_Returns403()
     {
-        var (client1, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "FileOwner");
-        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NonOwner");
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DelFileOwner");
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "DelFileNonOwner");
 
         var folderId = await CreateFolderAsync(client1);
         var fileId = await UploadFileAndGetIdAsync(client1, folderId, "protected.bin");
@@ -161,19 +161,38 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task UploadFile_WithoutCryptoParams_Returns400()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+        var folderId = await CreateFolderAsync(client);
+
+        var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("encrypted-data")), "file", "nocrypto.bin");
+        // Deliberately omit encrypted_file_key, nonce, encryption_algorithm
+
+        var url = $"/api/folders/{folderId}/files";
+
+        var response = await client.PostAsync(url, form);
+
+        // Should fail because required form fields are missing
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UploadFile_WithoutAuth_Returns401()
     {
         var client = _factory.CreateClient();
 
-        var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("data")), "file", "test.bin");
-
         var encKey = Convert.ToBase64String(new byte[16]);
         var nonce = Convert.ToBase64String(new byte[12]);
-        var url = $"/api/folders/{Guid.NewGuid()}/files"
-            + $"?encrypted_file_key={Uri.EscapeDataString(encKey)}"
-            + $"&nonce={Uri.EscapeDataString(nonce)}"
-            + $"&encryption_algorithm=AES-256-GCM";
+
+        var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("data")), "file", "test.bin");
+        form.Add(new StringContent(encKey), "encrypted_file_key");
+        form.Add(new StringContent(nonce), "nonce");
+        form.Add(new StringContent("AES-256-GCM"), "encryption_algorithm");
+
+        var url = $"/api/folders/{Guid.NewGuid()}/files";
 
         var response = await client.PostAsync(url, form);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

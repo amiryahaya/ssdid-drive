@@ -33,13 +33,13 @@ public static class Authenticate
 
                 // Step 3: Create session only after user is confirmed
                 var sessionResult = auth.CreateAuthenticatedSession(did);
-                return sessionResult.Match(
-                    ok =>
+                return await sessionResult.Match(
+                    async ok =>
                     {
                         try
                         {
                             user.LastLoginAt = DateTimeOffset.UtcNow;
-                            db.SaveChanges();
+                            await db.SaveChangesAsync();
                         }
                         catch (Exception)
                         {
@@ -69,7 +69,7 @@ public static class Authenticate
                             tenants
                         });
                     },
-                    err => err.ToProblemResult());
+                    err => Task.FromResult(err.ToProblemResult()));
             },
             err => Task.FromResult(err.ToProblemResult()));
     }

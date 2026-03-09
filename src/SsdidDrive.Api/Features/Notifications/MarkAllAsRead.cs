@@ -7,7 +7,7 @@ namespace SsdidDrive.Api.Features.Notifications;
 public static class MarkAllAsRead
 {
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPost("/read-all", Handle);
+        group.MapPatch("/read-all", Handle);
 
     private static async Task<IResult> Handle(
         AppDbContext db,

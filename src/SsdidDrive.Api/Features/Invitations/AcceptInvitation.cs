@@ -30,8 +30,7 @@ public static class AcceptInvitation
         }
 
         // Only the invited user can accept
-        var isInvitedUser = invitation.InvitedUserId == user.Id
-            || (user.Email != null && invitation.Email == user.Email);
+        var isInvitedUser = invitation.InvitedUserId == user.Id;
 
         if (!isInvitedUser)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();

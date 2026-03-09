@@ -8,6 +8,7 @@ public static class BeginAddCredential
 {
     // In-memory challenge store with TTL for MVP.
     // Key: userId, Value: (challenge, createdAt)
+    // TODO: Move to ISessionStore for horizontal scaling — this static store only works on a single instance.
     internal static readonly ConcurrentDictionary<Guid, (string Challenge, DateTimeOffset CreatedAt)> PendingChallenges = new();
     private static readonly TimeSpan ChallengeTtl = TimeSpan.FromMinutes(5);
 

@@ -134,11 +134,11 @@ public static class TestFixture
 
         var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(content)), "file", fileName);
+        form.Add(new StringContent(encKey), "encrypted_file_key");
+        form.Add(new StringContent(nonce), "nonce");
+        form.Add(new StringContent("AES-256-GCM"), "encryption_algorithm");
 
-        var url = $"/api/folders/{folderId}/files"
-            + $"?encrypted_file_key={Uri.EscapeDataString(encKey)}"
-            + $"&nonce={Uri.EscapeDataString(nonce)}"
-            + $"&encryption_algorithm=AES-256-GCM";
+        var url = $"/api/folders/{folderId}/files";
 
         var response = await client.PostAsync(url, form);
         response.EnsureSuccessStatusCode();

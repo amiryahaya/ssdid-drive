@@ -264,7 +264,31 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
             $"Expected 403 or 404 but got {(int)accessAfter.StatusCode}");
     }
 
-    // ── 12. CreateShare_WithoutAuth_Returns401 ────────────────────────
+    // ── 12. CreateShare_MissingEncryptedKey_Returns400 ────────────────
+
+    [Fact]
+    public async Task CreateShare_MissingEncryptedKey_Returns400()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareMissingKeyOwner");
+        var (_, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "ShareMissingKeyRecipient");
+
+        var folderId = await TestFixture.CreateFolderAsync(client1, "Share Missing Key Folder");
+
+        var request = new
+        {
+            resource_id = Guid.Parse(folderId),
+            resource_type = "folder",
+            shared_with_id = userId2,
+            permission = "read",
+            encrypted_key = "",  // Missing/empty
+            kem_algorithm = "ML-KEM-768"
+        };
+
+        var response = await client1.PostAsJsonAsync("/api/shares", request, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ── 13. CreateShare_WithoutAuth_Returns401 ────────────────────────
 
     [Fact]
     public async Task CreateShare_WithoutAuth_Returns401()

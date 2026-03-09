@@ -99,7 +99,8 @@ public class DeviceTests : IClassFixture<SsdidDriveFactory>
         var response = await client.GetAsync("/api/devices");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var devices = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var devices = body.GetProperty("items");
         Assert.True(devices.GetArrayLength() >= 2);
 
         var fingerprints = Enumerable.Range(0, devices.GetArrayLength())
@@ -191,7 +192,25 @@ public class DeviceTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    // ── 10. Revoke sets status to Revoked ──────────────────────────────
+    // ── 10. Revoke device as non-owner → 403 ──────────────────────────
+
+    [Fact]
+    public async Task RevokeDevice_NonOwner_ReturnsForbidden()
+    {
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "DeviceRevokeOwner");
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "DeviceRevokeNonOwner");
+
+        var fingerprint = $"fp-revoke-nonowner-{Guid.NewGuid():N}";
+        var enrollResp = await client1.PostAsJsonAsync("/api/devices", MakeEnrollRequest(fingerprint: fingerprint), TestFixture.Json);
+        var enrollBody = await enrollResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var deviceId = enrollBody.GetProperty("id").GetString();
+
+        // Non-owner tries to revoke
+        var response = await client2.DeleteAsync($"/api/devices/{deviceId}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ── 11. Revoke sets status to Revoked ──────────────────────────────
 
     [Fact]
     public async Task RevokeDevice_SetsStatusToRevoked()
@@ -205,9 +224,10 @@ public class DeviceTests : IClassFixture<SsdidDriveFactory>
 
         await client.DeleteAsync($"/api/devices/{deviceId}");
 
-        // Verify status via list (revoked devices still appear)
-        var listResp = await client.GetAsync("/api/devices");
-        var devices = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        // Verify status via list (include revoked devices)
+        var listResp = await client.GetAsync("/api/devices?include_revoked=true");
+        var body = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var devices = body.GetProperty("items");
 
         var revokedDevice = Enumerable.Range(0, devices.GetArrayLength())
             .Select(i => devices[i])

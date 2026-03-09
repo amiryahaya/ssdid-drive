@@ -9,11 +9,10 @@ public class RecoveryRequest
     public int ApprovalsReceived { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
-    /// <summary>Comma-separated GUIDs of trustees who have approved this request.</summary>
-    public string? ApprovedBy { get; set; }
 
     public User Requester { get; set; } = null!;
     public RecoveryConfig Config { get; set; } = null!;
+    public ICollection<RecoveryApproval> Approvals { get; set; } = [];
 }
 
 public enum RecoveryRequestStatus { Pending, Approved, Completed, Rejected, Expired }

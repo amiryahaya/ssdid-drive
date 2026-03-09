@@ -21,8 +21,7 @@ public static class DeclineInvitation
             return AppError.NotFound("Invitation not found").ToProblemResult();
 
         // Only the invited user can decline
-        var isInvitedUser = invitation.InvitedUserId == user.Id
-            || (user.Email != null && invitation.Email == user.Email);
+        var isInvitedUser = invitation.InvitedUserId == user.Id;
 
         if (!isInvitedUser)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();

@@ -38,7 +38,7 @@ public static class CreateInvitation
             return AppError.BadRequest("Role must be 'member' or 'admin'").ToProblemResult();
 
         var now = DateTimeOffset.UtcNow;
-        var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+        var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
 
         var invitation = new Invitation

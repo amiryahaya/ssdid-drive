@@ -136,6 +136,83 @@ public class PaginationTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(2, body.GetProperty("total").GetInt32());
     }
 
+    // ── Boundary Tests ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListFolders_PageBeyondTotal_ReturnsEmptyItems()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        await TestFixture.CreateFolderAsync(client, "BoundaryFolder A");
+        await TestFixture.CreateFolderAsync(client, "BoundaryFolder B");
+        await TestFixture.CreateFolderAsync(client, "BoundaryFolder C");
+
+        var response = await client.GetAsync("/api/folders?page=999&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+
+        Assert.Equal(0, items.GetArrayLength());
+        Assert.Equal(3, body.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task ListFolders_PageZero_ReturnsFirstPage()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        await TestFixture.CreateFolderAsync(client, "PageZeroFolder A");
+        await TestFixture.CreateFolderAsync(client, "PageZeroFolder B");
+
+        // page=0 should be treated as page 1
+        var response = await client.GetAsync("/api/folders?page=0&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+        var page = body.GetProperty("page").GetInt32();
+
+        Assert.True(items.GetArrayLength() >= 2);
+        Assert.Equal(1, page);
+    }
+
+    [Fact]
+    public async Task ListFolders_PageSizeZero_ClampsToMinimum()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        await TestFixture.CreateFolderAsync(client, "SizeZeroFolder A");
+
+        // pageSize=0 should be clamped to at least 1
+        var response = await client.GetAsync("/api/folders?page=1&pageSize=0");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+        var pageSize = body.GetProperty("page_size").GetInt32();
+
+        Assert.True(items.GetArrayLength() >= 1);
+        Assert.True(pageSize >= 1, $"Expected page_size >= 1 but got {pageSize}");
+    }
+
+    [Fact]
+    public async Task ListFolders_PageSizeExceedsMax_ClampsToMax()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+
+        await TestFixture.CreateFolderAsync(client, "LargeSizeFolder A");
+
+        // pageSize=200 should be clamped to 100
+        var response = await client.GetAsync("/api/folders?page=1&pageSize=200");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var pageSize = body.GetProperty("page_size").GetInt32();
+
+        Assert.True(pageSize <= 100, $"Expected page_size <= 100 but got {pageSize}");
+    }
+
     // ── Shares ─────────────────────────────────────────────────────────
 
     [Fact]

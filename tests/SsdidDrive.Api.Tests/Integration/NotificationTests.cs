@@ -50,7 +50,8 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.True(body.GetArrayLength() >= 2);
+        var items = body.GetProperty("items");
+        Assert.True(items.GetArrayLength() >= 2);
     }
 
     // ── 2. List with unread_only filter → only unread ────────────────────
@@ -68,12 +69,13 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
         // Should have exactly 2 unread notifications
-        Assert.Equal(2, body.GetArrayLength());
+        Assert.Equal(2, items.GetArrayLength());
 
-        for (int i = 0; i < body.GetArrayLength(); i++)
+        for (int i = 0; i < items.GetArrayLength(); i++)
         {
-            Assert.False(body[i].GetProperty("is_read").GetBoolean());
+            Assert.False(items[i].GetProperty("is_read").GetBoolean());
         }
     }
 
@@ -104,14 +106,15 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
 
         var notifId = await CreateNotificationAsync(_factory, userId);
 
-        var response = await client.PostAsync($"/api/notifications/{notifId}/read", null);
+        var response = await client.PatchAsync($"/api/notifications/{notifId}/read", null);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Verify it's now read
         var listResp = await client.GetAsync("/api/notifications?unread_only=true");
         var body = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var ids = Enumerable.Range(0, body.GetArrayLength())
-            .Select(i => body[i].GetProperty("id").GetGuid())
+        var items = body.GetProperty("items");
+        var ids = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i].GetProperty("id").GetGuid())
             .ToList();
         Assert.DoesNotContain(notifId, ids);
     }
@@ -126,7 +129,7 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
 
         var notifId = await CreateNotificationAsync(_factory, userId1);
 
-        var response = await client2.PostAsync($"/api/notifications/{notifId}/read", null);
+        var response = await client2.PatchAsync($"/api/notifications/{notifId}/read", null);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -142,7 +145,7 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
         await CreateNotificationAsync(_factory, userId, isRead: false);
         await CreateNotificationAsync(_factory, userId, isRead: true);
 
-        var response = await client.PostAsync("/api/notifications/read-all", null);
+        var response = await client.PatchAsync("/api/notifications/read-all", null);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
@@ -169,8 +172,9 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
         // Verify it's gone
         var listResp = await client.GetAsync("/api/notifications");
         var body = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var ids = Enumerable.Range(0, body.GetArrayLength())
-            .Select(i => body[i].GetProperty("id").GetGuid())
+        var items = body.GetProperty("items");
+        var ids = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i].GetProperty("id").GetGuid())
             .ToList();
         Assert.DoesNotContain(notifId, ids);
     }
@@ -219,11 +223,12 @@ public class NotificationTests : IClassFixture<SsdidDriveFactory>
 
         var response = await client.GetAsync("/api/notifications");
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
 
-        Assert.True(body.GetArrayLength() >= 2);
+        Assert.True(items.GetArrayLength() >= 2);
         // First should be "Newer"
-        var titles = Enumerable.Range(0, body.GetArrayLength())
-            .Select(i => body[i].GetProperty("title").GetString())
+        var titles = Enumerable.Range(0, items.GetArrayLength())
+            .Select(i => items[i].GetProperty("title").GetString())
             .ToList();
         var newerIdx = titles.IndexOf("Newer");
         var olderIdx = titles.IndexOf("Older");

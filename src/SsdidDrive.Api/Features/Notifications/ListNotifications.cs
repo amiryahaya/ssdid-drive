@@ -12,6 +12,7 @@ public static class ListNotifications
     private static async Task<IResult> Handle(
         AppDbContext db,
         CurrentUserAccessor accessor,
+        [AsParameters] PaginationParams pagination,
         bool? unread_only,
         CancellationToken ct)
     {
@@ -21,6 +22,8 @@ public static class ListNotifications
 
         if (unread_only == true)
             query = query.Where(n => !n.IsRead);
+
+        var total = await query.CountAsync(ct);
 
         // Client-side ordering for SQLite compatibility in tests
         var notifications = (await query
@@ -38,8 +41,10 @@ public static class ListNotifications
             })
             .ToListAsync(ct))
             .OrderByDescending(n => n.CreatedAt)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
             .ToList();
 
-        return Results.Ok(notifications);
+        return Results.Ok(new PagedResponse<object>(notifications, total, pagination.NormalizedPage, pagination.Take));
     }
 }

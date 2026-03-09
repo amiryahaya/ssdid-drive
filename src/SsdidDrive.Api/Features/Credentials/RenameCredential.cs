@@ -15,6 +15,9 @@ public static class RenameCredential
     {
         var user = accessor.User!;
 
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 512)
+            return AppError.BadRequest("Credential name is required (max 512 chars)").ToProblemResult();
+
         var credential = await db.WebAuthnCredentials
             .FirstOrDefaultAsync(c => c.Id == id && c.UserId == user.Id, ct);
 

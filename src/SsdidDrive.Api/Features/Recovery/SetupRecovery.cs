@@ -37,6 +37,14 @@ public static class SetupRecovery
         foreach (var existing in existingConfigs)
             existing.IsActive = false;
 
+        // Cancel any pending recovery requests for deactivated configs
+        var pendingRequests = await db.RecoveryRequests
+            .Where(rr => existingConfigs.Select(c => c.Id).Contains(rr.RecoveryConfigId)
+                && rr.Status == RecoveryRequestStatus.Pending)
+            .ToListAsync(ct);
+        foreach (var pr in pendingRequests)
+            pr.Status = RecoveryRequestStatus.Rejected;
+
         var config = new RecoveryConfig
         {
             UserId = user.Id,

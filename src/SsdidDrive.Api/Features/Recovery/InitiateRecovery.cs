@@ -26,6 +26,9 @@ public static class InitiateRecovery
         if (config is null)
             return AppError.NotFound("Recovery config not found").ToProblemResult();
 
+        if (config.UserId != user.Id)
+            return AppError.Forbidden("Only the account owner can initiate recovery").ToProblemResult();
+
         // Check for existing pending request
         var existingPending = await db.RecoveryRequests
             .AnyAsync(rr => rr.RecoveryConfigId == config.Id && rr.Status == RecoveryRequestStatus.Pending, ct);
