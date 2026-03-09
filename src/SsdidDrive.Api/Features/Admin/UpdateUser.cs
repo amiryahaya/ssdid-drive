@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Admin;
 
@@ -17,6 +18,7 @@ public static class UpdateUser
         UpdateUserRequest request,
         CurrentUserAccessor accessor,
         AppDbContext db,
+        AuditService audit,
         CancellationToken ct)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -46,6 +48,8 @@ public static class UpdateUser
 
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(accessor.UserId, $"user.{request.Status ?? "updated"}", "user", id, ct: ct);
 
         return Results.Ok(new
         {

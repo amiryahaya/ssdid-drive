@@ -219,6 +219,64 @@ public class AdminTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task AdminAuditLog_RecordsUserSuspension()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "AuditAdmin", systemRole: "SuperAdmin");
+        var (_, targetId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "AuditTarget");
+
+        await client.PatchAsJsonAsync($"/api/admin/users/{targetId}",
+            new { status = "suspended" }, TestFixture.Json);
+
+        var response = await client.GetAsync("/api/admin/audit-log");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+        Assert.True(items.GetArrayLength() >= 1);
+
+        // Check first entry has expected fields
+        var entry = items[0];
+        Assert.True(entry.TryGetProperty("action", out _));
+        Assert.True(entry.TryGetProperty("actor_id", out _));
+        Assert.True(entry.TryGetProperty("created_at", out _));
+    }
+
+    [Fact]
+    public async Task AdminAuditLog_RecordsTenantDisable()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "AuditTenantAdmin", systemRole: "SuperAdmin");
+        var slug = "audit-" + Guid.NewGuid().ToString("N")[..8];
+
+        var createResponse = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "AuditCorp", slug }, TestFixture.Json);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var tenantId = created.GetProperty("id").GetGuid();
+
+        await client.PatchAsJsonAsync($"/api/admin/tenants/{tenantId}",
+            new { disabled = true }, TestFixture.Json);
+
+        var response = await client.GetAsync("/api/admin/audit-log");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var items = body.GetProperty("items");
+        Assert.True(items.GetArrayLength() >= 1);
+
+        // Find the tenant.disabled entry
+        var found = false;
+        foreach (var entry in items.EnumerateArray())
+        {
+            if (entry.GetProperty("action").GetString() == "tenant.disabled")
+            {
+                found = true;
+                Assert.Equal(tenantId, entry.GetProperty("target_id").GetGuid());
+                break;
+            }
+        }
+        Assert.True(found, "Expected a tenant.disabled audit entry");
+    }
+
+    [Fact]
     public async Task AdminListTenants_SearchFilters()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TenantSearchAdmin", systemRole: "SuperAdmin");

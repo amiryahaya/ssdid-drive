@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Admin;
 
@@ -14,7 +15,9 @@ public static class UpdateTenant
     private static async Task<IResult> Handle(
         Guid id,
         UpdateTenantRequest request,
+        CurrentUserAccessor accessor,
         AppDbContext db,
+        AuditService audit,
         CancellationToken ct)
     {
         var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
@@ -36,6 +39,8 @@ public static class UpdateTenant
 
         tenant.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(accessor.UserId, request.Disabled == true ? "tenant.disabled" : "tenant.updated", "tenant", id, ct: ct);
 
         return Results.Ok(new
         {

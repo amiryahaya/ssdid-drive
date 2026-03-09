@@ -95,6 +95,7 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 
 builder.Services.AddScoped<SsdidAuthService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<AuditService>();
 builder.Services.AddSingleton<WebAuthnChallengeStore>();
 builder.Services.AddHostedService<ServerRegistrationService>();
 

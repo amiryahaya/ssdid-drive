@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecoveryRequest> RecoveryRequests => Set<RecoveryRequest>();
     public DbSet<RecoveryApproval> RecoveryApprovals => Set<RecoveryApproval>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
+    public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -353,6 +354,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(w => w.User)
                 .WithMany()
                 .HasForeignKey(w => w.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuditLogEntry>(e =>
+        {
+            e.ToTable("audit_log");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.Action).HasMaxLength(128).IsRequired();
+            e.Property(a => a.TargetType).HasMaxLength(64);
+            e.Property(a => a.Details).HasMaxLength(4096);
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(a => a.CreatedAt).IsDescending();
+
+            e.HasOne(a => a.Actor)
+                .WithMany()
+                .HasForeignKey(a => a.ActorId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
