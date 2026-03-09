@@ -4,6 +4,8 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
+import TenantsPage from './pages/TenantsPage'
+import TenantDetailPage from './pages/TenantDetailPage'
 
 function AuthenticatedApp() {
   const user = useAuthStore((s) => s.user)
@@ -21,6 +23,9 @@ function AuthenticatedApp() {
               </Link>
               <Link to="/users" className="text-gray-600 hover:text-gray-900">
                 Users
+              </Link>
+              <Link to="/tenants" className="text-gray-600 hover:text-gray-900">
+                Tenants
               </Link>
             </nav>
             <div className="flex items-center gap-3 text-sm">
@@ -41,6 +46,8 @@ function AuthenticatedApp() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/tenants" element={<TenantsPage />} />
+          <Route path="/tenants/:id" element={<TenantDetailPage />} />
         </Routes>
       </main>
     </div>
