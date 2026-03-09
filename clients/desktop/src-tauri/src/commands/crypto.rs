@@ -5,6 +5,7 @@ use crate::state::AppState;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use zeroize::Zeroize;
 
 /// Generated key pair response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -355,15 +356,19 @@ pub async fn decapsulate_folder_key(
 
     // Decrypt private keys with master key
     let master_key = state.crypto_service().get_master_key()?;
-    let ml_kem_sk = state
+    let mut ml_kem_sk = state
         .crypto_service()
         .decrypt_private_key(&encrypted_ml_kem_sk, &master_key)?;
-    let kaz_kem_sk = state
+    let mut kaz_kem_sk = state
         .crypto_service()
         .decrypt_private_key(&encrypted_kaz_kem_sk, &master_key)?;
 
     let ml_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&ml_kem_sk);
     let kaz_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&kaz_kem_sk);
+
+    // Zeroize decrypted private key bytes
+    ml_kem_sk.zeroize();
+    kaz_kem_sk.zeroize();
 
     let folder_key = state.crypto_service().decapsulate_folder_key(
         &kem_ciphertext,
