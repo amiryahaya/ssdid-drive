@@ -1,6 +1,8 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 
+ARG TARGETARCH
+
 WORKDIR /src
 
 # Copy csproj first for layer caching
@@ -14,6 +16,8 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 # ── Stage 2: Runtime ──────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview
 
+ARG TARGETARCH
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
@@ -22,16 +26,15 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
-# Ensure native KAZ-Sign library is loadable
-ENV LD_LIBRARY_PATH=/app/runtimes/linux-arm64/native
+# Ensure native KAZ-Sign library is loadable (arch-aware)
+ENV LD_LIBRARY_PATH=/app/runtimes/linux-${TARGETARCH}/native
 
 # Data directory for server identity + local file storage
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data/files
 VOLUME ["/app/data"]
 
 ENV ASPNETCORE_URLS=http://+:5000
-ENV ASPNETCORE_ENVIRONMENT=Development
-ENV ENABLE_AUTO_MIGRATE=true
+ENV ASPNETCORE_ENVIRONMENT=Production
 
 EXPOSE 5000
 
