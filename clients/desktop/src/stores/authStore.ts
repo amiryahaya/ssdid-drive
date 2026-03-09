@@ -38,7 +38,6 @@ interface AuthState {
   updateLastActivity: () => void;
   clearError: () => void;
   updateProfile: (name: string) => Promise<void>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   loadDevices: () => Promise<void>;
   revokeDevice: (deviceId: string) => Promise<void>;
 }
@@ -170,18 +169,6 @@ export const useAuthStore = create<AuthState>()(
         try {
           const user = await invoke<User>('update_profile', { name });
           set({ user, isLoading: false });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          set({ error: message, isLoading: false });
-          throw error;
-        }
-      },
-
-      changePassword: async (currentPassword: string, newPassword: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          await invoke('change_password', { currentPassword, newPassword });
-          set({ isLoading: false });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           set({ error: message, isLoading: false });

@@ -3,7 +3,9 @@ import LocalAuthentication
 import CryptoKit
 import Security
 
-/// Implementation of AuthRepository
+/// Implementation of AuthRepository.
+/// Authentication is SSDID wallet-based (QR challenge-response).
+/// Password is only used for client-side key encryption during invitation acceptance.
 final class AuthRepositoryImpl: AuthRepository {
 
     // MARK: - Properties
@@ -25,114 +27,6 @@ final class AuthRepositoryImpl: AuthRepository {
     }
 
     // MARK: - Authentication
-
-    func login(email: String, password: String) async throws -> User {
-        // Generate device signature
-        let deviceSignature = try await createDeviceSignature()
-
-        let request = LoginRequest(
-            email: email,
-            password: password,
-            deviceSignature: deviceSignature
-        )
-
-        let response: LoginResponse = try await apiClient.request(
-            Constants.API.Endpoints.login,
-            method: .post,
-            body: request,
-            requiresAuth: false
-        )
-
-        // Store tokens
-        keychainManager.accessToken = response.tokens.accessToken
-        keychainManager.refreshToken = response.tokens.refreshToken
-        keychainManager.userId = response.user.id
-
-        // Write tokens to shared keychain for File Provider extension
-        if let tokenData = response.tokens.accessToken.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
-        }
-        if let refreshData = response.tokens.refreshToken.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(refreshData, for: Constants.Keychain.refreshToken)
-        }
-        if let userIdData = response.user.id.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(userIdData, for: Constants.Keychain.userId)
-        }
-
-        // Unlock keys with password
-        try await unlockKeys(password: password)
-
-        // Sync KEM keys to shared keychain for File Provider decryption
-        syncKemKeysToExtension()
-
-        // Update shared defaults for menu bar helper (H2: use .shared directly to avoid MainActor hop)
-        let shared = SharedDefaults.shared
-        shared.writeIsAuthenticated(true)
-        shared.writeUserDisplayName(Self.maskedEmail(response.user.email))
-        shared.notifyHelper()
-
-        // Register File Provider domain for Finder integration
-        await MainActor.run {
-            DependencyContainer.shared.fileProviderDomainManager.registerDomain()
-        }
-
-        // Best-effort KDF profile upgrade
-        await upgradeKdfProfileIfNeeded(
-            password: password,
-            serverEncryptedMasterKey: response.user.encryptedMasterKey,
-            serverSalt: response.user.keyDerivationSalt
-        )
-
-        return response.user
-    }
-
-    func register(email: String, password: String) async throws -> User {
-        // Generate key bundle
-        let keyBundle = try keyManager.generateKeyBundle()
-
-        let request = RegisterRequest(
-            email: email,
-            password: password,
-            publicKeys: keyBundle.publicKeys
-        )
-
-        let response: RegisterResponse = try await apiClient.request(
-            Constants.API.Endpoints.register,
-            method: .post,
-            body: request,
-            requiresAuth: false
-        )
-
-        // Store tokens
-        keychainManager.accessToken = response.tokens.accessToken
-        keychainManager.refreshToken = response.tokens.refreshToken
-        keychainManager.userId = response.user.id
-        keychainManager.deviceId = response.device.id
-
-        // Write tokens to shared keychain for File Provider extension
-        if let tokenData = response.tokens.accessToken.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
-        }
-        if let refreshData = response.tokens.refreshToken.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(refreshData, for: Constants.Keychain.refreshToken)
-        }
-        if let userIdData = response.user.id.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(userIdData, for: Constants.Keychain.userId)
-        }
-
-        // Register File Provider domain
-        await MainActor.run {
-            DependencyContainer.shared.fileProviderDomainManager.registerDomain()
-        }
-
-        // Store encrypted keys
-        try keyManager.storeKeys(keyBundle, password: password)
-
-        // Sync KEM keys to shared keychain for File Provider decryption
-        syncKemKeysToExtension()
-
-        return response.user
-    }
 
     func logout() async throws {
         // Call logout endpoint (optional - may fail if already logged out)
@@ -238,14 +132,6 @@ final class AuthRepositoryImpl: AuthRepository {
         keychainManager.hasMasterKey
     }
 
-    func enableBiometricUnlock(password: String) async throws {
-        // First verify password by unlocking keys
-        try await unlockKeys(password: password)
-
-        // Keys are now stored with biometric protection
-        // (storeKeys already stores master key for biometric)
-    }
-
     func disableBiometricUnlock() async throws {
         try keychainManager.delete(key: Constants.Keychain.masterKey)
     }
@@ -283,11 +169,6 @@ final class AuthRepositoryImpl: AuthRepository {
     func lockKeys() async {
         keyManager.lockKeys()
         keychainManager.clearSharedKemKeys()
-    }
-
-    func unlockKeys(password: String) async throws {
-        _ = try keyManager.loadKeys(password: password)
-        syncKemKeysToExtension()
     }
 
     // MARK: - Device Management
@@ -339,112 +220,6 @@ final class AuthRepositoryImpl: AuthRepository {
         keychainManager.deviceId
     }
 
-    // MARK: - Password
-
-    func changePassword(currentPassword: String, newPassword: String) async throws {
-        // Verify current password
-        guard try await verifyPassword(currentPassword) else {
-            throw AuthError.invalidPassword
-        }
-
-        // Re-encrypt keys with new password
-        guard let keyBundle = keyManager.currentKeyBundle else {
-            throw AuthError.keysNotUnlocked
-        }
-
-        try keyManager.storeKeys(keyBundle, password: newPassword)
-
-        // Notify server
-        let request = ChangePasswordRequest(
-            currentPassword: currentPassword,
-            newPassword: newPassword
-        )
-
-        try await apiClient.requestNoContent(
-            "/auth/password",
-            method: .put,
-            body: request
-        )
-    }
-
-    func verifyPassword(_ password: String) async throws -> Bool {
-        do {
-            _ = try keyManager.loadKeys(password: password)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    // MARK: - KDF Profile Upgrade
-
-    /// Silently upgrade the KDF profile if the device supports a stronger one.
-    /// Re-encrypts the server's master key with a stronger password-derived key,
-    /// updates the server, and re-encrypts the local key bundle.
-    /// Best-effort: failures are logged and do not affect the login flow.
-    private func upgradeKdfProfileIfNeeded(
-        password: String,
-        serverEncryptedMasterKey: String?,
-        serverSalt: String?
-    ) async {
-        do {
-            guard let saltB64 = serverSalt,
-                  let encMasterKeyB64 = serverEncryptedMasterKey,
-                  let currentSalt = Data(base64Encoded: saltB64),
-                  let encryptedMasterKey = Data(base64Encoded: encMasterKeyB64)
-            else { return }
-
-            let deviceProfile = KdfProfile.selectForDevice()
-
-            let needsUpgrade: Bool
-            if KdfProfile.isTieredSalt(currentSalt) {
-                let currentProfile = try KdfProfile.fromByte(currentSalt[currentSalt.startIndex])
-                needsUpgrade = currentProfile.rawValue > deviceProfile.rawValue
-            } else {
-                needsUpgrade = true // Legacy salt always needs upgrade
-            }
-
-            guard needsUpgrade else { return }
-
-            // Derive old key from password + old salt
-            let oldKey = try TieredKdf.deriveKey(password: password, saltWithProfile: currentSalt)
-
-            // Decrypt server's master key
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedMasterKey)
-            var rawMasterKey = try AES.GCM.open(sealedBox, using: oldKey)
-            defer { rawMasterKey.secureZero() }
-
-            // Generate new salt + derive new key with stronger profile
-            let newSalt = KdfProfile.createSaltWithProfile(deviceProfile)
-            let newKey = try TieredKdf.deriveKey(password: password, saltWithProfile: newSalt)
-
-            // Re-encrypt master key with the stronger key
-            guard let newEncryptedMasterKey = try AES.GCM.seal(rawMasterKey, using: newKey).combined else {
-                return
-            }
-
-            // Update server via PUT /me/keys
-            struct UpdateKeysRequest: Encodable {
-                let encrypted_master_key: String
-                let key_derivation_salt: String
-            }
-            let request = UpdateKeysRequest(
-                encrypted_master_key: newEncryptedMasterKey.base64EncodedString(),
-                key_derivation_salt: newSalt.base64EncodedString()
-            )
-            try await apiClient.requestNoContent("/me/keys", method: .put, body: request)
-
-            // Re-encrypt local key bundle with new profile
-            if let bundle = keyManager.currentKeyBundle {
-                try keyManager.storeKeys(bundle, password: password)
-            }
-
-            print("[KdfUpgrade] Upgraded KDF profile to \(deviceProfile)")
-        } catch {
-            print("[KdfUpgrade] KDF profile upgrade failed (non-fatal): \(error)")
-        }
-    }
-
     // MARK: - KEM Key Sync
 
     /// Sync KEM keys to the shared keychain so the File Provider extension can decrypt and encrypt files.
@@ -463,85 +238,15 @@ final class AuthRepositoryImpl: AuthRepository {
             print("[KemSync] Failed to sync KEM keys to shared keychain: \(error)")
         }
     }
-
-    // MARK: - Private Helpers
-
-    /// Mask an email address to prevent full PII leakage in shared storage.
-    /// "user@example.com" → "u***@e***.com"
-    static func maskedEmail(_ email: String) -> String {
-        let parts = email.split(separator: "@", maxSplits: 1)
-        guard parts.count == 2 else { return "***" }
-        let local = parts[0]
-        let domain = parts[1]
-        let maskedLocal = local.prefix(1) + "***"
-        let domainParts = domain.split(separator: ".", maxSplits: 1)
-        let maskedDomain: String
-        if domainParts.count == 2 {
-            maskedDomain = domainParts[0].prefix(1) + "***." + domainParts[1]
-        } else {
-            maskedDomain = String(domain.prefix(1)) + "***"
-        }
-        return "\(maskedLocal)@\(maskedDomain)"
-    }
-
-    private func createDeviceSignature() async throws -> String {
-        // For initial login, we may not have device keys yet
-        // Return empty string for first-time auth
-        guard let keyBundle = keyManager.currentKeyBundle else {
-            return ""
-        }
-
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        guard let data = timestamp.data(using: .utf8) else {
-            throw AuthError.signatureFailed
-        }
-
-        let signature = try keyBundle.deviceSigningKey.signature(for: data)
-        return signature.rawRepresentation.base64EncodedString()
-    }
 }
 
 // MARK: - Request Types
-
-private struct LoginRequest: Codable {
-    let email: String
-    let password: String
-    let deviceSignature: String
-
-    enum CodingKeys: String, CodingKey {
-        case email
-        case password
-        case deviceSignature = "device_signature"
-    }
-}
-
-private struct RegisterRequest: Codable {
-    let email: String
-    let password: String
-    let publicKeys: KeyManager.PublicKeys
-
-    enum CodingKeys: String, CodingKey {
-        case email
-        case password
-        case publicKeys = "public_keys"
-    }
-}
 
 private struct RefreshRequest: Codable {
     let refreshToken: String
 
     enum CodingKeys: String, CodingKey {
         case refreshToken = "refresh_token"
-    }
-}
-
-private struct ChangePasswordRequest: Codable {
-    let currentPassword: String
-    let newPassword: String
-
-    enum CodingKeys: String, CodingKey {
-        case currentPassword = "current_password"
-        case newPassword = "new_password"
     }
 }
 
@@ -680,8 +385,6 @@ extension AuthRepositoryImpl {
 
 enum AuthError: Error, LocalizedError {
     case notAuthenticated
-    case invalidCredentials
-    case invalidPassword
     case biometricFailed
     case keysNotUnlocked
     case signatureFailed
@@ -693,10 +396,6 @@ enum AuthError: Error, LocalizedError {
         switch self {
         case .notAuthenticated:
             return "Not authenticated"
-        case .invalidCredentials:
-            return "Invalid email or password"
-        case .invalidPassword:
-            return "Invalid password"
         case .biometricFailed:
             return "Biometric authentication failed"
         case .keysNotUnlocked:

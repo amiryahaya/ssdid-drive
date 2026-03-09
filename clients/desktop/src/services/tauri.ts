@@ -15,8 +15,6 @@ import type {
   PiiConversation,
   RegisterKemKeysResponse,
   DecryptedAskResponse,
-  UserCredential,
-  WebAuthnBeginResponse,
 } from '../types';
 
 // ==================== SSDID Auth Helpers ====================
@@ -237,34 +235,6 @@ export const tauriService = {
 
   async declineShare(shareId: string): Promise<void> {
     return invoke('decline_share', { shareId });
-  },
-
-  // ==================== Credential Commands ====================
-
-  async listCredentials(): Promise<UserCredential[]> {
-    return invoke('list_credentials');
-  },
-
-  async renameCredential(credentialId: string, name: string): Promise<UserCredential> {
-    return invoke('rename_credential', { credentialId, name });
-  },
-
-  async deleteCredential(credentialId: string): Promise<void> {
-    return invoke('delete_credential', { credentialId });
-  },
-
-  // ==================== WebAuthn Commands ====================
-
-  async webauthnAddCredentialBegin(): Promise<WebAuthnBeginResponse> {
-    return invoke('webauthn_add_credential_begin');
-  },
-
-  async webauthnAddCredentialComplete(request: {
-    challenge_id: string;
-    attestation: Record<string, unknown>;
-    credential_name: string;
-  }): Promise<void> {
-    return invoke('webauthn_add_credential_complete', { request });
   },
 
   // ==================== Settings Commands ====================

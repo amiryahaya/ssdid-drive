@@ -142,48 +142,6 @@ export interface Toast {
   duration?: number;
 }
 
-// Auth provider types
-export interface AuthProvider {
-  id: string;
-  name: string;
-  provider_type: string;
-  tenant_id: string;
-  client_id: string | null;
-  issuer: string | null;
-  enabled: boolean;
-}
-
-export interface OidcCallbackResponse {
-  status: 'authenticated' | 'new_user';
-  user: User | null;
-  access_token: string | null;
-  refresh_token: string | null;
-  device_id: string | null;
-  key_material: string | null;
-  key_salt: string | null;
-}
-
-export interface WebAuthnBeginResponse {
-  options: Record<string, unknown>;
-  challenge_id: string;
-}
-
-export interface WebAuthnLoginResponse {
-  user: User;
-  access_token: string;
-  refresh_token: string;
-  device_id: string;
-}
-
-export interface UserCredential {
-  id: string;
-  credential_type: string;
-  name: string | null;
-  provider_name: string | null;
-  created_at: string;
-  last_used_at: string | null;
-}
-
 // PII Service types
 export interface PiiConversation {
   id: string;

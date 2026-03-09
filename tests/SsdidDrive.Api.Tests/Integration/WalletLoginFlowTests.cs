@@ -395,53 +395,21 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
     // --- Helper methods ---
 
     private (SsdidIdentity Identity, CryptoProviderFactory CryptoFactory) CreateWalletIdentity()
-    {
-        var providers = new ICryptoProvider[] { new Ed25519Provider() };
-        var cryptoFactory = new CryptoProviderFactory(providers);
-        var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
-        return (identity, cryptoFactory);
-    }
+        => TestFixture.CreateWalletIdentity();
 
     private async Task<JsonElement> RegisterWallet(SsdidIdentity walletIdentity)
-    {
-        var client = _factory.CreateClient();
-
-        var regResp = await client.PostAsJsonAsync("/api/auth/ssdid/register",
-            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId }, SnakeJson);
-        regResp.EnsureSuccessStatusCode();
-        var regBody = await regResp.Content.ReadFromJsonAsync<JsonElement>();
-        var challenge = regBody.GetProperty("challenge").GetString()!;
-
-        var signedChallenge = walletIdentity.SignChallenge(challenge);
-        var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge },
-            SnakeJson);
-        verifyResp.EnsureSuccessStatusCode();
-        var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
-        return verifyBody.GetProperty("credential");
-    }
+        => await TestFixture.RegisterWalletAsync(_factory, walletIdentity);
 
     private async Task<JsonElement?> ReadSseEvent(HttpClient client, string challengeId, string subscriberSecret, CancellationToken ct)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get,
-            $"/api/auth/ssdid/events?challenge_id={challengeId}&subscriber_secret={Uri.EscapeDataString(subscriberSecret)}");
-        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
-
-        var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new StreamReader(stream);
-
-        while (!ct.IsCancellationRequested)
+        try
         {
-            var line = await reader.ReadLineAsync(ct);
-            if (line is null) break;
-            if (line.StartsWith("data: "))
-            {
-                var json = line["data: ".Length..];
-                return JsonSerializer.Deserialize<JsonElement>(json);
-            }
+            return await TestFixture.ReadSseEventOrFail(client, challengeId, subscriberSecret, ct);
         }
-        return null;
+        catch (TimeoutException)
+        {
+            return null;
+        }
     }
 
     public class WalletLoginFactory : SsdidDriveFactory

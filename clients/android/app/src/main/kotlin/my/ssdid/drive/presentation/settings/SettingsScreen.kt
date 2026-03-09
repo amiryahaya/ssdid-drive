@@ -7,7 +7,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -27,7 +26,6 @@ fun SettingsScreen(
     onNavigateToInitiateRecovery: () -> Unit = {},
     onNavigateToInvitations: () -> Unit = {},
     onNavigateToPiiChat: () -> Unit = {},
-    onNavigateToCredentials: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -108,11 +106,6 @@ fun SettingsScreen(
                     // AI Chat Section
                     AiChatSectionButton(
                         onNavigateToPiiChat = onNavigateToPiiChat
-                    )
-
-                    // Security Keys & Passkeys Section
-                    CredentialsSectionButton(
-                        onNavigateToCredentials = onNavigateToCredentials
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -376,48 +369,3 @@ private fun AiChatSectionButton(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CredentialsSectionButton(
-    onNavigateToCredentials: () -> Unit
-) {
-    Card(
-        onClick = onNavigateToCredentials,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Fingerprint,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Security Keys & Passkeys",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "Manage WebAuthn and OIDC credentials",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
