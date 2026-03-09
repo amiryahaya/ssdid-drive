@@ -150,16 +150,22 @@ describe('fileStore', () => {
   });
 
   describe('createFolder', () => {
+    const mockKeys = { ml_kem_pk: 'ml-pk', kaz_kem_pk: 'kaz-pk' };
+
     it('should create folder and reload files', async () => {
       mockInvoke
+        .mockResolvedValueOnce(mockKeys) // get_user_kem_public_keys
         .mockResolvedValueOnce(undefined) // create_folder
         .mockResolvedValueOnce(mockFileListResponse); // list_files
 
       await useFileStore.getState().createFolder('New Folder');
 
+      expect(mockInvoke).toHaveBeenCalledWith('get_user_kem_public_keys');
       expect(mockInvoke).toHaveBeenCalledWith('create_folder', {
         name: 'New Folder',
         parentId: null,
+        mlKemPk: 'ml-pk',
+        kazKemPk: 'kaz-pk',
       });
       expect(mockInvoke).toHaveBeenCalledWith('list_files', { folderId: null });
     });
@@ -170,14 +176,17 @@ describe('fileStore', () => {
       });
 
       mockInvoke
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(mockFolderResponse);
+        .mockResolvedValueOnce(mockKeys) // get_user_kem_public_keys
+        .mockResolvedValueOnce(undefined) // create_folder
+        .mockResolvedValueOnce(mockFolderResponse); // list_files
 
       await useFileStore.getState().createFolder('Sub Folder', 'folder-1');
 
       expect(mockInvoke).toHaveBeenCalledWith('create_folder', {
         name: 'Sub Folder',
         parentId: 'folder-1',
+        mlKemPk: 'ml-pk',
+        kazKemPk: 'kaz-pk',
       });
     });
 

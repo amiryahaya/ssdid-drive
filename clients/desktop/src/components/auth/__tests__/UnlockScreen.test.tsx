@@ -43,16 +43,10 @@ describe('UnlockScreen', () => {
     expect(screen.getByText(mockUser.email)).toBeInTheDocument();
   });
 
-  it('should render password input', () => {
-    render(<UnlockScreen />);
-
-    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
-  });
-
   it('should render unlock button', () => {
     render(<UnlockScreen />);
 
-    expect(screen.getByRole('button', { name: 'Unlock' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Unlock/i })).toBeInTheDocument();
   });
 
   it('should not render biometric unlock button when biometric is not available', () => {
@@ -61,29 +55,16 @@ describe('UnlockScreen', () => {
     expect(screen.queryByRole('button', { name: /unlock with/i })).not.toBeInTheDocument();
   });
 
-  it('should show/hide password on toggle', async () => {
-    const { user } = render(<UnlockScreen />);
-
-    const passwordInput = screen.getByPlaceholderText('Enter your password');
-    expect(passwordInput).toHaveAttribute('type', 'password');
-
-    const toggleButton = passwordInput.parentElement?.querySelector('button');
-    await user.click(toggleButton!);
-
-    expect(passwordInput).toHaveAttribute('type', 'text');
-  });
-
-  it('should call unlock with password on submit', async () => {
+  it('should call unlock on button click', async () => {
     const unlockSpy = vi.fn().mockResolvedValue(undefined);
     useAuthStore.setState({ unlock: unlockSpy });
 
     const { user } = render(<UnlockScreen />);
 
-    await user.type(screen.getByPlaceholderText('Enter your password'), 'mypassword');
-    await user.click(screen.getByRole('button', { name: 'Unlock' }));
+    await user.click(screen.getByRole('button', { name: /Unlock/i }));
 
     await waitFor(() => {
-      expect(unlockSpy).toHaveBeenCalledWith('mypassword');
+      expect(unlockSpy).toHaveBeenCalled();
     });
   });
 
@@ -103,15 +84,15 @@ describe('UnlockScreen', () => {
   });
 
   it('should show error message on unlock failure', () => {
-    useAuthStore.setState({ error: 'Invalid password' });
+    useAuthStore.setState({ error: 'Unlock failed' });
 
     render(<UnlockScreen />);
 
-    expect(screen.getByText('Invalid password')).toBeInTheDocument();
+    expect(screen.getByText('Unlock failed')).toBeInTheDocument();
   });
 
   it('should clear error when dismiss is clicked', async () => {
-    useAuthStore.setState({ error: 'Invalid password' });
+    useAuthStore.setState({ error: 'Unlock failed' });
 
     const { user } = render(<UnlockScreen />);
 
@@ -126,7 +107,6 @@ describe('UnlockScreen', () => {
     render(<UnlockScreen />);
 
     expect(screen.getByRole('button', { name: /unlocking/i })).toBeDisabled();
-    // Biometric button is not rendered when biometric is not available
   });
 
   it('should show loading spinner while unlocking', () => {
@@ -156,6 +136,6 @@ describe('UnlockScreen', () => {
 
     render(<UnlockScreen />);
 
-    expect(screen.getByText('Enter your password to unlock')).toBeInTheDocument();
+    expect(screen.getByText('Unlock to continue')).toBeInTheDocument();
   });
 });

@@ -66,49 +66,12 @@ describe('createChallenge', () => {
 
 describe('tauriService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   // ==================== Auth Commands ====================
 
   describe('auth commands', () => {
-    describe('login', () => {
-      it('should call invoke with correct parameters', async () => {
-        const mockUser = { id: 'user-1', email: 'test@example.com', name: 'Test' };
-        mockInvoke.mockResolvedValueOnce({ user: mockUser });
-
-        const result = await tauriService.login('test@example.com', 'password123');
-
-        expect(mockInvoke).toHaveBeenCalledWith('login', {
-          email: 'test@example.com',
-          password: 'password123',
-        });
-        expect(result).toEqual({ user: mockUser });
-      });
-    });
-
-    describe('register', () => {
-      it('should call invoke with correct parameters', async () => {
-        const mockUser = { id: 'user-1', email: 'test@example.com', name: 'Test' };
-        mockInvoke.mockResolvedValueOnce({ user: mockUser });
-
-        const result = await tauriService.register(
-          'test@example.com',
-          'password123',
-          'Test User',
-          'invite-token'
-        );
-
-        expect(mockInvoke).toHaveBeenCalledWith('register', {
-          email: 'test@example.com',
-          password: 'password123',
-          name: 'Test User',
-          invitationToken: 'invite-token',
-        });
-        expect(result).toEqual({ user: mockUser });
-      });
-    });
-
     describe('logout', () => {
       it('should call invoke with correct command', async () => {
         mockInvoke.mockResolvedValueOnce(undefined);
@@ -241,27 +204,38 @@ describe('tauriService', () => {
 
     describe('createFolder', () => {
       it('should call invoke with correct parameters', async () => {
+        const mockKeys = { ml_kem_pk: 'ml-pk', kaz_kem_pk: 'kaz-pk' };
         const mockFolder = { id: 'folder-1', name: 'New Folder', item_type: 'folder' };
-        mockInvoke.mockResolvedValueOnce(mockFolder);
+        mockInvoke
+          .mockResolvedValueOnce(mockKeys) // get_user_kem_public_keys
+          .mockResolvedValueOnce(mockFolder); // create_folder
 
         const result = await tauriService.createFolder('New Folder', 'parent-1');
 
+        expect(mockInvoke).toHaveBeenCalledWith('get_user_kem_public_keys');
         expect(mockInvoke).toHaveBeenCalledWith('create_folder', {
           name: 'New Folder',
           parentId: 'parent-1',
+          mlKemPk: 'ml-pk',
+          kazKemPk: 'kaz-pk',
         });
         expect(result).toEqual(mockFolder);
       });
 
       it('should use null for parentId when not provided', async () => {
+        const mockKeys = { ml_kem_pk: 'ml-pk', kaz_kem_pk: 'kaz-pk' };
         const mockFolder = { id: 'folder-1', name: 'New Folder', item_type: 'folder' };
-        mockInvoke.mockResolvedValueOnce(mockFolder);
+        mockInvoke
+          .mockResolvedValueOnce(mockKeys) // get_user_kem_public_keys
+          .mockResolvedValueOnce(mockFolder); // create_folder
 
         await tauriService.createFolder('New Folder');
 
         expect(mockInvoke).toHaveBeenCalledWith('create_folder', {
           name: 'New Folder',
           parentId: null,
+          mlKemPk: 'ml-pk',
+          kazKemPk: 'kaz-pk',
         });
       });
     });
