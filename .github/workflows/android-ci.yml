@@ -5,10 +5,13 @@ on:
     branches: [main]
     paths:
       - 'clients/android/**'
+      - '.github/workflows/android-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'clients/android/**'
+      - '.github/workflows/android-ci.yml'
+  workflow_dispatch:
 
 jobs:
   build-and-test:
