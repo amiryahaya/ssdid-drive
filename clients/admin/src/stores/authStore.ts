@@ -17,7 +17,7 @@ interface AuthState {
   initialize: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, get) => {
+export const useAuthStore = create<AuthState>((set) => {
   const logout = () => {
     setToken(null)
     set({ token: null, user: null, isAuthenticated: false })

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import DataTable from '../components/DataTable'
 import type { Column } from '../components/DataTable'
+import Pagination from '../components/Pagination'
 import CreateTenantDialog from '../components/CreateTenantDialog'
 import EditTenantDialog from '../components/EditTenantDialog'
 import { useAdminStore } from '../stores/adminStore'
@@ -41,6 +42,13 @@ export default function TenantsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   const loadTenants = useCallback(
     (currentPage: number, currentSearch: string) => {
@@ -159,8 +167,7 @@ export default function TenantsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Tenants</h2>
+      <div className="flex items-center justify-end mb-6">
         <div className="flex items-center gap-3">
           <input
             type="text"
@@ -191,40 +198,24 @@ export default function TenantsPage() {
         rowKey={(t) => t.id}
       />
 
-      {!tenantsLoading && tenantsTotal > 0 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-              className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        loading={tenantsLoading}
+        total={tenantsTotal}
+        onChange={setPage}
+      />
 
       <CreateTenantDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreated={() => loadTenants(page, search)}
+        onCreated={() => loadTenants(page, debouncedSearch)}
       />
 
       <EditTenantDialog
         tenant={editingTenant}
         onClose={() => setEditingTenant(null)}
-        onUpdated={() => loadTenants(page, search)}
+        onUpdated={() => loadTenants(page, debouncedSearch)}
       />
     </div>
   )

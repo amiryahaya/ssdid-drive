@@ -36,21 +36,24 @@ export default function TenantDetailPage() {
   // Use tenant from store if available, otherwise use directly fetched one
   const tenant: Tenant | undefined = tenants.find((t) => t.id === id) ?? directTenant ?? undefined
 
+  // Fetch tenant if not in store (e.g. direct navigation)
   useEffect(() => {
     if (!id) return
-
-    // If tenant not in store, fetch it directly
     if (!tenants.find((t) => t.id === id)) {
       fetchTenantById(id)
         .then(setDirectTenant)
         .catch(() => setError('Tenant not found'))
     }
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch members
+  useEffect(() => {
+    if (!id) return
     setError(null)
     fetchTenantMembers(id).catch((err) =>
       setError(err instanceof Error ? err.message : 'Failed to load members'),
     )
-  }, [id, tenants, fetchTenantById, fetchTenantMembers])
+  }, [id, fetchTenantMembers])
 
   const memberColumns: Column<TenantMember>[] = [
     {
@@ -136,7 +139,6 @@ export default function TenantDetailPage() {
         </div>
       )}
 
-      {error && !tenant && null}
       {error && tenant && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-4">
           {error}
