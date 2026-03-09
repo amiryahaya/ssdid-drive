@@ -35,6 +35,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasConversion(
                     v => v.ToString().ToLowerInvariant(),
                     v => Enum.Parse<UserStatus>(v, true));
+            e.Property(u => u.SystemRole)
+                .HasConversion<string>()
+                .HasMaxLength(20);
             e.Property(u => u.PublicKeys).HasColumnType("jsonb");
             e.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
             e.Property(u => u.UpdatedAt).HasDefaultValueSql("now()");

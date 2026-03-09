@@ -9,6 +9,7 @@ public class User
     public string? DisplayName { get; set; }
     public string? Email { get; set; }
     public UserStatus Status { get; set; } = UserStatus.Active;
+    public SystemRole? SystemRole { get; set; }
 
     // Zero-knowledge key storage (client-side encrypted)
     public string? PublicKeys { get; set; } // JSON
