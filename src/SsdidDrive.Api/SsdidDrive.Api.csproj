@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <None Include="runtimes/osx-arm64/native/libkazsign.dylib" CopyToOutputDirectory="PreserveNewest" Link="runtimes/osx-arm64/native/libkazsign.dylib" />
+    <None Include="runtimes/linux-arm64/native/libkazsign.so" CopyToOutputDirectory="PreserveNewest" Link="runtimes/linux-arm64/native/libkazsign.so" />
   </ItemGroup>
 
   <ItemGroup>
