@@ -16,13 +16,14 @@ public static class RenameFolder
         if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 512)
             return AppError.BadRequest("Folder name is required (max 512 chars)").ToProblemResult();
 
+        var user = accessor.User!;
         var folder = await db.Folders
-            .FirstOrDefaultAsync(f => f.Id == id, ct);
+            .FirstOrDefaultAsync(f => f.Id == id && f.TenantId == user.TenantId, ct);
 
         if (folder is null)
             return AppError.NotFound("Folder not found").ToProblemResult();
 
-        if (folder.OwnerId != accessor.User!.Id)
+        if (folder.OwnerId != user.Id)
             return AppError.Forbidden("Only the folder owner can rename it").ToProblemResult();
 
         folder.Name = req.Name.Trim();

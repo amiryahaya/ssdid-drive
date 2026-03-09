@@ -33,8 +33,8 @@ public class RenameFolderTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task RenameFolder_NonOwner_Returns403()
     {
-        var (client1, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Owner");
-        var (client2, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "NonOwner");
+        var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "Owner");
+        var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "NonOwner");
 
         var folderId = await TestFixture.CreateFolderAsync(client1, "Owner's Folder");
 
