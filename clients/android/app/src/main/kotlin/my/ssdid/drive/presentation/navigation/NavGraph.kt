@@ -24,7 +24,6 @@ import my.ssdid.drive.presentation.recovery.PendingRequestsScreen
 import my.ssdid.drive.presentation.recovery.RecoverySetupScreen
 import my.ssdid.drive.presentation.recovery.TrusteeSelectionScreen
 import my.ssdid.drive.presentation.files.upload.ShareIntentScreen
-import my.ssdid.drive.presentation.settings.CredentialManagerScreen
 import my.ssdid.drive.presentation.settings.InvitationsScreen
 import my.ssdid.drive.presentation.settings.SettingsScreen
 import my.ssdid.drive.presentation.sharing.ReceivedSharesScreen
@@ -251,17 +250,7 @@ fun NavGraph(
                 },
                 onNavigateToPiiChat = {
                     navController.navigate(Screen.PiiConversations.route)
-                },
-                onNavigateToCredentials = {
-                    navController.navigate(Screen.Credentials.route)
                 }
-            )
-        }
-
-        // Credentials
-        composable(Screen.Credentials.route) {
-            CredentialManagerScreen(
-                onNavigateBack = { navController.popBackStack() }
             )
         }
 
