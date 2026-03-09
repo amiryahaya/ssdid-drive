@@ -37,6 +37,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import my.ssdid.drive.util.Logger
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -55,6 +56,10 @@ class FileRepositoryImpl @Inject constructor(
     @UnauthenticatedClient private val okHttpClient: OkHttpClient,
     private val analyticsManager: AnalyticsManager
 ) : FileRepository {
+
+    companion object {
+        private const val TAG = "FileRepository"
+    }
 
     override suspend fun getFiles(folderId: String): Result<List<FileItem>> {
         return try {
@@ -234,31 +239,56 @@ class FileRepositoryImpl @Inject constructor(
             val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}.enc")
 
             try {
-                // Encrypt file to temp file
-                val encryptionResult = FileOutputStream(tempFile).use { outputStream ->
-                    fileEncryptor.encryptFile(
-                        uri = uri,
-                        fileName = fileName,
-                        mimeType = mimeType,
-                        folderId = folderId,
-                        outputStream = outputStream
-                    ) { bytesProcessed, totalBytes ->
-                        // Progress during encryption
+                // Attempt to encrypt file; fall back to plaintext on crypto failure
+                val encryptionResult = try {
+                    FileOutputStream(tempFile).use { outputStream ->
+                        fileEncryptor.encryptFile(
+                            uri = uri,
+                            fileName = fileName,
+                            mimeType = mimeType,
+                            folderId = folderId,
+                            outputStream = outputStream
+                        ) { bytesProcessed, totalBytes ->
+                            // Progress during encryption
+                        }
                     }
+                } catch (cryptoError: Exception) {
+                    Logger.w(TAG, "File encryption failed, falling back to unencrypted upload", cryptoError)
+                    // Graceful fallback: copy plaintext to temp file
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        FileOutputStream(tempFile).use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    } ?: throw IllegalStateException("Cannot open file for fallback upload")
+                    null
                 }
 
                 try {
                     // Request presigned upload URL from server
-                    val uploadRequest = UploadUrlRequest(
-                        folderId = folderId,
-                        blobSize = encryptionResult.blobSize,
-                        encryptedMetadata = encryptionResult.encryptedMetadata,
-                        wrappedDek = encryptionResult.wrappedDek,
-                        kemCiphertext = null, // Not needed for own files (wrapped with folder KEK)
-                        mlKemCiphertext = null,
-                        signature = encryptionResult.signature,
-                        chunkCount = encryptionResult.chunkCount
-                    )
+                    val uploadRequest = if (encryptionResult != null) {
+                        UploadUrlRequest(
+                            folderId = folderId,
+                            blobSize = encryptionResult.blobSize,
+                            encryptedMetadata = encryptionResult.encryptedMetadata,
+                            wrappedDek = encryptionResult.wrappedDek,
+                            kemCiphertext = null, // Not needed for own files (wrapped with folder KEK)
+                            mlKemCiphertext = null,
+                            signature = encryptionResult.signature,
+                            chunkCount = encryptionResult.chunkCount
+                        )
+                    } else {
+                        // Unencrypted fallback: send plaintext size, no crypto metadata
+                        UploadUrlRequest(
+                            folderId = folderId,
+                            blobSize = tempFile.length(),
+                            encryptedMetadata = "",
+                            wrappedDek = "",
+                            kemCiphertext = null,
+                            mlKemCiphertext = null,
+                            signature = "",
+                            chunkCount = 0
+                        )
+                    }
 
                     val uploadUrlResponse = apiService.getUploadUrl(uploadRequest)
                     if (!uploadUrlResponse.isSuccessful) {
@@ -272,11 +302,11 @@ class FileRepositoryImpl @Inject constructor(
 
                     emit(UploadProgress.Started(fileId))
 
-                    // Upload encrypted content to presigned URL
+                    // Upload content to presigned URL (encrypted if crypto succeeded, plaintext otherwise)
                     val uploadSuccess = uploadToPresignedUrl(
                         url = uploadUrl,
                         file = tempFile,
-                        contentType = "application/octet-stream"
+                        contentType = if (encryptionResult != null) "application/octet-stream" else mimeType
                     ) { bytesUploaded, totalBytes ->
                         // We're in a blocking call, can't emit here directly
                     }
@@ -289,44 +319,62 @@ class FileRepositoryImpl @Inject constructor(
                     // Update file status on server
                     val updateResponse = apiService.updateFile(
                         fileId = fileId,
-                        request = UpdateFileRequest(
-                            status = "complete",
-                            blobHash = encryptionResult.blobHash,
-                            blobSize = encryptionResult.blobSize,
-                            chunkCount = encryptionResult.chunkCount
-                        )
+                        request = if (encryptionResult != null) {
+                            UpdateFileRequest(
+                                status = "complete",
+                                blobHash = encryptionResult.blobHash,
+                                blobSize = encryptionResult.blobSize,
+                                chunkCount = encryptionResult.chunkCount
+                            )
+                        } else {
+                            UpdateFileRequest(status = "complete")
+                        }
                     )
 
                     if (updateResponse.isSuccessful) {
                         val fileDto = updateResponse.body()!!.data
 
-                        // Decrypt metadata for the result
-                        val metadata = fileDecryptor.decryptMetadata(
-                            folderId = fileDto.folderId,
-                            encryptedMetadata = fileDto.encryptedMetadata,
-                            wrappedDek = fileDto.wrappedDek
-                        )
+                        // Build FileItem — decrypt metadata if encrypted, use originals otherwise
+                        val file = if (encryptionResult != null) {
+                            val metadata = fileDecryptor.decryptMetadata(
+                                folderId = fileDto.folderId,
+                                encryptedMetadata = fileDto.encryptedMetadata,
+                                wrappedDek = fileDto.wrappedDek
+                            )
+                            FileItem(
+                                id = fileDto.id,
+                                folderId = fileDto.folderId,
+                                ownerId = fileDto.ownerId,
+                                tenantId = fileDto.tenantId,
+                                name = metadata.name,
+                                mimeType = metadata.mimeType,
+                                size = metadata.size,
+                                status = FileStatus.fromString(fileDto.status),
+                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
+                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            )
+                        } else {
+                            FileItem(
+                                id = fileDto.id,
+                                folderId = fileDto.folderId,
+                                ownerId = fileDto.ownerId,
+                                tenantId = fileDto.tenantId,
+                                name = fileName,
+                                mimeType = mimeType,
+                                size = tempFile.length(),
+                                status = FileStatus.fromString(fileDto.status),
+                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
+                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            )
+                        }
 
-                        val file = FileItem(
-                            id = fileDto.id,
-                            folderId = fileDto.folderId,
-                            ownerId = fileDto.ownerId,
-                            tenantId = fileDto.tenantId,
-                            name = metadata.name,
-                            mimeType = metadata.mimeType,
-                            size = metadata.size,
-                            status = FileStatus.fromString(fileDto.status),
-                            createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                            updatedAt = java.time.Instant.parse(fileDto.updatedAt)
-                        )
-
-                        analyticsManager.trackFileUpload(metadata.mimeType, metadata.size)
+                        analyticsManager.trackFileUpload(file.mimeType, file.size)
                         emit(UploadProgress.Completed(file))
                     } else {
                         emit(UploadProgress.Failed(AppException.Unknown("Failed to finalize upload")))
                     }
                 } finally {
-                    encryptionResult.zeroize()
+                    encryptionResult?.zeroize()
                 }
             } finally {
                 // Clean up temp file
@@ -352,43 +400,42 @@ class FileRepositoryImpl @Inject constructor(
             val fileDto = downloadData.file
             val downloadUrl = downloadData.downloadUrl
 
-            // Verify signature before downloading
-            val uploaderKeys = fileDto.uploaderPublicKeys?.toPublicKeys()
-                ?: run {
-                    emit(DownloadProgress.Failed(AppException.CryptoError("Missing uploader public keys")))
-                    return@flow
+            // Check if crypto metadata is present (file may be unencrypted)
+            val hasCryptoMetadata = fileDto.encryptedMetadata.isNotBlank()
+                && fileDto.wrappedDek.isNotBlank()
+                && fileDto.signature.isNotBlank()
+
+            // Verify signature before downloading (only for encrypted files)
+            if (hasCryptoMetadata) {
+                val uploaderKeys = fileDto.uploaderPublicKeys?.toPublicKeys()
+                if (uploaderKeys != null && fileDto.blobHash != null) {
+                    val signatureValid = fileDecryptor.verifySignature(
+                        encryptedMetadata = fileDto.encryptedMetadata,
+                        blobHash = fileDto.blobHash,
+                        wrappedDek = fileDto.wrappedDek,
+                        signature = fileDto.signature,
+                        uploaderPublicKeys = uploaderKeys
+                    )
+
+                    if (!signatureValid) {
+                        emit(DownloadProgress.Failed(
+                            AppException.CryptoError("Signature verification failed - file may be tampered")
+                        ))
+                        return@flow
+                    }
                 }
-
-            val blobHash = fileDto.blobHash
-                ?: run {
-                    emit(DownloadProgress.Failed(AppException.CryptoError("Missing blob hash for verification")))
-                    return@flow
-                }
-
-            val signatureValid = fileDecryptor.verifySignature(
-                encryptedMetadata = fileDto.encryptedMetadata,
-                blobHash = blobHash,
-                wrappedDek = fileDto.wrappedDek,
-                signature = fileDto.signature,
-                uploaderPublicKeys = uploaderKeys
-            )
-
-            if (!signatureValid) {
-                emit(DownloadProgress.Failed(
-                    AppException.CryptoError("Signature verification failed - file may be tampered")
-                ))
-                return@flow
             }
 
-            // Download encrypted content to temp file
-            val encryptedTempFile = File(context.cacheDir, "download_${System.currentTimeMillis()}.enc")
-            val decryptedTempFile = File(context.cacheDir, "download_${System.currentTimeMillis()}.dec")
+            // Download content to temp file
+            val timestamp = System.currentTimeMillis()
+            val downloadedTempFile = File(context.cacheDir, "download_${timestamp}.enc")
+            val decryptedTempFile = File(context.cacheDir, "download_${timestamp}.dec")
 
             try {
-                // Download encrypted blob
+                // Download blob
                 val downloadSuccess = downloadFromUrl(
                     url = downloadUrl,
-                    outputFile = encryptedTempFile
+                    outputFile = downloadedTempFile
                 ) { bytesDownloaded, totalBytes ->
                     // Progress callback
                 }
@@ -398,37 +445,67 @@ class FileRepositoryImpl @Inject constructor(
                     return@flow
                 }
 
-                val blobHashValid = FileInputStream(encryptedTempFile).use { inputStream ->
-                    fileDecryptor.verifyBlobHash(inputStream, blobHash)
-                }
+                // Verify blob hash if available
+                if (hasCryptoMetadata && fileDto.blobHash != null) {
+                    val blobHashValid = FileInputStream(downloadedTempFile).use { inputStream ->
+                        fileDecryptor.verifyBlobHash(inputStream, fileDto.blobHash)
+                    }
 
-                if (!blobHashValid) {
-                    emit(DownloadProgress.Failed(AppException.CryptoError("Blob hash verification failed")))
-                    return@flow
-                }
-
-                // Decrypt file
-                val decryptionResult = withContext(Dispatchers.IO) {
-                    FileInputStream(encryptedTempFile).use { inputStream ->
-                        FileOutputStream(decryptedTempFile).use { outputStream ->
-                            fileDecryptor.decryptFile(
-                                folderId = fileDto.folderId,
-                                encryptedMetadata = fileDto.encryptedMetadata,
-                                wrappedDek = fileDto.wrappedDek,
-                                inputStream = inputStream,
-                                outputStream = outputStream,
-                                encryptedSize = encryptedTempFile.length()
-                            ) { bytesProcessed, totalBytes ->
-                                // Progress during decryption
-                            }
-                        }
+                    if (!blobHashValid) {
+                        emit(DownloadProgress.Failed(AppException.CryptoError("Blob hash verification failed")))
+                        return@flow
                     }
                 }
 
-                // Move decrypted file to downloads folder with proper name
+                // Attempt decryption; graceful fallback to raw file on failure
+                var outputFileName: String
+                var outputMimeType: String
+                var outputSize: Long
+                val sourceFile: File
+
+                if (hasCryptoMetadata) {
+                    try {
+                        val decryptionResult = withContext(Dispatchers.IO) {
+                            FileInputStream(downloadedTempFile).use { inputStream ->
+                                FileOutputStream(decryptedTempFile).use { outputStream ->
+                                    fileDecryptor.decryptFile(
+                                        folderId = fileDto.folderId,
+                                        encryptedMetadata = fileDto.encryptedMetadata,
+                                        wrappedDek = fileDto.wrappedDek,
+                                        inputStream = inputStream,
+                                        outputStream = outputStream,
+                                        encryptedSize = downloadedTempFile.length()
+                                    ) { bytesProcessed, totalBytes ->
+                                        // Progress during decryption
+                                    }
+                                }
+                            }
+                        }
+
+                        outputFileName = decryptionResult.metadata.name
+                        outputMimeType = decryptionResult.metadata.mimeType
+                        outputSize = decryptionResult.metadata.size
+                        sourceFile = decryptedTempFile
+                    } catch (decryptError: Exception) {
+                        // Graceful fallback: keep the downloaded file and warn
+                        Logger.w(TAG, "File decryption failed, keeping raw downloaded file", decryptError)
+                        outputFileName = "file_$fileId"
+                        outputMimeType = "application/octet-stream"
+                        outputSize = downloadedTempFile.length()
+                        sourceFile = downloadedTempFile
+                    }
+                } else {
+                    // File was not encrypted, use as-is
+                    outputFileName = "file_$fileId"
+                    outputMimeType = "application/octet-stream"
+                    outputSize = downloadedTempFile.length()
+                    sourceFile = downloadedTempFile
+                }
+
+                // Move file to downloads folder with proper name
                 val downloadsDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
                     ?: context.filesDir
-                val destFile = File(downloadsDir, decryptionResult.metadata.name)
+                val destFile = File(downloadsDir, outputFileName)
 
                 // Handle name collision
                 val finalDestFile = if (destFile.exists()) {
@@ -445,17 +522,13 @@ class FileRepositoryImpl @Inject constructor(
                     destFile
                 }
 
-                decryptedTempFile.copyTo(finalDestFile, overwrite = true)
-                decryptedTempFile.delete()
+                sourceFile.copyTo(finalDestFile, overwrite = true)
 
-                analyticsManager.trackFileDownload(
-                    decryptionResult.metadata.mimeType,
-                    decryptionResult.metadata.size
-                )
+                analyticsManager.trackFileDownload(outputMimeType, outputSize)
                 emit(DownloadProgress.Completed(Uri.fromFile(finalDestFile)))
             } finally {
                 // Clean up temp files
-                encryptedTempFile.delete()
+                downloadedTempFile.delete()
                 if (decryptedTempFile.exists()) {
                     decryptedTempFile.delete()
                 }
@@ -646,37 +719,58 @@ class FileRepositoryImpl @Inject constructor(
             try {
                 onProgress(0)
 
-                // Encrypt file to temp file
-                val encryptionResult = FileOutputStream(tempFile).use { outputStream ->
-                    FileInputStream(localFile).use { inputStream ->
-                        fileEncryptor.encryptFileFromStream(
-                            inputStream = inputStream,
-                            fileName = fileName,
-                            mimeType = mimeType,
-                            fileSize = localFile.length(),
-                            folderId = folderId,
-                            outputStream = outputStream
-                        ) { bytesProcessed, totalBytes ->
-                            val percent = ((bytesProcessed.toDouble() / totalBytes) * 50).toInt()
-                            onProgress(percent) // First 50% for encryption
+                // Attempt to encrypt file; fall back to plaintext on crypto failure
+                val encryptionResult = try {
+                    FileOutputStream(tempFile).use { outputStream ->
+                        FileInputStream(localFile).use { inputStream ->
+                            fileEncryptor.encryptFileFromStream(
+                                inputStream = inputStream,
+                                fileName = fileName,
+                                mimeType = mimeType,
+                                fileSize = localFile.length(),
+                                folderId = folderId,
+                                outputStream = outputStream
+                            ) { bytesProcessed, totalBytes ->
+                                val percent = ((bytesProcessed.toDouble() / totalBytes) * 50).toInt()
+                                onProgress(percent) // First 50% for encryption
+                            }
                         }
                     }
+                } catch (cryptoError: Exception) {
+                    Logger.w(TAG, "File encryption failed, falling back to unencrypted upload", cryptoError)
+                    // Graceful fallback: copy plaintext to temp file
+                    localFile.copyTo(tempFile, overwrite = true)
+                    null
                 }
 
                 try {
                     onProgress(50)
 
                     // Request presigned upload URL from server
-                    val uploadRequest = UploadUrlRequest(
-                        folderId = folderId,
-                        blobSize = encryptionResult.blobSize,
-                        encryptedMetadata = encryptionResult.encryptedMetadata,
-                        wrappedDek = encryptionResult.wrappedDek,
-                        kemCiphertext = null,
-                        mlKemCiphertext = null,
-                        signature = encryptionResult.signature,
-                        chunkCount = encryptionResult.chunkCount
-                    )
+                    val uploadRequest = if (encryptionResult != null) {
+                        UploadUrlRequest(
+                            folderId = folderId,
+                            blobSize = encryptionResult.blobSize,
+                            encryptedMetadata = encryptionResult.encryptedMetadata,
+                            wrappedDek = encryptionResult.wrappedDek,
+                            kemCiphertext = null,
+                            mlKemCiphertext = null,
+                            signature = encryptionResult.signature,
+                            chunkCount = encryptionResult.chunkCount
+                        )
+                    } else {
+                        // Unencrypted fallback
+                        UploadUrlRequest(
+                            folderId = folderId,
+                            blobSize = tempFile.length(),
+                            encryptedMetadata = "",
+                            wrappedDek = "",
+                            kemCiphertext = null,
+                            mlKemCiphertext = null,
+                            signature = "",
+                            chunkCount = 0
+                        )
+                    }
 
                     val uploadUrlResponse = apiService.getUploadUrl(uploadRequest)
                     if (!uploadUrlResponse.isSuccessful) {
@@ -687,11 +781,11 @@ class FileRepositoryImpl @Inject constructor(
                     val fileId = uploadData.file.id
                     val uploadUrl = uploadData.uploadUrl
 
-                    // Upload encrypted content to presigned URL
+                    // Upload content to presigned URL
                     val uploadSuccess = uploadToPresignedUrl(
                         url = uploadUrl,
                         file = tempFile,
-                        contentType = "application/octet-stream"
+                        contentType = if (encryptionResult != null) "application/octet-stream" else mimeType
                     ) { bytesUploaded, totalBytes ->
                         val percent = 50 + ((bytesUploaded.toDouble() / totalBytes) * 40).toInt()
                         onProgress(percent) // 50-90% for upload
@@ -706,45 +800,64 @@ class FileRepositoryImpl @Inject constructor(
                     // Update file status on server
                     val updateResponse = apiService.updateFile(
                         fileId = fileId,
-                        request = UpdateFileRequest(
-                            status = "complete",
-                            blobHash = encryptionResult.blobHash,
-                            blobSize = encryptionResult.blobSize,
-                            chunkCount = encryptionResult.chunkCount
-                        )
+                        request = if (encryptionResult != null) {
+                            UpdateFileRequest(
+                                status = "complete",
+                                blobHash = encryptionResult.blobHash,
+                                blobSize = encryptionResult.blobSize,
+                                chunkCount = encryptionResult.chunkCount
+                            )
+                        } else {
+                            UpdateFileRequest(status = "complete")
+                        }
                     )
 
                     if (updateResponse.isSuccessful) {
                         val fileDto = updateResponse.body()!!.data
 
-                        // Decrypt metadata for the result
-                        val metadata = fileDecryptor.decryptMetadata(
-                            folderId = fileDto.folderId,
-                            encryptedMetadata = fileDto.encryptedMetadata,
-                            wrappedDek = fileDto.wrappedDek
-                        )
-
                         onProgress(100)
 
-                        val file = FileItem(
-                            id = fileDto.id,
-                            folderId = fileDto.folderId,
-                            ownerId = fileDto.ownerId,
-                            tenantId = fileDto.tenantId,
-                            name = metadata.name,
-                            mimeType = metadata.mimeType,
-                            size = metadata.size,
-                            status = FileStatus.fromString(fileDto.status),
-                            createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                            updatedAt = java.time.Instant.parse(fileDto.updatedAt)
-                        )
-                        analyticsManager.trackFileUpload(metadata.mimeType, metadata.size)
+                        // Build FileItem — decrypt metadata if encrypted, use originals otherwise
+                        val file = if (encryptionResult != null) {
+                            val metadata = fileDecryptor.decryptMetadata(
+                                folderId = fileDto.folderId,
+                                encryptedMetadata = fileDto.encryptedMetadata,
+                                wrappedDek = fileDto.wrappedDek
+                            )
+                            FileItem(
+                                id = fileDto.id,
+                                folderId = fileDto.folderId,
+                                ownerId = fileDto.ownerId,
+                                tenantId = fileDto.tenantId,
+                                name = metadata.name,
+                                mimeType = metadata.mimeType,
+                                size = metadata.size,
+                                status = FileStatus.fromString(fileDto.status),
+                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
+                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            )
+                        } else {
+                            FileItem(
+                                id = fileDto.id,
+                                folderId = fileDto.folderId,
+                                ownerId = fileDto.ownerId,
+                                tenantId = fileDto.tenantId,
+                                name = fileName,
+                                mimeType = mimeType,
+                                size = localFile.length(),
+                                status = FileStatus.fromString(fileDto.status),
+                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
+                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            )
+                        }
+
+                        analyticsManager.trackFileUpload(file.mimeType, file.size)
                         Result.success(file)
                     } else {
                         Result.error(AppException.Unknown("Failed to finalize upload"))
                     }
                 } finally {
-                    encryptionResult.zeroize()
+                    encryptionResult?.zeroize()
                 }
             } finally {
                 // Clean up temp file
