@@ -1,0 +1,101 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - prod
+
+env:
+  JAVA_VERSION: '17'
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+
+      - name: Create keystore.properties
+        run: |
+          cat > keystore.properties <<EOF
+          storeFile=../../release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Determine flavor
+        id: flavor
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "flavor=Prod" >> "$GITHUB_OUTPUT"
+          else
+            FLAVOR="${{ github.event.inputs.build_type }}"
+            echo "flavor=${FLAVOR^}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release AAB
+        run: ./gradlew bundle${{ steps.flavor.outputs.flavor }}Release --no-daemon
+
+      - name: Build release APK
+        run: ./gradlew assemble${{ steps.flavor.outputs.flavor }}Release --no-daemon
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-${{ steps.flavor.outputs.flavor }}
+          path: clients/android/app/build/outputs/bundle/*Release/*.aab
+          retention-days: 30
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-${{ steps.flavor.outputs.flavor }}
+          path: clients/android/app/build/outputs/apk/*/release/*.apk
+          retention-days: 30
+
+  publish-play-store:
+    needs: build-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/android-v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: android-aab-Prod
+          path: artifacts
+
+      - name: Publish to Play Store (internal track)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: my.ssdid.drive
+          releaseFiles: artifacts/**/*.aab
+          track: internal
+          status: completed

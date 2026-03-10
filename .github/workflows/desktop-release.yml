@@ -1,0 +1,175 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+
+env:
+  KAZSIGN_VERSION: v2.0.0
+  KAZKEM_VERSION: v2.0.0
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            os_name: macos-arm64
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            os_name: macos-x64
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os_name: linux-x64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            os_name: windows-x64
+
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        working-directory: clients/desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/desktop/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: clients/desktop/src-tauri -> target
+
+      # Linux dependencies for Tauri
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      # Download PQC native libraries
+      - name: Download KAZ-Sign native library
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            ASSET="kaz-sign-macos-${{ contains(matrix.target, 'aarch64') && 'arm64' || 'x64' }}.tar.gz"
+            DEST="native/kaz-sign-sys/vendor/lib"
+          elif [[ "${{ runner.os }}" == "Linux" ]]; then
+            ASSET="kaz-sign-linux-x64.tar.gz"
+            DEST="native/kaz-sign-sys/vendor/lib"
+          else
+            ASSET="kaz-sign-windows-x64.zip"
+            DEST="native/kaz-sign-sys/vendor/lib"
+          fi
+          mkdir -p "$DEST"
+          gh release download ${{ env.KAZSIGN_VERSION }} \
+            --repo amiryahaya/pqc-kaz \
+            --pattern "$ASSET" \
+            --dir /tmp
+          if [[ "$ASSET" == *.zip ]]; then
+            unzip "/tmp/$ASSET" -d "$DEST"
+          else
+            tar xzf "/tmp/$ASSET" -C "$DEST"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download KAZ-KEM native library
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            ASSET="kaz-kem-macos-${{ contains(matrix.target, 'aarch64') && 'arm64' || 'x64' }}.tar.gz"
+            DEST="native/kaz-kem-sys/vendor/lib"
+          elif [[ "${{ runner.os }}" == "Linux" ]]; then
+            ASSET="kaz-kem-linux-x64.tar.gz"
+            DEST="native/kaz-kem-sys/vendor/lib"
+          else
+            ASSET="kaz-kem-windows-x64.zip"
+            DEST="native/kaz-kem-sys/vendor/lib"
+          fi
+          mkdir -p "$DEST"
+          gh release download ${{ env.KAZKEM_VERSION }} \
+            --repo amiryahaya/pqc-kaz \
+            --pattern "$ASSET" \
+            --dir /tmp
+          if [[ "$ASSET" == *.zip ]]; then
+            unzip "/tmp/$ASSET" -d "$DEST"
+          else
+            tar xzf "/tmp/$ASSET" -C "$DEST"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test:run
+
+      # macOS: Code signing
+      - name: Import Apple certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERT_PATH
+          security import $CERT_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS notarization
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows signing
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: clients/desktop
+          tagName: desktop-v__VERSION__
+          releaseName: 'SSDID Drive Desktop v__VERSION__'
+          releaseBody: 'See the assets for download links.'
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      - name: Cleanup keychain
+        if: always() && runner.os == 'macOS'
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true

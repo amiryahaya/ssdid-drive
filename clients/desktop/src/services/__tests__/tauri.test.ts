@@ -170,6 +170,10 @@ describe('tauriService', () => {
           filePath: '/path/to/file.txt',
           folderId: 'folder-1',
           fileName: 'custom.txt',
+          fileId: null,
+          encryptedFileKey: null,
+          nonce: null,
+          algorithm: null,
         });
         expect(result).toEqual(mockFile);
       });
@@ -184,6 +188,10 @@ describe('tauriService', () => {
           filePath: '/path/to/file.txt',
           folderId: null,
           fileName: null,
+          fileId: null,
+          encryptedFileKey: null,
+          nonce: null,
+          algorithm: null,
         });
       });
     });

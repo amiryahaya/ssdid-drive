@@ -461,7 +461,7 @@ class FileRepositoryImpl @Inject constructor(
                 var outputFileName: String
                 var outputMimeType: String
                 var outputSize: Long
-                val sourceFile: File
+                var sourceFile: File
 
                 if (hasCryptoMetadata) {
                     try {

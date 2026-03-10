@@ -276,6 +276,10 @@ describe('fileStore', () => {
         filePath: '/path/to/file.pdf',
         folderId: null,
         fileName: null,
+        fileId: expect.any(String),
+        encryptedFileKey: null,
+        nonce: null,
+        algorithm: null,
       });
       expect(mockListen).toHaveBeenCalledWith('upload-progress', expect.any(Function));
     });
@@ -291,6 +295,10 @@ describe('fileStore', () => {
         filePath: '/path/to/file.pdf',
         folderId: 'folder-1',
         fileName: null,
+        fileId: expect.any(String),
+        encryptedFileKey: null,
+        nonce: null,
+        algorithm: null,
       });
     });
 
