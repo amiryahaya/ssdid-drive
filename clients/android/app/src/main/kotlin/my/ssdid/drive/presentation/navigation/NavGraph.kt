@@ -33,7 +33,6 @@ import my.ssdid.drive.presentation.sharing.ShareFolderScreen
 import my.ssdid.drive.presentation.files.preview.FilePreviewScreen
 import my.ssdid.drive.presentation.onboarding.OnboardingScreen
 import my.ssdid.drive.presentation.piichat.ConversationsScreen
-import my.ssdid.drive.presentation.piichat.ChatScreen
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -368,24 +367,9 @@ fun NavGraph(
             )
         }
 
-        // PII Chat - Conversation list
+        // PII Chat - Coming Soon
         composable(Screen.PiiConversations.route) {
             ConversationsScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToChat = { conversationId ->
-                    navController.navigate(Screen.PiiChat.createRoute(conversationId))
-                }
-            )
-        }
-
-        // PII Chat - Chat screen
-        composable(
-            route = Screen.PiiChat.ROUTE,
-            arguments = listOf(
-                navArgument(Screen.ARG_CONVERSATION_ID) { type = NavType.StringType }
-            )
-        ) {
-            ChatScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
