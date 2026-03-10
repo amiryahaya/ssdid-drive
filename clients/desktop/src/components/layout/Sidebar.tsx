@@ -18,7 +18,7 @@ const navigation = [
   { name: 'Favorites', href: '/favorites', icon: Star },
   { name: 'Shared with Me', href: '/shared-with-me', icon: FolderInput },
   { name: 'My Shares', href: '/my-shares', icon: Share2 },
-  { name: 'AI Chat', href: '/pii-chat', icon: Bot },
+  { name: 'AI Chat', href: '/pii-chat', icon: Bot, comingSoon: true },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -65,6 +65,11 @@ export function Sidebar() {
             {item.name === 'Favorites' && favoritesCount > 0 && (
               <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
                 {favoritesCount}
+              </span>
+            )}
+            {item.comingSoon && (
+              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+                Soon
               </span>
             )}
           </NavLink>

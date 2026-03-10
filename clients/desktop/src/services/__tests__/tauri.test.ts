@@ -489,4 +489,93 @@ describe('tauriService', () => {
       });
     });
   });
+
+  // ==================== Crypto Commands ====================
+
+  describe('crypto operations', () => {
+    it('should encrypt file', async () => {
+      mockInvoke.mockResolvedValueOnce({
+        ciphertext_path: '/tmp/encrypted.bin',
+        file_key: 'enc-key',
+        nonce: 'nonce-123',
+      });
+
+      const result = await tauriService.encryptFile('/path/file.pdf', 'folder-key', 'file-id');
+
+      expect(mockInvoke).toHaveBeenCalledWith('encrypt_file', {
+        filePath: '/path/file.pdf',
+        folderKey: 'folder-key',
+        fileId: 'file-id',
+      });
+      expect(result.ciphertext_path).toBe('/tmp/encrypted.bin');
+      expect(result.file_key).toBe('enc-key');
+      expect(result.nonce).toBe('nonce-123');
+    });
+
+    it('should decrypt file', async () => {
+      mockInvoke.mockResolvedValueOnce({ plaintext_path: '/path/decrypted.pdf' });
+
+      const result = await tauriService.decryptFile('/tmp/encrypted.bin', 'folder-key', 'file-id');
+
+      expect(mockInvoke).toHaveBeenCalledWith('decrypt_file', {
+        ciphertextPath: '/tmp/encrypted.bin',
+        folderKey: 'folder-key',
+        fileId: 'file-id',
+      });
+      expect(result.plaintext_path).toBe('/path/decrypted.pdf');
+    });
+
+    it('should decapsulate folder key', async () => {
+      mockInvoke.mockResolvedValueOnce({ folder_key: 'decapsulated-key' });
+
+      const result = await tauriService.decapsulateFolderKey(
+        'kem-ciphertext',
+        'wrapped-key',
+        'ml-kem-sk',
+        'kaz-kem-sk'
+      );
+
+      expect(mockInvoke).toHaveBeenCalledWith('decapsulate_folder_key', {
+        kemCiphertext: 'kem-ciphertext',
+        wrappedFolderKey: 'wrapped-key',
+        encryptedMlKemSk: 'ml-kem-sk',
+        encryptedKazKemSk: 'kaz-kem-sk',
+      });
+      expect(result.folder_key).toBe('decapsulated-key');
+    });
+
+    it('should get folder encryption metadata', async () => {
+      const mockMeta = {
+        kem_ciphertext: 'kem-ct',
+        wrapped_folder_key: 'wrapped-key',
+        encrypted_ml_kem_sk: 'ml-sk',
+        encrypted_kaz_kem_sk: 'kaz-sk',
+      };
+      mockInvoke.mockResolvedValueOnce(mockMeta);
+
+      const result = await tauriService.getFolderEncryptionMetadata('folder-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('get_folder_encryption_metadata', {
+        folderId: 'folder-1',
+      });
+      expect(result).toEqual(mockMeta);
+    });
+
+    it('should get file metadata', async () => {
+      const mockMeta = {
+        id: 'file-1',
+        name: 'Document.pdf',
+        folder_id: 'folder-1',
+        encrypted_file_key: 'enc-key',
+        nonce: 'nonce-123',
+        algorithm: 'AES-256-GCM',
+      };
+      mockInvoke.mockResolvedValueOnce(mockMeta);
+
+      const result = await tauriService.getFileMetadata('file-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('get_file_metadata', { fileId: 'file-1' });
+      expect(result).toEqual(mockMeta);
+    });
+  });
 });

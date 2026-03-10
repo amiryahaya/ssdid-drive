@@ -311,6 +311,100 @@ describe('fileStore', () => {
 
       expect(useFileStore.getState().error).toBe('Upload failed');
     });
+
+    it('should encrypt file when uploading to a folder with encryption metadata', async () => {
+      // Set current folder
+      useFileStore.setState({
+        currentFolder: { id: 'folder-1', name: 'Encrypted', parent_id: null },
+      });
+
+      // Mock the tauri service calls for encryption
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFolderEncryptionMetadata').mockResolvedValue({
+        kem_ciphertext: 'kem-ct',
+        wrapped_folder_key: 'wrapped-key',
+        encrypted_ml_kem_sk: 'ml-sk',
+        encrypted_kaz_kem_sk: 'kaz-sk',
+      });
+      vi.spyOn(tauriService, 'decapsulateFolderKey').mockResolvedValue({
+        folder_key: 'decapsulated-folder-key',
+      });
+      vi.spyOn(tauriService, 'encryptFile').mockResolvedValue({
+        ciphertext_path: '/tmp/encrypted.bin',
+        file_key: 'encrypted-file-key',
+        nonce: 'test-nonce',
+      });
+
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // upload_file
+        .mockResolvedValueOnce({ items: [], current_folder: null, breadcrumbs: [] }); // list_files
+
+      await useFileStore.getState().uploadFile('/path/to/file.pdf');
+
+      // Should upload the encrypted file path, not the original
+      expect(mockInvoke).toHaveBeenCalledWith('upload_file', expect.objectContaining({
+        filePath: '/tmp/encrypted.bin',
+        folderId: 'folder-1',
+        encryptedFileKey: 'encrypted-file-key',
+        nonce: 'test-nonce',
+        algorithm: 'AES-256-GCM',
+      }));
+    });
+
+    it('should fallback to unencrypted upload when encryption fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      useFileStore.setState({
+        currentFolder: { id: 'folder-1', name: 'Encrypted', parent_id: null },
+      });
+
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFolderEncryptionMetadata').mockRejectedValue(
+        new Error('No encryption metadata')
+      );
+
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // upload_file
+        .mockResolvedValueOnce({ items: [], current_folder: null, breadcrumbs: [] }); // list_files
+
+      await useFileStore.getState().uploadFile('/path/to/file.pdf');
+
+      // Should upload the original path without encryption
+      expect(mockInvoke).toHaveBeenCalledWith('upload_file', expect.objectContaining({
+        filePath: '/path/to/file.pdf',
+        encryptedFileKey: null,
+        nonce: null,
+        algorithm: null,
+      }));
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'File encryption failed, uploading without encryption:',
+        expect.any(Error)
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('should clean up progress listener after upload completes', async () => {
+      const mockUnlisten = vi.fn();
+      mockListen.mockResolvedValueOnce(mockUnlisten);
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // upload_file
+        .mockResolvedValueOnce({ items: [], current_folder: null, breadcrumbs: [] }); // list_files
+
+      await useFileStore.getState().uploadFile('/path/to/file.pdf');
+
+      expect(mockUnlisten).toHaveBeenCalled();
+    });
+
+    it('should clean up progress listener even on upload failure', async () => {
+      const mockUnlisten = vi.fn();
+      mockListen.mockResolvedValueOnce(mockUnlisten);
+      mockInvoke.mockRejectedValueOnce(new Error('Upload failed'));
+
+      await expect(useFileStore.getState().uploadFile('/path/to/file.pdf')).rejects.toThrow();
+
+      expect(mockUnlisten).toHaveBeenCalled();
+    });
   });
 
   describe('downloadFile', () => {
@@ -352,6 +446,116 @@ describe('fileStore', () => {
       ).rejects.toThrow('Download failed');
 
       expect(useFileStore.getState().error).toBe('Download failed');
+    });
+
+    it('should decrypt file after download when file is encrypted', async () => {
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFileMetadata').mockResolvedValue({
+        id: 'file-1',
+        name: 'Document.pdf',
+        folder_id: 'folder-1',
+        encrypted_file_key: 'enc-key',
+        nonce: 'test-nonce',
+        algorithm: 'AES-256-GCM',
+      });
+      vi.spyOn(tauriService, 'getFolderEncryptionMetadata').mockResolvedValue({
+        kem_ciphertext: 'kem-ct',
+        wrapped_folder_key: 'wrapped-key',
+        encrypted_ml_kem_sk: 'ml-sk',
+        encrypted_kaz_kem_sk: 'kaz-sk',
+      });
+      vi.spyOn(tauriService, 'decapsulateFolderKey').mockResolvedValue({
+        folder_key: 'decapsulated-folder-key',
+      });
+      vi.spyOn(tauriService, 'decryptFile').mockResolvedValue({
+        plaintext_path: '/path/to/dest',
+      });
+
+      mockInvoke.mockResolvedValueOnce(undefined); // download_file
+
+      await useFileStore.getState().downloadFile('file-1', '/path/to/dest', 'Document.pdf');
+
+      expect(tauriService.decryptFile).toHaveBeenCalledWith(
+        '/path/to/dest',
+        'decapsulated-folder-key',
+        'file-1'
+      );
+    });
+
+    it('should handle decryption failure gracefully', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFileMetadata').mockResolvedValue({
+        id: 'file-1',
+        name: 'Document.pdf',
+        folder_id: 'folder-1',
+        encrypted_file_key: 'enc-key',
+        nonce: 'test-nonce',
+        algorithm: 'AES-256-GCM',
+      });
+      vi.spyOn(tauriService, 'getFolderEncryptionMetadata').mockRejectedValue(
+        new Error('KEM decapsulation failed')
+      );
+
+      mockInvoke.mockResolvedValueOnce(undefined); // download_file
+
+      // Should NOT throw — graceful fallback
+      await useFileStore.getState().downloadFile('file-1', '/path/to/dest', 'Document.pdf');
+
+      expect(useFileStore.getState().error).toContain('decryption failed');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should skip decryption for unencrypted files', async () => {
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFileMetadata').mockResolvedValue({
+        id: 'file-1',
+        name: 'Document.pdf',
+        folder_id: null,
+        encrypted_file_key: null,
+        nonce: null,
+        algorithm: null,
+      });
+      const decryptSpy = vi.spyOn(tauriService, 'decryptFile');
+
+      mockInvoke.mockResolvedValueOnce(undefined); // download_file
+
+      await useFileStore.getState().downloadFile('file-1', '/path/to/dest', 'Document.pdf');
+
+      expect(decryptSpy).not.toHaveBeenCalled();
+    });
+
+    it('should mark download progress as error on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Download failed'));
+
+      await expect(
+        useFileStore.getState().downloadFile('file-1', '/path', 'file.pdf')
+      ).rejects.toThrow('Download failed');
+
+      const progress = Array.from(useFileStore.getState().downloadProgress.values())[0];
+      expect(progress?.phase).toBe('error');
+    });
+
+    it('should clean up progress listener after download', async () => {
+      const mockUnlisten = vi.fn();
+      mockListen.mockResolvedValueOnce(mockUnlisten);
+      mockInvoke.mockResolvedValueOnce(undefined); // download_file
+
+      const tauriService = (await import('../../services/tauri')).default;
+      vi.spyOn(tauriService, 'getFileMetadata').mockResolvedValue({
+        id: 'file-1',
+        name: 'Document.pdf',
+        folder_id: null,
+        encrypted_file_key: null,
+        nonce: null,
+        algorithm: null,
+      });
+
+      await useFileStore.getState().downloadFile('file-1', '/path/to/dest', 'Document.pdf');
+
+      expect(mockUnlisten).toHaveBeenCalled();
     });
   });
 

@@ -350,10 +350,26 @@ private fun AiChatSectionButton(
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "AI Chat",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "AI Chat",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.tertiary
+                    ) {
+                        Text(
+                            text = "Coming Soon",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiary
+                        )
+                    }
+                }
                 Text(
                     text = "Secure conversations with post-quantum encryption",
                     style = MaterialTheme.typography.bodySmall,
