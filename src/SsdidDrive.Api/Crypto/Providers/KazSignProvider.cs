@@ -36,8 +36,13 @@ public class KazSignProvider : ICryptoProvider, IDisposable
     {
         var level = ParseLevel(variant);
         using var signer = new KazSigner(level);
-        var rawSig = signer.SignDetached(message, privateKey);
-        return signer.SignatureToWire(rawSig);
+        // Use non-detached sign (single SHA) to match the registry's Java verifier.
+        // SignDetached does double SHA which the registry cannot verify.
+        var fullSig = signer.Sign(message, privateKey);
+        // Extract only S1||S2||S3 (signature overhead bytes), discard appended message
+        var sigOnly = new byte[signer.SignatureOverhead];
+        Array.Copy(fullSig, sigOnly, signer.SignatureOverhead);
+        return signer.SignatureToWire(sigOnly);
     }
 
     public bool Verify(byte[] message, byte[] signature, byte[] publicKey, string? variant = null)
@@ -61,7 +66,11 @@ public class KazSignProvider : ICryptoProvider, IDisposable
 
             var level = InferLevelFromRawPublicKey(rawPk);
             using var signer = new KazSigner(level);
-            return signer.VerifyDetached(message, rawSig, rawPk);
+            // Use non-detached verify to match sign(): reconstruct S1||S2||S3||message
+            var fullSig = new byte[rawSig.Length + message.Length];
+            Array.Copy(rawSig, fullSig, rawSig.Length);
+            Array.Copy(message, 0, fullSig, rawSig.Length, message.Length);
+            return signer.Verify(fullSig, rawPk, out _);
         }
         catch (KazSignException)
         {
