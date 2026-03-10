@@ -178,40 +178,6 @@ public class RegistryIntegrationTests
         Assert.True(verified, "Signature verification with resolved public key failed");
     }
 
-    // ── Test 9: Challenge-response registration with Ed25519 ──
-
-    [Fact]
-    public async Task ChallengeResponseRegistration_Ed25519_Succeeds()
-    {
-        SkipIfRegistryUnavailable();
-
-        var cryptoFactory = CreateCryptoFactory();
-        var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
-
-        // Step 1: Register DID document first
-        var (registered, regMsg) = await RegisterDidDocument(identity, cryptoFactory);
-        Assert.True(registered, $"DID document registration failed: {regMsg}");
-
-        // Step 2: Request challenge
-        var challengeResp = await Http.PostAsJsonAsync($"{RegistryUrl}/api/register",
-            new { did = identity.Did, key_id = identity.KeyId });
-        Assert.Equal(HttpStatusCode.OK, challengeResp.StatusCode);
-
-        var challengeBody = await challengeResp.Content.ReadFromJsonAsync<JsonElement>();
-        var challenge = challengeBody.GetProperty("challenge").GetString()!;
-        Assert.False(string.IsNullOrEmpty(challenge));
-        Assert.True(challengeBody.TryGetProperty("server_did", out _));
-        Assert.True(challengeBody.TryGetProperty("server_signature", out _));
-
-        // Step 3: Sign challenge and verify
-        var signedChallenge = identity.SignChallenge(challenge);
-        var verifyResp = await Http.PostAsJsonAsync($"{RegistryUrl}/api/register/verify",
-            new { did = identity.Did, key_id = identity.KeyId, signed_challenge = signedChallenge });
-        Assert.Equal(HttpStatusCode.Created, verifyResp.StatusCode);
-
-        var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(verifyBody.TryGetProperty("credential", out _));
-    }
 
     // ── Test 10: ServerRegistrationService format matches registry ──
 

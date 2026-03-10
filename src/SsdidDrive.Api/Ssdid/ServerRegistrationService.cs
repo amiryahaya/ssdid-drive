@@ -35,29 +35,16 @@ public class ServerRegistrationService(
                 using var scope = services.CreateScope();
                 var registry = scope.ServiceProvider.GetRequiredService<RegistryClient>();
 
-                // Step 1: Register DID Document via W3C Data Integrity proof
+                // Register DID Document with the registry (POST /api/did)
                 var didRegistered = await RegisterDidDocument(registry);
-                if (!didRegistered)
+                if (didRegistered)
                 {
-                    logger.LogWarning(
-                        "DID document registration failed (attempt {Attempt}/{Max})",
-                        attempt, MaxRetries);
-
-                    if (attempt < MaxRetries)
-                        await Task.Delay(RetryDelay * attempt, ct);
-                    continue;
-                }
-
-                // Step 2: Challenge-response service registration
-                var serviceRegistered = await RegisterWithChallenge(registry);
-                if (serviceRegistered)
-                {
-                    logger.LogInformation("Server DID registered and verified: {Did}", identity.Did);
+                    logger.LogInformation("Server DID registered: {Did}", identity.Did);
                     return;
                 }
 
                 logger.LogWarning(
-                    "Service registration failed (attempt {Attempt}/{Max})",
+                    "DID document registration failed (attempt {Attempt}/{Max})",
                     attempt, MaxRetries);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -102,27 +89,4 @@ public class ServerRegistrationService(
         return success;
     }
 
-    /// <summary>
-    /// Challenge-response service registration (POST /api/register + /api/register/verify).
-    /// </summary>
-    private async Task<bool> RegisterWithChallenge(RegistryClient registry)
-    {
-        // Step 1: Request challenge
-        var challengeResp = await registry.RequestRegistrationChallenge(identity.Did, identity.KeyId);
-        if (challengeResp is null)
-            return false;
-
-        logger.LogDebug("Received registration challenge from {ServerDid}", challengeResp.ServerDid);
-
-        // Step 2: Sign the challenge
-        var signedChallenge = identity.SignChallenge(challengeResp.Challenge);
-
-        // Step 3: Verify with the signed challenge
-        var verifyResp = await registry.VerifyRegistration(identity.Did, identity.KeyId, signedChallenge);
-        if (verifyResp is null)
-            return false;
-
-        logger.LogInformation("Service registration verified: {Status}", verifyResp.Status);
-        return true;
-    }
 }

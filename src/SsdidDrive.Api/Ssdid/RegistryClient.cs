@@ -4,8 +4,8 @@ namespace SsdidDrive.Api.Ssdid;
 
 /// <summary>
 /// HTTP client for the SSDID Registry.
-/// Resolves DIDs to DID Documents, registers DID Documents,
-/// and performs challenge-response service registration.
+/// The registry is a DID Document store — it handles CRUD only.
+/// Challenge-response authentication happens directly between clients and this server.
 /// </summary>
 public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logger)
 {
@@ -88,6 +88,13 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
                 return (true, null);
             }
 
+            // 409 Conflict = DID already exists — treat as success
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                logger.LogInformation("DID document already registered with registry (409 Conflict)");
+                return (true, null);
+            }
+
             var body = await response.Content.ReadAsStringAsync();
             logger.LogWarning("Failed to register DID document: {Status} {Body}",
                 response.StatusCode, body);
@@ -100,85 +107,4 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
         }
     }
 
-    // ── Challenge-Response Service Registration (POST /api/register) ──
-
-    /// <summary>
-    /// Step 1: Request a challenge for service registration.
-    /// </summary>
-    public async Task<RegistrationChallengeResponse?> RequestRegistrationChallenge(string did, string keyId)
-    {
-        try
-        {
-            var payload = new { did, key_id = keyId };
-            var response = await httpClient.PostAsJsonAsync("/api/register", payload);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                logger.LogWarning("Registration challenge request failed: {Status} {Body}",
-                    response.StatusCode, body);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            return new RegistrationChallengeResponse(
-                Challenge: root.GetProperty("challenge").GetString()!,
-                ServerDid: root.GetProperty("server_did").GetString()!,
-                ServerKeyId: root.GetProperty("server_key_id").GetString()!,
-                ServerSignature: root.GetProperty("server_signature").GetString()!
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error requesting registration challenge");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Step 2: Verify the signed challenge to complete service registration.
-    /// </summary>
-    public async Task<RegistrationVerifyResponse?> VerifyRegistration(string did, string keyId, string signedChallenge)
-    {
-        try
-        {
-            var payload = new { did, key_id = keyId, signed_challenge = signedChallenge };
-            var response = await httpClient.PostAsJsonAsync("/api/register/verify", payload);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync();
-                logger.LogWarning("Registration verification failed: {Status} {Body}",
-                    response.StatusCode, body);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement.Clone();
-
-            return new RegistrationVerifyResponse(
-                Status: root.GetProperty("status").GetString()!,
-                Credential: root.GetProperty("credential")
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error verifying registration");
-            return null;
-        }
-    }
 }
-
-public record RegistrationChallengeResponse(
-    string Challenge,
-    string ServerDid,
-    string ServerKeyId,
-    string ServerSignature);
-
-public record RegistrationVerifyResponse(
-    string Status,
-    JsonElement Credential);
