@@ -91,6 +91,7 @@ clients/desktop/native/**/target/
 clients/ios/**/build/
 clients/ios/**/DerivedData/
 clients/ios/**/.build/
+clients/ios/**/.spm-cache/
 *.xcuserdata
 *.xcworkspace/xcuserdata/
 *.xcscmblueprint
