@@ -67,7 +67,7 @@ sudo apt update && sudo apt install -y caddy
 ## 4. Directory Structure
 
 ```bash
-mkdir -p ~/ssdid-drive/{data/files,config,logs,backups}
+mkdir -p ~/ssdid-drive/{data/files,config,logs,native,backups}
 ```
 
 ```
@@ -78,6 +78,8 @@ mkdir -p ~/ssdid-drive/{data/files,config,logs,backups}
 │   ├── server-identity.json     # Auto-generated on first run (contains private key)
 │   └── files/                   # Client-encrypted file storage (~130 GB on 150 GB VPS)
 ├── logs/                        # Serilog daily rolling logs (7-day retention, 50 MB/file)
+├── native/
+│   └── libkazsign.so            # KAZ-Sign native library (built for VPS architecture)
 ├── backups/                     # Database + identity backups
 └── compose.yml                  # Podman compose file
 ```
@@ -192,10 +194,12 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       ENABLE_AUTO_MIGRATE: "true"
+      LD_LIBRARY_PATH: /app/native
     volumes:
       - ./config/appsettings.Production.json:/app/appsettings.Production.json:ro
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./native/libkazsign.so:/app/native/libkazsign.so:ro
     deploy:
       resources:
         limits:
@@ -274,10 +278,8 @@ make -j$(nproc)
 # Verify the library was built
 ls -la lib/libkazsign.so
 
-# Copy to the correct runtime path for the VPS architecture
-ARCH=$(dpkg --print-architecture)   # amd64 on Contabo, arm64 on ARM VPS
-mkdir -p ~/ssdid-drive/repo/src/SsdidDrive.Api/runtimes/linux-${ARCH}/native
-cp lib/libkazsign.so ~/ssdid-drive/repo/src/SsdidDrive.Api/runtimes/linux-${ARCH}/native/
+# Copy to the native directory (mounted into container via compose volume)
+cp lib/libkazsign.so ~/ssdid-drive/native/libkazsign.so
 ```
 
 ### 6.4 Build Admin SPA
