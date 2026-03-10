@@ -67,7 +67,7 @@ sudo apt update && sudo apt install -y caddy
 ## 4. Directory Structure
 
 ```bash
-mkdir -p ~/ssdid-drive/{data/files,config,backups}
+mkdir -p ~/ssdid-drive/{data/files,config,logs,backups}
 ```
 
 ```
@@ -77,6 +77,7 @@ mkdir -p ~/ssdid-drive/{data/files,config,backups}
 ├── data/
 │   ├── server-identity.json     # Auto-generated on first run (contains private key)
 │   └── files/                   # Client-encrypted file storage (~130 GB on 150 GB VPS)
+├── logs/                        # Serilog daily rolling logs (7-day retention, 50 MB/file)
 ├── backups/                     # Database + identity backups
 └── compose.yml                  # Podman compose file
 ```
@@ -88,13 +89,6 @@ mkdir -p ~/ssdid-drive/{data/files,config,backups}
 ```bash
 cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning",
-      "Microsoft.EntityFrameworkCore": "Warning"
-    }
-  },
   "ConnectionStrings": {
     "Default": "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=CHANGE_ME_STRONG_PASSWORD",
     "Redis": "redis:6379"
@@ -111,6 +105,20 @@ cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
       "MaxSessions": 10000
     }
   },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft.AspNetCore": "Warning",
+        "Microsoft.EntityFrameworkCore": "Warning",
+        "System.Net.Http.HttpClient": "Warning"
+      }
+    }
+  },
+  "Sentry": {
+    "Dsn": "https://YOUR_SENTRY_DSN_HERE",
+    "TracesSampleRate": 0.2
+  },
   "Cors": {
     "Origins": [
       "https://drive.ssdid.my"
@@ -120,7 +128,9 @@ cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
 EOF
 ```
 
-**Important:** Replace `CHANGE_ME_STRONG_PASSWORD` with a strong password:
+**Important:**
+- Replace `CHANGE_ME_STRONG_PASSWORD` with a strong password (see below)
+- Replace `YOUR_SENTRY_DSN_HERE` with your Sentry project DSN (create a project at [sentry.io](https://sentry.io) → Settings → Projects → ASP.NET Core). Leave empty to disable Sentry.
 
 ```bash
 openssl rand -base64 32
@@ -171,7 +181,7 @@ services:
       - backend
 
   api:
-    image: localhost/ssdid-drive-api:latest
+    image: ghcr.io/amiryahaya/ssdid-drive/api:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -185,6 +195,7 @@ services:
     volumes:
       - ./config/appsettings.Production.json:/app/appsettings.Production.json:ro
       - ./data:/app/data
+      - ./logs:/app/logs
     deploy:
       resources:
         limits:
@@ -480,14 +491,12 @@ du -sh ~/ssdid-drive/data/files/
 ### 9.5 Update Deployment
 
 ```bash
-cd ~/ssdid-drive/repo
-git pull
+cd ~/ssdid-drive
 
-# Rebuild image
-podman build -t ssdid-drive-api:latest -f src/SsdidDrive.Api/Containerfile src/SsdidDrive.Api/
+# Pull latest image from GHCR (built automatically by CD pipeline)
+podman pull ghcr.io/amiryahaya/ssdid-drive/api:latest
 
 # Rolling restart
-cd ~/ssdid-drive
 podman compose down api
 podman compose up -d api
 
@@ -499,8 +508,12 @@ curl -s https://drive.ssdid.my/health
 ### 9.6 View Logs
 
 ```bash
-# API logs
+# API container logs (stdout/stderr via Serilog console sink)
 podman compose logs api -f
+
+# API file logs (Serilog daily rolling files, 7-day retention)
+ls -la ~/ssdid-drive/logs/
+tail -f ~/ssdid-drive/logs/ssdid-drive-$(date +%Y%m%d).log
 
 # Database logs
 podman compose logs db -f
@@ -508,6 +521,8 @@ podman compose logs db -f
 # Caddy logs
 sudo tail -f /var/log/caddy/drive.log
 ```
+
+**Sentry:** Errors and performance traces are sent to Sentry when `Sentry:Dsn` is configured. View at your Sentry dashboard.
 
 ## 10. Security Checklist
 
@@ -520,6 +535,8 @@ sudo tail -f /var/log/caddy/drive.log
 - [ ] Redis not exposed externally (container network only, no port mapping)
 - [ ] API only listens on `127.0.0.1:5000` (Caddy proxies external traffic)
 - [ ] CORS origins restricted to actual domains
+- [ ] Sentry DSN configured for production error tracking
+- [ ] Log directory permissions (`chmod 700 ~/ssdid-drive/logs/`)
 - [ ] Regular backups configured for database, server identity, and file storage
 - [ ] SSH key-only auth (disable password auth in `/etc/ssh/sshd_config`)
 - [ ] Disk usage monitoring configured
@@ -546,13 +563,17 @@ Internet
 │ (512 MB limit)  │     └──────────────────┘
 │                 │     ┌──────────────────┐
 │                 │────▶│  Redis 7         │
-└─────────────────┘     │  :6379 (192 MB)  │
+│                 │     │  :6379 (192 MB)  │
+│                 │     └──────────────────┘
+│                 │     ┌──────────────────┐
+│                 │────▶│  Sentry          │
+└─────────────────┘     │  (error tracking)│
          │              └──────────────────┘
          ▼
 ┌───────────────────────┐     ┌──────────────────┐
 │  SSDID Registry       │     │  Local Disk      │
 │  registry.ssdid.my    │     │  ~/data/files/   │
-└───────────────────────┘     │  (~130 GB)       │
+└───────────────────────┘     │  ~/logs/ (350 MB)│
                               └──────────────────┘
 ```
 
