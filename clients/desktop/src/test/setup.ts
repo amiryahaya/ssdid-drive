@@ -43,6 +43,21 @@ window.ResizeObserver = ResizeObserverMock;
 // Mock scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
 
+// Mock EventSource (not available in jsdom)
+class EventSourceMock {
+  static lastUrl: string = '';
+  addEventListener = vi.fn();
+  removeEventListener = vi.fn();
+  close = vi.fn();
+  onerror: ((event: Event) => void) | null = null;
+
+  constructor(url: string) {
+    EventSourceMock.lastUrl = url;
+  }
+}
+
+window.EventSource = EventSourceMock as unknown as typeof EventSource;
+
 // Mock HTMLElement.prototype.hasPointerCapture
 HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 HTMLElement.prototype.setPointerCapture = vi.fn();

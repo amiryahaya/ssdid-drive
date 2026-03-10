@@ -7,6 +7,8 @@ obj/
 *.DotSettings.user
 *.nupkg
 **/packages/
+!clients/ios/**/Packages/
+clients/ios/**/Packages/**/.build/
 project.lock.json
 *.nuget.props
 *.nuget.targets
