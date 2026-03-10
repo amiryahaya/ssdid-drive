@@ -45,14 +45,18 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}"));
 
 // ── Sentry ──
-builder.WebHost.UseSentry(options =>
+var sentryDsn = builder.Configuration["Sentry:Dsn"];
+if (!string.IsNullOrEmpty(sentryDsn) && sentryDsn.Contains('@'))
 {
-    options.Dsn = builder.Configuration["Sentry:Dsn"];
-    options.TracesSampleRate = builder.Configuration.GetValue("Sentry:TracesSampleRate", 0.2);
-    options.SendDefaultPii = false;
-    options.Environment = builder.Environment.EnvironmentName;
-    options.Release = typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev";
-});
+    builder.WebHost.UseSentry(options =>
+    {
+        options.Dsn = sentryDsn;
+        options.TracesSampleRate = builder.Configuration.GetValue("Sentry:TracesSampleRate", 0.2);
+        options.SendDefaultPii = false;
+        options.Environment = builder.Environment.EnvironmentName;
+        options.Release = typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev";
+    });
+}
 
 // ── Problem Details + Global Exception Handler ──
 builder.Services.AddProblemDetails();
