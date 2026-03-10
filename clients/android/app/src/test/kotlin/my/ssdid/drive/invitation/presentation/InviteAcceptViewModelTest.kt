@@ -46,11 +46,15 @@ class InviteAcceptViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk()
+        // Default mock to prevent unmocked init-block coroutines leaking between tests
+        coEvery { authRepository.getInvitationInfo(any()) } returns
+            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun createViewModel(token: String = "test-token-123"): InviteAcceptViewModel {

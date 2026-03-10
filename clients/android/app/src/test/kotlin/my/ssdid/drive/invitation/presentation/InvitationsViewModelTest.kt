@@ -38,11 +38,14 @@ class InvitationsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         tenantRepository = mockk()
+        // Default mock to prevent unmocked init-block coroutines leaking between tests
+        coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun createViewModel(): InvitationsViewModel {
