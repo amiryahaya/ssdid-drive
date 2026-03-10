@@ -24,9 +24,35 @@ using SsdidDrive.Api.Crypto;
 using SsdidDrive.Api.Crypto.Providers;
 using SsdidDrive.Api.Health;
 using Microsoft.Extensions.FileProviders;
+using Serilog;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Serilog ──
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "SsdidDrive.Api")
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(builder.Environment.ContentRootPath, "logs", "ssdid-drive-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7,
+        fileSizeLimitBytes: 50 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}"));
+
+// ── Sentry ──
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"];
+    options.TracesSampleRate = builder.Configuration.GetValue("Sentry:TracesSampleRate", 0.2);
+    options.SendDefaultPii = false;
+    options.Environment = builder.Environment.EnvironmentName;
+    options.Release = typeof(Program).Assembly.GetName().Version?.ToString() ?? "dev";
+});
 
 // ── Problem Details + Global Exception Handler ──
 builder.Services.AddProblemDetails();
@@ -153,22 +179,36 @@ var app = builder.Build();
 // ── Startup warnings ──
 if (!app.Environment.IsDevelopment())
 {
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+
     var keyPath = app.Configuration["Ssdid:IdentityPath"]
         ?? Path.Combine(app.Environment.ContentRootPath, "data", "server-identity.json");
     if (File.Exists(keyPath))
-        app.Logger.LogWarning(
+        startupLogger.LogWarning(
             "Server identity private key is stored in plaintext at {Path}. " +
             "Consider using a key vault or HSM for production.", keyPath);
 
     if (string.IsNullOrEmpty(app.Configuration.GetConnectionString("Redis")))
-        app.Logger.LogWarning(
+        startupLogger.LogWarning(
             "SessionStore is in-memory only (single-instance). " +
             "Set ConnectionStrings:Redis for horizontal scaling.");
+
+    if (string.IsNullOrEmpty(app.Configuration["Sentry:Dsn"]))
+        startupLogger.LogWarning(
+            "Sentry DSN is not configured. Error tracking is disabled. " +
+            "Set Sentry:Dsn to enable production error reporting.");
 }
 
 // ── Pipeline ──
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseSerilogRequestLogging(options =>
+{
+    options.GetLevel = (httpContext, elapsed, ex) =>
+        httpContext.Request.Path.StartsWithSegments("/health")
+            ? Serilog.Events.LogEventLevel.Verbose
+            : Serilog.Events.LogEventLevel.Information;
+});
 
 if (app.Environment.IsDevelopment())
 {
