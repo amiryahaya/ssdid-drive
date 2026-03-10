@@ -11,6 +11,7 @@ import my.ssdid.drive.util.Result
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -215,16 +216,16 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `retryLoadInvitation calls repository again`() = runTest {
+    fun `retryLoadInvitation calls repository again`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Error(AppException.Network("Error")) andThen
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.retryLoadInvitation()
-        advanceUntilIdle()
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 2) { authRepository.getInvitationInfo(any()) }
     }
