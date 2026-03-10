@@ -17,8 +17,10 @@ namespace SsdidDrive.Api.Tests.Integration;
 /// Part 2: Full API stack tests — backend endpoints (/api/auth/ssdid/register,
 /// /register/verify, /authenticate) with the real registry as the DID resolver.
 ///
-/// KAZ-Sign: C library (v3.0) uses kaz-pqc-core-v2.0 algorithm (g1=65537, g2=65539),
-/// matching the deployed registry JARs. SPKI + KazWire encoding is used for interop.
+/// Registration flow:
+///   1. POST /api/did — register DID Document (W3C Data Integrity proof)
+///   2. POST /api/register — request challenge (mutual authentication)
+///   3. POST /api/register/verify — verify signed challenge, receive VC
 ///
 /// Skip if registry is unreachable (offline, CI without network, etc.).
 /// </summary>
@@ -64,7 +66,7 @@ public class RegistryIntegrationTests
     public async Task RegisterDid_Ed25519_Succeeds()
     {
         SkipIfRegistryUnavailable();
-        await RegisterAndResolve("Ed25519VerificationKey2020");
+        await RegisterDidDocAndResolve("Ed25519VerificationKey2020");
     }
 
     // ── Tests 2-4: PQC algorithms ──
@@ -73,21 +75,21 @@ public class RegistryIntegrationTests
     public async Task RegisterDid_MlDsa44_Succeeds()
     {
         SkipIfRegistryUnavailable();
-        await RegisterAndResolve("MlDsa44VerificationKey2024");
+        await RegisterDidDocAndResolve("MlDsa44VerificationKey2024");
     }
 
     [Fact]
     public async Task RegisterDid_MlDsa65_Succeeds()
     {
         SkipIfRegistryUnavailable();
-        await RegisterAndResolve("MlDsa65VerificationKey2024");
+        await RegisterDidDocAndResolve("MlDsa65VerificationKey2024");
     }
 
     [Fact]
     public async Task RegisterDid_SlhDsaSha2128f_Succeeds()
     {
         SkipIfRegistryUnavailable();
-        await RegisterAndResolve("SlhDsaSha2128fVerificationKey2024");
+        await RegisterDidDocAndResolve("SlhDsaSha2128fVerificationKey2024");
     }
 
     [Fact]
@@ -95,7 +97,7 @@ public class RegistryIntegrationTests
     {
         SkipIfRegistryUnavailable();
         PlatformFacts.SkipIfKazSignUnsupported();
-        await RegisterAndResolve("KazSignVerificationKey2024");
+        await RegisterDidDocAndResolve("KazSignVerificationKey2024");
     }
 
     // ── Test 6: Resolve unknown DID returns 404 ──
@@ -150,8 +152,8 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
 
-        // Register
-        var (registered, regResponse) = await RegisterDid(identity, cryptoFactory);
+        // Register DID document
+        var (registered, regResponse) = await RegisterDidDocument(identity, cryptoFactory);
         Assert.True(registered, $"DID registration failed: {regResponse}");
 
         // Resolve
@@ -176,7 +178,42 @@ public class RegistryIntegrationTests
         Assert.True(verified, "Signature verification with resolved public key failed");
     }
 
-    // ── Test 9: Server's ServerRegistrationService registers correctly ──
+    // ── Test 9: Challenge-response registration with Ed25519 ──
+
+    [Fact]
+    public async Task ChallengeResponseRegistration_Ed25519_Succeeds()
+    {
+        SkipIfRegistryUnavailable();
+
+        var cryptoFactory = CreateCryptoFactory();
+        var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
+
+        // Step 1: Register DID document first
+        var (registered, regMsg) = await RegisterDidDocument(identity, cryptoFactory);
+        Assert.True(registered, $"DID document registration failed: {regMsg}");
+
+        // Step 2: Request challenge
+        var challengeResp = await Http.PostAsJsonAsync($"{RegistryUrl}/api/register",
+            new { did = identity.Did, key_id = identity.KeyId });
+        Assert.Equal(HttpStatusCode.OK, challengeResp.StatusCode);
+
+        var challengeBody = await challengeResp.Content.ReadFromJsonAsync<JsonElement>();
+        var challenge = challengeBody.GetProperty("challenge").GetString()!;
+        Assert.False(string.IsNullOrEmpty(challenge));
+        Assert.True(challengeBody.TryGetProperty("server_did", out _));
+        Assert.True(challengeBody.TryGetProperty("server_signature", out _));
+
+        // Step 3: Sign challenge and verify
+        var signedChallenge = identity.SignChallenge(challenge);
+        var verifyResp = await Http.PostAsJsonAsync($"{RegistryUrl}/api/register/verify",
+            new { did = identity.Did, key_id = identity.KeyId, signed_challenge = signedChallenge });
+        Assert.Equal(HttpStatusCode.Created, verifyResp.StatusCode);
+
+        var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(verifyBody.TryGetProperty("credential", out _));
+    }
+
+    // ── Test 10: ServerRegistrationService format matches registry ──
 
     [Fact]
     public async Task ServerRegistration_MatchesRegistryFormat()
@@ -187,28 +224,13 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var identity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
 
-        var didDoc = identity.BuildDidDocument();
-        var proofType = CryptoProviderFactory.GetProofType(identity.AlgorithmType);
-        var proofOptions = new Dictionary<string, object>
-        {
-            ["type"] = proofType,
-            ["created"] = DateTimeOffset.UtcNow.ToString("o"),
-            ["verificationMethod"] = identity.KeyId,
-            ["proofPurpose"] = "assertionMethod"
-        };
+        var (registered, regResponse) = await RegisterDidDocument(identity, cryptoFactory);
 
-        var payload = SsdidCrypto.W3cSigningPayload(didDoc, proofOptions);
-        var proofBytes = identity.SignRaw(payload);
-        proofOptions["proofValue"] = SsdidCrypto.MultibaseEncode(proofBytes);
-
-        var reqPayload = new { did_document = didDoc, proof = proofOptions };
-        var resp = await Http.PostAsJsonAsync($"{RegistryUrl}/api/did", reqPayload);
-
-        Assert.True(resp.IsSuccessStatusCode,
-            $"Server registration format rejected: {resp.StatusCode} - {await resp.Content.ReadAsStringAsync()}");
+        Assert.True(registered,
+            $"Server registration format rejected: {regResponse}");
     }
 
-    // ── Test 10: KAZ-Sign local W3C proof round-trip ──
+    // ── Test 11: KAZ-Sign local W3C proof round-trip ──
 
     [Fact]
     public void KazSign_LocalW3cProof_Succeeds()
@@ -251,7 +273,7 @@ public class RegistryIntegrationTests
     // → RegistryClient → real SSDID registry → DID Document resolution.
     // ════════════════════════════════════════════════════════════════════
 
-    // ── Test 11: Full API auth flow with Ed25519 via real registry ──
+    // ── Test 12: Full API auth flow with Ed25519 via real registry ──
 
     [Fact]
     public async Task ApiAuthFlow_Ed25519_RegisterVerifyAuthenticate()
@@ -260,7 +282,7 @@ public class RegistryIntegrationTests
         await RunApiAuthFlow("Ed25519VerificationKey2020");
     }
 
-    // ── Test 12: Full API auth flow with ML-DSA-44 via real registry ──
+    // ── Test 13: Full API auth flow with ML-DSA-44 via real registry ──
 
     [Fact]
     public async Task ApiAuthFlow_MlDsa44_RegisterVerifyAuthenticate()
@@ -269,7 +291,7 @@ public class RegistryIntegrationTests
         await RunApiAuthFlow("MlDsa44VerificationKey2024");
     }
 
-    // ── Test 13: Full API auth flow with ML-DSA-65 via real registry ──
+    // ── Test 14: Full API auth flow with ML-DSA-65 via real registry ──
 
     [Fact]
     public async Task ApiAuthFlow_MlDsa65_RegisterVerifyAuthenticate()
@@ -278,7 +300,7 @@ public class RegistryIntegrationTests
         await RunApiAuthFlow("MlDsa65VerificationKey2024");
     }
 
-    // ── Test 14: Full API auth flow with SLH-DSA-SHA2-128f via real registry ──
+    // ── Test 15: Full API auth flow with SLH-DSA-SHA2-128f via real registry ──
 
     [Fact]
     public async Task ApiAuthFlow_SlhDsaSha2128f_RegisterVerifyAuthenticate()
@@ -287,7 +309,7 @@ public class RegistryIntegrationTests
         await RunApiAuthFlow("SlhDsaSha2128fVerificationKey2024");
     }
 
-    // ── Test 15: Full API auth flow with KAZ-Sign via real registry ──
+    // ── Test 16: Full API auth flow with KAZ-Sign via real registry ──
 
     [Fact]
     public async Task ApiAuthFlow_KazSign_RegisterVerifyAuthenticate()
@@ -297,7 +319,7 @@ public class RegistryIntegrationTests
         await RunApiAuthFlow("KazSignVerificationKey2024");
     }
 
-    // ── Test 16: API register with unregistered DID returns 404 ──
+    // ── Test 17: API register with unregistered DID returns 404 ──
 
     [Fact]
     public async Task ApiRegister_UnregisteredDid_Returns404()
@@ -315,7 +337,7 @@ public class RegistryIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 
-    // ── Test 17: API authenticate with session token grants access ──
+    // ── Test 18: API authenticate with session token grants access ──
 
     [Fact]
     public async Task ApiAuthFlow_SessionToken_GrantsProtectedAccess()
@@ -325,8 +347,8 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var clientIdentity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
 
-        // Pre-register the client's DID in the real registry
-        var (registered, regMsg) = await RegisterDid(clientIdentity, cryptoFactory);
+        // Pre-register the client's DID document in the real registry
+        var (registered, regMsg) = await RegisterDidDocument(clientIdentity, cryptoFactory);
         Assert.True(registered, $"Pre-registration failed: {regMsg}");
 
         await using var factory = new RealRegistryFactory();
@@ -372,7 +394,7 @@ public class RegistryIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
     }
 
-    // ── Test 18: API verify with wrong signature returns 401 ──
+    // ── Test 19: API verify with wrong signature returns 401 ──
 
     [Fact]
     public async Task ApiVerify_WrongSignature_Returns401()
@@ -382,8 +404,8 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var clientIdentity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
 
-        // Pre-register client DID
-        var (registered, _) = await RegisterDid(clientIdentity, cryptoFactory);
+        // Pre-register client DID document
+        var (registered, _) = await RegisterDidDocument(clientIdentity, cryptoFactory);
         Assert.True(registered);
 
         await using var factory = new RealRegistryFactory();
@@ -404,7 +426,7 @@ public class RegistryIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, verifyResp.StatusCode);
     }
 
-    // ── Test 19: API verify with different key's signature returns 401 ──
+    // ── Test 20: API verify with different key's signature returns 401 ──
 
     [Fact]
     public async Task ApiVerify_DifferentKeySignature_Returns401()
@@ -415,8 +437,8 @@ public class RegistryIntegrationTests
         var clientIdentity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
         var wrongIdentity = SsdidIdentity.Create("Ed25519VerificationKey2020", cryptoFactory);
 
-        // Pre-register client DID (not the wrong identity)
-        var (registered, _) = await RegisterDid(clientIdentity, cryptoFactory);
+        // Pre-register client DID document (not the wrong identity)
+        var (registered, _) = await RegisterDidDocument(clientIdentity, cryptoFactory);
         Assert.True(registered);
 
         await using var factory = new RealRegistryFactory();
@@ -440,7 +462,7 @@ public class RegistryIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, verifyResp.StatusCode);
     }
 
-    // ── Test 20: ML-DSA-44 full round-trip: register → resolve → sign → verify ──
+    // ── Test 21: ML-DSA-44 full round-trip: register → resolve → sign → verify ──
 
     [Fact]
     public async Task FullRoundTrip_MlDsa44_RegisterResolveVerify()
@@ -450,7 +472,7 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var identity = SsdidIdentity.Create("MlDsa44VerificationKey2024", cryptoFactory);
 
-        var (registered, regResponse) = await RegisterDid(identity, cryptoFactory);
+        var (registered, regResponse) = await RegisterDidDocument(identity, cryptoFactory);
         Assert.True(registered, $"DID registration failed: {regResponse}");
 
         var encodedDid = Uri.EscapeDataString(identity.Did);
@@ -490,8 +512,8 @@ public class RegistryIntegrationTests
         var cryptoFactory = CreateCryptoFactory();
         var clientIdentity = SsdidIdentity.Create(algorithmType, cryptoFactory);
 
-        // Pre-register the client's DID in the real registry
-        var (registered, regMsg) = await RegisterDid(clientIdentity, cryptoFactory);
+        // Pre-register the client's DID document in the real registry
+        var (registered, regMsg) = await RegisterDidDocument(clientIdentity, cryptoFactory);
         Assert.True(registered, $"Pre-registration failed for {algorithmType}: {regMsg}");
 
         await using var factory = new RealRegistryFactory();
@@ -545,15 +567,15 @@ public class RegistryIntegrationTests
     }
 
     /// <summary>
-    /// Register a DID with the given algorithm, then resolve it back and verify the public key matches.
+    /// Register a DID document, then resolve it and verify the public key matches.
     /// </summary>
-    private static async Task RegisterAndResolve(string algorithmType)
+    private static async Task RegisterDidDocAndResolve(string algorithmType)
     {
         var cryptoFactory = CreateCryptoFactory();
         var identity = SsdidIdentity.Create(algorithmType, cryptoFactory);
 
-        // Register
-        var (registered, registryResponse) = await RegisterDid(identity, cryptoFactory);
+        // Register DID document
+        var (registered, registryResponse) = await RegisterDidDocument(identity, cryptoFactory);
         Assert.True(registered, $"DID registration failed for {algorithmType}: {registryResponse}");
 
         // Resolve
@@ -572,7 +594,11 @@ public class RegistryIntegrationTests
         Assert.Equal(identity.PublicKey, resolvedPubKey);
     }
 
-    private static async Task<(bool Success, string Response)> RegisterDid(SsdidIdentity identity, CryptoProviderFactory cryptoFactory)
+    /// <summary>
+    /// Register a DID Document with the registry via W3C Data Integrity proof.
+    /// </summary>
+    private static async Task<(bool Success, string Response)> RegisterDidDocument(
+        SsdidIdentity identity, CryptoProviderFactory cryptoFactory)
     {
         var didDoc = identity.BuildDidDocument();
 

@@ -4,7 +4,8 @@ namespace SsdidDrive.Api.Ssdid;
 
 /// <summary>
 /// HTTP client for the SSDID Registry.
-/// Resolves DIDs to DID Documents and retrieves public keys.
+/// Resolves DIDs to DID Documents, registers DID Documents,
+/// and performs challenge-response service registration.
 /// </summary>
 public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logger)
 {
@@ -69,10 +70,12 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
         return null;
     }
 
+    // ── DID Document Registration (POST /api/did) ──
+
     /// <summary>
-    /// Register a DID Document with the registry.
+    /// Register a DID Document with the registry via W3C Data Integrity proof.
     /// </summary>
-    public async Task<bool> RegisterDid(object didDocument, object proof)
+    public async Task<(bool Success, string? Error)> RegisterDidDocument(object didDocument, object proof)
     {
         try
         {
@@ -81,17 +84,101 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
 
             if (response.IsSuccessStatusCode)
             {
-                logger.LogInformation("DID registered with registry");
-                return true;
+                logger.LogInformation("DID document registered with registry");
+                return (true, null);
             }
 
-            logger.LogWarning("Failed to register DID: {Status}", response.StatusCode);
-            return false;
+            var body = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to register DID document: {Status} {Body}",
+                response.StatusCode, body);
+            return (false, $"{response.StatusCode}: {body}");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error registering DID with registry");
-            return false;
+            logger.LogError(ex, "Error registering DID document with registry");
+            return (false, ex.Message);
+        }
+    }
+
+    // ── Challenge-Response Service Registration (POST /api/register) ──
+
+    /// <summary>
+    /// Step 1: Request a challenge for service registration.
+    /// </summary>
+    public async Task<RegistrationChallengeResponse?> RequestRegistrationChallenge(string did, string keyId)
+    {
+        try
+        {
+            var payload = new { did, key_id = keyId };
+            var response = await httpClient.PostAsJsonAsync("/api/register", payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                logger.LogWarning("Registration challenge request failed: {Status} {Body}",
+                    response.StatusCode, body);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            return new RegistrationChallengeResponse(
+                Challenge: root.GetProperty("challenge").GetString()!,
+                ServerDid: root.GetProperty("server_did").GetString()!,
+                ServerKeyId: root.GetProperty("server_key_id").GetString()!,
+                ServerSignature: root.GetProperty("server_signature").GetString()!
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error requesting registration challenge");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Step 2: Verify the signed challenge to complete service registration.
+    /// </summary>
+    public async Task<RegistrationVerifyResponse?> VerifyRegistration(string did, string keyId, string signedChallenge)
+    {
+        try
+        {
+            var payload = new { did, key_id = keyId, signed_challenge = signedChallenge };
+            var response = await httpClient.PostAsJsonAsync("/api/register/verify", payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                logger.LogWarning("Registration verification failed: {Status} {Body}",
+                    response.StatusCode, body);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement.Clone();
+
+            return new RegistrationVerifyResponse(
+                Status: root.GetProperty("status").GetString()!,
+                Credential: root.GetProperty("credential")
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error verifying registration");
+            return null;
         }
     }
 }
+
+public record RegistrationChallengeResponse(
+    string Challenge,
+    string ServerDid,
+    string ServerKeyId,
+    string ServerSignature);
+
+public record RegistrationVerifyResponse(
+    string Status,
+    JsonElement Credential);
