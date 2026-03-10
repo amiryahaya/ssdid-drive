@@ -130,4 +130,136 @@ describe('tenantStore', () => {
       expect(state.error).toBeNull();
     });
   });
+
+  describe('loadTenantConfig', () => {
+    it('should load tenant config successfully', async () => {
+      mockInvoke.mockResolvedValueOnce({
+        id: 'tenant-1',
+        name: 'Test Org',
+        slug: 'test-org',
+        pqc_algorithm: 'ML-KEM-768',
+        plan: 'enterprise',
+        settings: { allow_external_sharing: true },
+      });
+
+      await useTenantStore.getState().loadTenantConfig();
+
+      expect(mockInvoke).toHaveBeenCalledWith('get_tenant_config');
+      expect(useTenantStore.getState().tenantConfig).toBeTruthy();
+      expect(useTenantStore.getState().tenantConfig?.plan).toBe('enterprise');
+    });
+
+    it('should handle config load failure gracefully', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockInvoke.mockRejectedValueOnce(new Error('Config not found'));
+
+      await useTenantStore.getState().loadTenantConfig();
+
+      expect(useTenantStore.getState().tenantConfig).toBeNull();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('leaveTenant', () => {
+    it('should leave tenant and remove from available list', async () => {
+      useTenantStore.setState({
+        availableTenants: [
+          { ...mockTenant, id: 'tenant-1' },
+          { ...mockTenant, id: 'tenant-2', name: 'Other Org', slug: 'other-org' },
+        ],
+      });
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await useTenantStore.getState().leaveTenant('tenant-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('leave_tenant', { tenantId: 'tenant-1' });
+      expect(useTenantStore.getState().availableTenants).toHaveLength(1);
+      expect(useTenantStore.getState().availableTenants[0].id).toBe('tenant-2');
+      expect(useTenantStore.getState().isLoading).toBe(false);
+    });
+
+    it('should set error and throw on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Cannot leave'));
+
+      await expect(useTenantStore.getState().leaveTenant('tenant-1')).rejects.toThrow('Cannot leave');
+
+      expect(useTenantStore.getState().error).toBe('Cannot leave');
+      expect(useTenantStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('invitations', () => {
+    const mockInvitations = [
+      {
+        id: 'invite-1',
+        tenant_id: 'tenant-2',
+        tenant_name: 'New Org',
+        invited_by: 'admin@example.com',
+        role: 'member' as const,
+        created_at: '2026-01-01T00:00:00Z',
+        expires_at: null,
+      },
+    ];
+
+    it('should load invitations', async () => {
+      mockInvoke.mockResolvedValueOnce(mockInvitations);
+
+      await useTenantStore.getState().loadInvitations();
+
+      expect(mockInvoke).toHaveBeenCalledWith('get_tenant_invitations');
+      expect(useTenantStore.getState().pendingInvitations).toEqual(mockInvitations);
+    });
+
+    it('should handle load invitations failure gracefully', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockInvoke.mockRejectedValueOnce(new Error('Failed'));
+
+      await useTenantStore.getState().loadInvitations();
+
+      expect(useTenantStore.getState().pendingInvitations).toEqual([]);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should accept invitation and add tenant', async () => {
+      useTenantStore.setState({ pendingInvitations: mockInvitations, availableTenants: [mockTenant] });
+      const newTenant = { id: 'tenant-2', name: 'New Org', slug: 'new-org', role: 'member' as const, joined_at: '2026-01-01T00:00:00Z' };
+      mockInvoke.mockResolvedValueOnce(newTenant);
+
+      const result = await useTenantStore.getState().acceptInvitation('invite-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('accept_tenant_invitation', { invitationId: 'invite-1' });
+      expect(result).toEqual(newTenant);
+      expect(useTenantStore.getState().availableTenants).toHaveLength(2);
+      expect(useTenantStore.getState().pendingInvitations).toHaveLength(0);
+    });
+
+    it('should set error on accept failure', async () => {
+      useTenantStore.setState({ pendingInvitations: mockInvitations });
+      mockInvoke.mockRejectedValueOnce(new Error('Invitation expired'));
+
+      await expect(useTenantStore.getState().acceptInvitation('invite-1')).rejects.toThrow('Invitation expired');
+      expect(useTenantStore.getState().error).toBe('Invitation expired');
+    });
+
+    it('should decline invitation and remove from list', async () => {
+      useTenantStore.setState({ pendingInvitations: mockInvitations });
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await useTenantStore.getState().declineInvitation('invite-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('decline_tenant_invitation', { invitationId: 'invite-1' });
+      expect(useTenantStore.getState().pendingInvitations).toHaveLength(0);
+    });
+
+    it('should set error on decline failure', async () => {
+      useTenantStore.setState({ pendingInvitations: mockInvitations });
+      mockInvoke.mockRejectedValueOnce(new Error('Decline failed'));
+
+      await expect(useTenantStore.getState().declineInvitation('invite-1')).rejects.toThrow('Decline failed');
+      expect(useTenantStore.getState().error).toBe('Decline failed');
+    });
+  });
+
 });
