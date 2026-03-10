@@ -93,7 +93,16 @@ builder.Services.AddSingleton<SsdidIdentity>(sp =>
     var identityPath = builder.Configuration["Ssdid:IdentityPath"]
         ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
     var algorithmType = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
-    return SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
+    var identity = SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
+    if (identity.AlgorithmMismatch)
+    {
+        var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("SsdidIdentity");
+        log.LogWarning(
+            "Loaded identity uses {Loaded} but configured Ssdid:Algorithm is {Configured}. " +
+            "Delete {Path} to regenerate with the configured algorithm.",
+            identity.AlgorithmType, algorithmType, identityPath);
+    }
+    return identity;
 });
 
 // ── Session Store Options ──

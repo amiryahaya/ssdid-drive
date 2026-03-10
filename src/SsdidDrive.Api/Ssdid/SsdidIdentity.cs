@@ -10,6 +10,7 @@ public class SsdidIdentity
     public byte[] PublicKey { get; init; } = default!;
     public byte[] PrivateKey { get; init; } = default!;
     public string AlgorithmType { get; init; } = "KazSignVerificationKey2024";
+    public bool AlgorithmMismatch { get; init; }
 
     private CryptoProviderFactory? _cryptoFactory;
 
@@ -40,13 +41,15 @@ public class SsdidIdentity
         {
             var json = File.ReadAllText(path);
             var data = JsonSerializer.Deserialize<IdentityData>(json)!;
+            var loadedAlgorithm = data.AlgorithmType ?? "Ed25519VerificationKey2020";
             return new SsdidIdentity
             {
                 Did = data.Did,
                 KeyId = data.KeyId,
                 PublicKey = SsdidCrypto.Base64UrlDecode(data.PublicKey),
                 PrivateKey = SsdidCrypto.Base64UrlDecode(data.PrivateKey),
-                AlgorithmType = data.AlgorithmType ?? "Ed25519VerificationKey2020",
+                AlgorithmType = loadedAlgorithm,
+                AlgorithmMismatch = loadedAlgorithm != algorithmType,
                 _cryptoFactory = cryptoFactory
             };
         }

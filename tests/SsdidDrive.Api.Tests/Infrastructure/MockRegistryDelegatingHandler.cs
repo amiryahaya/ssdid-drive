@@ -30,24 +30,31 @@ public class MockRegistryDelegatingHandler : HttpMessageHandler
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("did_document", out var didDoc) &&
-                didDoc.TryGetProperty("id", out var idEl))
+            if (!root.TryGetProperty("did_document", out var didDoc) ||
+                !didDoc.TryGetProperty("id", out var idEl))
             {
-                var did = idEl.GetString()!;
-
-                // Return 409 if DID already exists (matches real registry behavior)
-                if (_documents.ContainsKey(did))
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
                 {
-                    return new HttpResponseMessage(HttpStatusCode.Conflict)
-                    {
-                        Content = new StringContent(
-                            JsonSerializer.Serialize(new { error = "DID already exists" }),
-                            Encoding.UTF8, "application/json")
-                    };
-                }
-
-                _documents[did] = JsonSerializer.Deserialize<object>(root.GetRawText())!;
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new { error = "Missing did_document.id" }),
+                        Encoding.UTF8, "application/json")
+                };
             }
+
+            var did = idEl.GetString()!;
+
+            // Return 409 if DID already exists (matches real registry behavior)
+            if (_documents.ContainsKey(did))
+            {
+                return new HttpResponseMessage(HttpStatusCode.Conflict)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new { error = "DID already exists" }),
+                        Encoding.UTF8, "application/json")
+                };
+            }
+
+            _documents[did] = JsonSerializer.Deserialize<object>(root.GetRawText())!;
 
             return new HttpResponseMessage(HttpStatusCode.Created)
             {

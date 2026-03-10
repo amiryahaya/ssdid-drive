@@ -88,10 +88,14 @@ public class RegistryClient(HttpClient httpClient, ILogger<RegistryClient> logge
                 return (true, null);
             }
 
-            // 409 Conflict = DID already exists — treat as success
+            // 409 Conflict = DID already exists — treat as success for idempotent startup.
+            // If the server key was rotated, the registry still has the old public key.
+            // Use PUT /api/did/:did to update if key material changed.
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                logger.LogInformation("DID document already registered with registry (409 Conflict)");
+                logger.LogWarning(
+                    "DID already registered (409 Conflict). If the server key was rotated, " +
+                    "the registry may have a stale public key — resolve and verify manually.");
                 return (true, null);
             }
 
