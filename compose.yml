@@ -27,6 +27,26 @@ services:
       timeout: 3s
       retries: 5
 
+  api:
+    image: ghcr.io/amiryahaya/ssdid-drive/api:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - api-logs:/app/logs
+      - api-data:/app/data
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=ssdid_drive"
+      ConnectionStrings__Redis: "redis:6379"
+      ASPNETCORE_ENVIRONMENT: Production
+      ENABLE_AUTO_MIGRATE: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:
   redisdata:
+  api-logs:
+  api-data:
