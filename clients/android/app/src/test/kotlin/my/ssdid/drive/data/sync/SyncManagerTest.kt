@@ -134,6 +134,8 @@ class SyncManagerTest {
 
     @Test
     fun `cancelAllSync cancels by tag and resets state to IDLE`() {
+        isConnectedFlow.value = false
+        every { networkMonitor.isNetworkAvailable() } returns false
         val syncManager = createSyncManager()
         syncManager.triggerSync() // set to SYNCING
 

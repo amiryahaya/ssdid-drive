@@ -11,6 +11,7 @@ import my.ssdid.drive.util.Result
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -20,12 +21,8 @@ import org.junit.Test
 /**
  * Unit tests for InvitationsViewModel.
  *
- * Tests cover:
- * - Loading pending invitations
- * - Accepting invitations
- * - Declining invitations
- * - Error handling
- * - Message clearing
+ * Uses runBlocking instead of runTest to avoid UncaughtExceptionsBeforeTest
+ * caused by kotlinx-coroutines-test ExceptionCollector leaking between test classes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvitationsViewModelTest {
@@ -38,7 +35,6 @@ class InvitationsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         tenantRepository = mockk()
-        // Default mock to prevent unmocked init-block coroutines leaking between tests
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
     }
 
@@ -52,23 +48,26 @@ class InvitationsViewModelTest {
         return InvitationsViewModel(tenantRepository)
     }
 
+    private fun advanceAll() {
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
+
     // ==================== Initialization Tests ====================
 
     @Test
-    fun `init loads pending invitations`() = runTest {
+    fun `init loads pending invitations`() = runBlocking {
         val invitations = listOf(InvitationTestFixtures.DomainModels.validPendingInvitation)
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(invitations)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         coVerify { tenantRepository.getPendingInvitations() }
     }
 
     @Test
-    fun `initial state transitions to loading when loadInvitations is called`() = runTest {
+    fun `initial state transitions to loading when loadInvitations is called`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } coAnswers {
-            // Delay to allow capturing loading state
             kotlinx.coroutines.delay(100)
             Result.Success(emptyList())
         }
@@ -76,13 +75,10 @@ class InvitationsViewModelTest {
         viewModel = createViewModel()
 
         viewModel.uiState.test {
-            // First state might be default (isLoading = false) or loading
             val initialState = awaitItem()
 
-            // Advance past the coroutine launch
-            testScheduler.advanceTimeBy(50)
+            testDispatcher.scheduler.advanceTimeBy(50)
 
-            // Check the loading state
             val loadingState = awaitItem()
             assertTrue(loadingState.isLoading)
 
@@ -93,7 +89,7 @@ class InvitationsViewModelTest {
     // ==================== Load Invitations Tests ====================
 
     @Test
-    fun `loadInvitations success updates state with invitations`() = runTest {
+    fun `loadInvitations success updates state with invitations`() = runBlocking {
         val invitations = listOf(
             InvitationTestFixtures.DomainModels.validPendingInvitation,
             InvitationTestFixtures.DomainModels.pendingInvitationAsAdmin
@@ -101,7 +97,7 @@ class InvitationsViewModelTest {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(invitations)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -113,11 +109,11 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `loadInvitations with empty list updates state correctly`() = runTest {
+    fun `loadInvitations with empty list updates state correctly`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -128,12 +124,12 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `loadInvitations failure shows error`() = runTest {
+    fun `loadInvitations failure shows error`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns
             Result.Error(AppException.Network("Network error"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -144,22 +140,20 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `loadInvitations clears previous error`() = runTest {
+    fun `loadInvitations clears previous error`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns
             Result.Error(AppException.Network("Error")) andThen
             Result.Success(emptyList())
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
-        // First load fails
         viewModel.uiState.test {
             var state = awaitItem()
             assertNotNull(state.error)
 
-            // Reload
             viewModel.loadInvitations()
-            advanceUntilIdle()
+            advanceAll()
 
             state = awaitItem()
             assertNull(state.error)
@@ -170,7 +164,7 @@ class InvitationsViewModelTest {
     // ==================== Accept Invitation Tests ====================
 
     @Test
-    fun `acceptInvitation success shows success message`() = runTest {
+    fun `acceptInvitation success shows success message`() = runBlocking {
         val accepted = InvitationAccepted(
             id = "inv-123",
             tenantId = "tenant-456",
@@ -181,10 +175,10 @@ class InvitationsViewModelTest {
         coEvery { tenantRepository.acceptInvitation(any()) } returns Result.Success(accepted)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -196,7 +190,7 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `acceptInvitation reloads invitations after success`() = runTest {
+    fun `acceptInvitation reloads invitations after success`() = runBlocking {
         val accepted = InvitationAccepted(
             id = "inv-123",
             tenantId = "tenant-456",
@@ -207,17 +201,16 @@ class InvitationsViewModelTest {
         coEvery { tenantRepository.acceptInvitation(any()) } returns Result.Success(accepted)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
-        // Should be called once on init and once after accept
         coVerify(atLeast = 2) { tenantRepository.getPendingInvitations() }
     }
 
     @Test
-    fun `acceptInvitation sets isProcessing during call`() = runTest {
+    fun `acceptInvitation sets isProcessing during call`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.acceptInvitation(any()) } coAnswers {
             Result.Success(
@@ -231,7 +224,7 @@ class InvitationsViewModelTest {
         }
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             skipItems(1)
@@ -246,16 +239,16 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `acceptInvitation failure shows error`() = runTest {
+    fun `acceptInvitation failure shows error`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.acceptInvitation(any()) } returns
             Result.Error(AppException.NotFound("Invitation not found"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -266,16 +259,16 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `acceptInvitation with conflict error`() = runTest {
+    fun `acceptInvitation with conflict error`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.acceptInvitation(any()) } returns
             Result.Error(AppException.Conflict("Already processed"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -287,15 +280,15 @@ class InvitationsViewModelTest {
     // ==================== Decline Invitation Tests ====================
 
     @Test
-    fun `declineInvitation success shows success message`() = runTest {
+    fun `declineInvitation success shows success message`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.declineInvitation(any()) } returns Result.Success(Unit)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.declineInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -306,28 +299,28 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `declineInvitation reloads invitations after success`() = runTest {
+    fun `declineInvitation reloads invitations after success`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.declineInvitation(any()) } returns Result.Success(Unit)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.declineInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         coVerify(atLeast = 2) { tenantRepository.getPendingInvitations() }
     }
 
     @Test
-    fun `declineInvitation sets isProcessing during call`() = runTest {
+    fun `declineInvitation sets isProcessing during call`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.declineInvitation(any()) } coAnswers {
             Result.Success(Unit)
         }
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             skipItems(1)
@@ -342,16 +335,16 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `declineInvitation failure shows error`() = runTest {
+    fun `declineInvitation failure shows error`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.declineInvitation(any()) } returns
             Result.Error(AppException.Network("Network error"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.declineInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -364,12 +357,12 @@ class InvitationsViewModelTest {
     // ==================== Message Clearing Tests ====================
 
     @Test
-    fun `clearError clears error message`() = runTest {
+    fun `clearError clears error message`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns
             Result.Error(AppException.Network("Error"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -384,15 +377,15 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `clearSuccessMessage clears success message`() = runTest {
+    fun `clearSuccessMessage clears success message`() = runBlocking {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
         coEvery { tenantRepository.declineInvitation(any()) } returns Result.Success(Unit)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.declineInvitation("inv-123")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             var state = awaitItem()
@@ -409,7 +402,7 @@ class InvitationsViewModelTest {
     // ==================== Edge Cases ====================
 
     @Test
-    fun `multiple invitations loaded correctly`() = runTest {
+    fun `multiple invitations loaded correctly`() = runBlocking {
         val invitations = listOf(
             InvitationTestFixtures.DomainModels.validPendingInvitation,
             InvitationTestFixtures.DomainModels.validPendingInvitation.copy(id = "inv-2"),
@@ -420,7 +413,7 @@ class InvitationsViewModelTest {
         coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(invitations)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -430,7 +423,7 @@ class InvitationsViewModelTest {
     }
 
     @Test
-    fun `accept followed by decline on different invitations`() = runTest {
+    fun `accept followed by decline on different invitations`() = runBlocking {
         val accepted = InvitationAccepted(
             id = "inv-1",
             tenantId = "tenant-1",
@@ -442,15 +435,15 @@ class InvitationsViewModelTest {
         coEvery { tenantRepository.declineInvitation("inv-2") } returns Result.Success(Unit)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptInvitation("inv-1")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.clearSuccessMessage()
 
         viewModel.declineInvitation("inv-2")
-        advanceUntilIdle()
+        advanceAll()
 
         coVerify { tenantRepository.acceptInvitation("inv-1") }
         coVerify { tenantRepository.declineInvitation("inv-2") }

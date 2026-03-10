@@ -21,13 +21,8 @@ import org.junit.Test
 /**
  * Unit tests for InviteAcceptViewModel.
  *
- * Tests cover:
- * - Initialization with token
- * - Loading invitation info
- * - Accept with SSDID Wallet flow
- * - Wallet callback handling
- * - Retry logic
- * - Error handling
+ * Uses runBlocking instead of runTest to avoid UncaughtExceptionsBeforeTest
+ * caused by kotlinx-coroutines-test ExceptionCollector leaking between test classes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InviteAcceptViewModelTest {
@@ -47,7 +42,6 @@ class InviteAcceptViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk()
-        // Default mock to prevent unmocked init-block coroutines leaking between tests
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
     }
@@ -63,23 +57,26 @@ class InviteAcceptViewModelTest {
         return InviteAcceptViewModel(authRepository, savedStateHandle)
     }
 
+    private fun advanceAll() {
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
+
     // ==================== Initialization Tests ====================
 
     @Test
-    fun `initial state with valid token loads invitation info`() = runTest {
+    fun `initial state with valid token loads invitation info`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
 
         viewModel = createViewModel("test-token")
-        advanceUntilIdle()
+        advanceAll()
 
-        // After creation, token should be set and API should be called
         assertEquals("test-token", viewModel.uiState.value.token)
         coVerify { authRepository.getInvitationInfo("test-token") }
     }
 
     @Test
-    fun `initial state with empty token shows error`() = runTest {
+    fun `initial state with empty token shows error`() = runBlocking {
         viewModel = createViewModel("")
 
         viewModel.uiState.test {
@@ -91,8 +88,7 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `initial state with blank token tries to load`() = runTest {
-        // Blank (spaces) is not empty, so isNotBlank() returns false for "   "
+    fun `initial state with blank token tries to load`() = runBlocking {
         viewModel = createViewModel("   ")
 
         viewModel.uiState.test {
@@ -104,12 +100,12 @@ class InviteAcceptViewModelTest {
     // ==================== Load Invitation Tests ====================
 
     @Test
-    fun `loadInvitationInfo success updates state with invitation`() = runTest {
+    fun `loadInvitationInfo success updates state with invitation`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.validTokenInvitation
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -121,12 +117,12 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo with expired invitation shows error`() = runTest {
+    fun `loadInvitationInfo with expired invitation shows error`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.expiredTokenInvitation
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -137,12 +133,12 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo with revoked invitation shows error`() = runTest {
+    fun `loadInvitationInfo with revoked invitation shows error`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.revokedTokenInvitation
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -152,12 +148,12 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo with already used invitation shows error`() = runTest {
+    fun `loadInvitationInfo with already used invitation shows error`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.alreadyUsedTokenInvitation
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -167,12 +163,12 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo with not found invitation shows error`() = runTest {
+    fun `loadInvitationInfo with not found invitation shows error`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.notFoundTokenInvitation
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -182,7 +178,7 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo with generic invalid invitation shows error`() = runTest {
+    fun `loadInvitationInfo with generic invalid invitation shows error`() = runBlocking {
         val invitation = InvitationTestFixtures.DomainModels.validTokenInvitation.copy(
             valid = false,
             errorReason = null
@@ -190,7 +186,7 @@ class InviteAcceptViewModelTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns Result.Success(invitation)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -200,12 +196,12 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `loadInvitationInfo failure shows error message`() = runTest {
+    fun `loadInvitationInfo failure shows error message`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Error(AppException.Network("Network error"))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -222,10 +218,10 @@ class InviteAcceptViewModelTest {
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
 
         viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
+        advanceAll()
 
         viewModel.retryLoadInvitation()
-        testDispatcher.scheduler.advanceUntilIdle()
+        advanceAll()
 
         coVerify(exactly = 2) { authRepository.getInvitationInfo(any()) }
     }
@@ -233,34 +229,34 @@ class InviteAcceptViewModelTest {
     // ==================== Accept With Wallet Tests ====================
 
     @Test
-    fun `acceptWithWallet creates challenge and launches wallet`() = runTest {
+    fun `acceptWithWallet creates challenge and launches wallet`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
         coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptWithWallet()
-        advanceUntilIdle()
+        advanceAll()
 
         coVerify { authRepository.createChallenge("register") }
         coVerify { authRepository.launchWalletAuth(testChallengeInfo) }
     }
 
     @Test
-    fun `acceptWithWallet sets isWaitingForWallet on success`() = runTest {
+    fun `acceptWithWallet sets isWaitingForWallet on success`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
         coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptWithWallet()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -272,17 +268,17 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `acceptWithWallet failure shows registration error`() = runTest {
+    fun `acceptWithWallet failure shows registration error`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.createChallenge("register") } throws
             RuntimeException("Wallet not installed")
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptWithWallet()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -296,7 +292,7 @@ class InviteAcceptViewModelTest {
     // ==================== Wallet Callback Tests ====================
 
     @Test
-    fun `handleWalletCallback saves session and sets isRegistered`() = runTest {
+    fun `handleWalletCallback saves session and sets isRegistered`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
@@ -304,13 +300,13 @@ class InviteAcceptViewModelTest {
         coEvery { authRepository.saveSession("session-token-abc") } just Runs
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.acceptWithWallet()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.handleWalletCallback("session-token-abc")
-        advanceUntilIdle()
+        advanceAll()
 
         coVerify { authRepository.saveSession("session-token-abc") }
         viewModel.uiState.test {
@@ -322,17 +318,17 @@ class InviteAcceptViewModelTest {
     }
 
     @Test
-    fun `handleWalletCallback failure shows registration error`() = runTest {
+    fun `handleWalletCallback failure shows registration error`() = runBlocking {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.saveSession(any()) } throws
             RuntimeException("Invalid session token")
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.handleWalletCallback("bad-token")
-        advanceUntilIdle()
+        advanceAll()
 
         viewModel.uiState.test {
             val state = awaitItem()
