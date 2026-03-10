@@ -17,17 +17,6 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Unit tests for InviteAcceptViewModel.
- *
- * Tests cover:
- * - Initialization with token
- * - Loading invitation info
- * - Accept with SSDID Wallet flow
- * - Wallet callback handling
- * - Retry logic
- * - Error handling
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InviteAcceptViewModelTest {
 
@@ -46,11 +35,14 @@ class InviteAcceptViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk()
+        coEvery { authRepository.getInvitationInfo(any()) } returns
+            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun createViewModel(token: String = "test-token-123"): InviteAcceptViewModel {
@@ -68,7 +60,6 @@ class InviteAcceptViewModelTest {
         viewModel = createViewModel("test-token")
         advanceUntilIdle()
 
-        // After creation, token should be set and API should be called
         assertEquals("test-token", viewModel.uiState.value.token)
         coVerify { authRepository.getInvitationInfo("test-token") }
     }
@@ -87,7 +78,6 @@ class InviteAcceptViewModelTest {
 
     @Test
     fun `initial state with blank token tries to load`() = runTest {
-        // Blank (spaces) is not empty, so isNotBlank() returns false for "   "
         viewModel = createViewModel("   ")
 
         viewModel.uiState.test {

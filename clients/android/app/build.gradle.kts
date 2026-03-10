@@ -186,6 +186,11 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            // Isolate each test class in its own JVM to prevent
+            // kotlinx-coroutines-test ExceptionCollector leak between classes
+            it.forkEvery = 1
+        }
     }
 
     packaging {

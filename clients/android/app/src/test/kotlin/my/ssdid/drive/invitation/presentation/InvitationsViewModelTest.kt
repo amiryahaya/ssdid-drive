@@ -17,16 +17,6 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Unit tests for InvitationsViewModel.
- *
- * Tests cover:
- * - Loading pending invitations
- * - Accepting invitations
- * - Declining invitations
- * - Error handling
- * - Message clearing
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvitationsViewModelTest {
 
@@ -38,11 +28,13 @@ class InvitationsViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         tenantRepository = mockk()
+        coEvery { tenantRepository.getPendingInvitations() } returns Result.Success(emptyList())
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkAll()
     }
 
     private fun createViewModel(): InvitationsViewModel {
@@ -65,7 +57,6 @@ class InvitationsViewModelTest {
     @Test
     fun `initial state transitions to loading when loadInvitations is called`() = runTest {
         coEvery { tenantRepository.getPendingInvitations() } coAnswers {
-            // Delay to allow capturing loading state
             kotlinx.coroutines.delay(100)
             Result.Success(emptyList())
         }
@@ -73,13 +64,9 @@ class InvitationsViewModelTest {
         viewModel = createViewModel()
 
         viewModel.uiState.test {
-            // First state might be default (isLoading = false) or loading
-            val initialState = awaitItem()
-
-            // Advance past the coroutine launch
+            awaitItem()
             testScheduler.advanceTimeBy(50)
 
-            // Check the loading state
             val loadingState = awaitItem()
             assertTrue(loadingState.isLoading)
 
@@ -149,12 +136,10 @@ class InvitationsViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        // First load fails
         viewModel.uiState.test {
             var state = awaitItem()
             assertNotNull(state.error)
 
-            // Reload
             viewModel.loadInvitations()
             advanceUntilIdle()
 
@@ -209,7 +194,6 @@ class InvitationsViewModelTest {
         viewModel.acceptInvitation("inv-123")
         advanceUntilIdle()
 
-        // Should be called once on init and once after accept
         coVerify(atLeast = 2) { tenantRepository.getPendingInvitations() }
     }
 
