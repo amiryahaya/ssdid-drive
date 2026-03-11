@@ -36,7 +36,12 @@ public static class LoginInitiate
             server_did = identity.Did,
             server_key_id = identity.KeyId,
             server_signature = serverSignature,
-            registry_url = registryUrl
+            registry_url = registryUrl,
+            requested_claims = new
+            {
+                required = new[] { "name" },
+                optional = new[] { "email" }
+            }
         };
 
         return Results.Ok(new
