@@ -14,6 +14,7 @@ import com.securesharing.data.remote.dto.TenantSwitchRequest
 import com.securesharing.data.remote.dto.UpdateMemberRoleRequest
 import com.securesharing.domain.model.Invitation
 import com.securesharing.domain.model.InvitationAccepted
+import com.securesharing.domain.model.InviteCodeInfo
 import com.securesharing.domain.model.Inviter
 import com.securesharing.domain.model.MemberStatus
 import com.securesharing.domain.model.PublicKeys
@@ -472,6 +473,39 @@ class TenantRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to decline invitation", e))
         }
+    }
+
+    // ==================== Invite Code ====================
+
+    override suspend fun lookupInviteCode(code: String): Result<InviteCodeInfo> {
+        return try {
+            val response = apiService.getInviteByCode(code)
+
+            if (response.isSuccessful) {
+                val dto = response.body()!!.data
+                val info = InviteCodeInfo(
+                    id = dto.id,
+                    tenantName = dto.tenantName,
+                    role = UserRole.fromString(dto.role),
+                    shortCode = dto.shortCode,
+                    expiresAt = dto.expiresAt
+                )
+                Result.success(info)
+            } else {
+                when (response.code()) {
+                    404 -> Result.error(AppException.NotFound("Invalid invite code"))
+                    410 -> Result.error(AppException.Unknown("This invite code has expired"))
+                    else -> Result.error(AppException.Unknown("Failed to look up invite code: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to look up invite code", e))
+        }
+    }
+
+    override suspend fun acceptInvitationById(invitationId: String): Result<InvitationAccepted> {
+        // Reuses the same API endpoint as acceptInvitation
+        return acceptInvitation(invitationId)
     }
 
     // ==================== Extension Functions ====================

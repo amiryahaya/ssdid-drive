@@ -28,6 +28,7 @@ import com.securesharing.presentation.files.upload.ShareIntentScreen
 import com.securesharing.presentation.settings.CredentialManagerScreen
 import com.securesharing.presentation.settings.InvitationsScreen
 import com.securesharing.presentation.settings.SettingsScreen
+import com.securesharing.presentation.tenant.JoinTenantScreen
 import com.securesharing.presentation.sharing.ReceivedSharesScreen
 import com.securesharing.presentation.sharing.CreatedSharesScreen
 import com.securesharing.presentation.sharing.ShareFileScreen
@@ -100,6 +101,9 @@ fun NavGraph(
                 onOidcBrowserOpen = { url ->
                     val customTabsIntent = CustomTabsIntent.Builder().build()
                     customTabsIntent.launchUrl(context, Uri.parse(url))
+                },
+                onNavigateToJoinTenant = {
+                    navController.navigate(Screen.JoinTenant.route)
                 }
             )
         }
@@ -257,7 +261,28 @@ fun NavGraph(
                 },
                 onNavigateToCredentials = {
                     navController.navigate(Screen.Credentials.route)
+                },
+                onNavigateToJoinTenant = {
+                    navController.navigate(Screen.JoinTenant.route)
                 }
+            )
+        }
+
+        // Join Tenant (invite code entry)
+        composable(Screen.JoinTenant.route) {
+            JoinTenantScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onJoinSuccess = {
+                    navController.navigate(Screen.Files.route) {
+                        popUpTo(Screen.JoinTenant.route) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.JoinTenant.route) { inclusive = true }
+                    }
+                },
+                isLoggedIn = true
             )
         }
 

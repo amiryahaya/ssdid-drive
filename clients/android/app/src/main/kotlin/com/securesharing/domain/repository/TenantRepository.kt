@@ -3,6 +3,7 @@ package com.securesharing.domain.repository
 import com.securesharing.crypto.PqcAlgorithm
 import com.securesharing.domain.model.Invitation
 import com.securesharing.domain.model.InvitationAccepted
+import com.securesharing.domain.model.InviteCodeInfo
 import com.securesharing.domain.model.Tenant
 import com.securesharing.domain.model.TenantConfig
 import com.securesharing.domain.model.TenantContext
@@ -161,4 +162,24 @@ interface TenantRepository {
      * @return Result indicating success or failure
      */
     suspend fun declineInvitation(invitationId: String): Result<Unit>
+
+    // ==================== Invite Code ====================
+
+    /**
+     * Look up an invitation by short code (e.g. "ACME-7K9X").
+     * Public endpoint — no auth required.
+     *
+     * @param code The short invite code
+     * @return Result containing the invite code info for preview
+     */
+    suspend fun lookupInviteCode(code: String): Result<InviteCodeInfo>
+
+    /**
+     * Accept an invitation by its ID (after looking up by short code).
+     * Requires auth — used for existing logged-in users.
+     *
+     * @param invitationId The ID from the invite code lookup
+     * @return Result containing the accepted invitation details
+     */
+    suspend fun acceptInvitationById(invitationId: String): Result<InvitationAccepted>
 }

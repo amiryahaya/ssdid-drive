@@ -28,6 +28,7 @@ import com.securesharing.util.OidcCallbackHolder
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onOidcBrowserOpen: (String) -> Unit = {},
+    onNavigateToJoinTenant: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel(),
     oidcViewModel: OidcLoginViewModel = hiltViewModel(),
     passkeyViewModel: PasskeyLoginViewModel = hiltViewModel()
@@ -297,5 +298,11 @@ fun LoginScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        TextButton(onClick = onNavigateToJoinTenant) {
+            Text("Have an invite code?")
+        }
     }
 }

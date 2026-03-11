@@ -22,6 +22,7 @@ import com.securesharing.data.remote.FoldersResponse
 import com.securesharing.data.remote.InvitationAcceptedResponse
 import com.securesharing.data.remote.InvitationCreatedResponse
 import com.securesharing.data.remote.InvitationsResponse
+import com.securesharing.data.remote.InviteCodeInfoResponse
 import com.securesharing.data.remote.InviteInfoResponse
 import com.securesharing.data.remote.InviteMemberRequest
 import com.securesharing.data.remote.LoginRequest
@@ -170,6 +171,16 @@ interface ApiService {
      */
     @POST("invitations/{id}/decline")
     suspend fun declineInvitation(@Path("id") invitationId: String): Response<Unit>
+
+    // ==================== Invite Code (Short Code Lookup) ====================
+
+    /**
+     * Look up an invitation by short code (e.g. "ACME-7K9X").
+     * Public endpoint — no auth required.
+     * Returns tenant name, role, and expiry for preview.
+     */
+    @GET("invitations/code/{code}")
+    suspend fun getInviteByCode(@Path("code") code: String): Response<InviteCodeInfoResponse>
 
     // ==================== Invitation Token (Public - Unauthenticated) ====================
 
