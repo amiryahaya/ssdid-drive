@@ -9,7 +9,7 @@ namespace SsdidDrive.Api.Features.Auth;
 
 public static class RegisterVerify
 {
-    public record Request(string Did, string KeyId, string SignedChallenge);
+    public record Request(string Did, string KeyId, string SignedChallenge, Dictionary<string, string>? SharedClaims = null);
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/register/verify", Handle)
@@ -29,17 +29,22 @@ public static class RegisterVerify
         return await result.Match(
             async ok =>
             {
-                var user = await ProvisionUser(db, req.Did);
+                var user = await ProvisionUser(db, req.Did, req.SharedClaims);
                 return Results.Created($"/api/users/{user.Id}", ok);
             },
             err => Task.FromResult(err.ToProblemResult()));
     }
 
-    private static async Task<User> ProvisionUser(AppDbContext db, string did)
+    private static async Task<User> ProvisionUser(AppDbContext db, string did, Dictionary<string, string>? claims)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Did == did);
         if (user is not null)
+        {
+            // Update claims on re-registration (wallet may have updated profile)
+            ApplyClaims(user, claims);
+            await db.SaveChangesAsync();
             return user;
+        }
 
         await using var tx = await db.Database.BeginTransactionAsync();
         try
@@ -58,6 +63,7 @@ public static class RegisterVerify
                 Did = did,
                 TenantId = tenant.Id
             };
+            ApplyClaims(user, claims);
             db.Users.Add(user);
 
             db.UserTenants.Add(new UserTenant
@@ -79,5 +85,16 @@ public static class RegisterVerify
             return existing ?? throw new InvalidOperationException(
                 $"User provisioning failed for DID {did}: concurrent insert expected but user not found");
         }
+    }
+
+    private static void ApplyClaims(User user, Dictionary<string, string>? claims)
+    {
+        if (claims is null || claims.Count == 0) return;
+
+        if (claims.TryGetValue("name", out var name) && !string.IsNullOrWhiteSpace(name))
+            user.DisplayName = name.Trim()[..Math.Min(name.Trim().Length, 200)];
+
+        if (claims.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email))
+            user.Email = email.Trim()[..Math.Min(email.Trim().Length, 320)];
     }
 }
