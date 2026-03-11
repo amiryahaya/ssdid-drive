@@ -153,6 +153,30 @@ interface ApiService {
     @POST("invitations/{id}/decline")
     suspend fun declineInvitation(@Path("id") invitationId: String): Response<Unit>
 
+    // ==================== Invitations - Create & Sent ====================
+
+    /**
+     * Create a new invitation.
+     * Requires admin or owner role.
+     */
+    @POST("invitations")
+    suspend fun createInvitation(@Body request: my.ssdid.drive.data.remote.dto.CreateInvitationRequest): Response<my.ssdid.drive.data.remote.dto.CreateInvitationResponse>
+
+    /**
+     * Get invitations sent by the current user.
+     */
+    @GET("invitations/sent")
+    suspend fun getSentInvitations(
+        @Query("page") page: Int = 1,
+        @Query("per_page") perPage: Int = 20
+    ): Response<my.ssdid.drive.data.remote.dto.SentInvitationsResponse>
+
+    /**
+     * Revoke a pending invitation.
+     */
+    @DELETE("invitations/{id}")
+    suspend fun revokeInvitation(@Path("id") invitationId: String): Response<Unit>
+
     // ==================== Invitation Token (Public - Unauthenticated) ====================
 
     /**

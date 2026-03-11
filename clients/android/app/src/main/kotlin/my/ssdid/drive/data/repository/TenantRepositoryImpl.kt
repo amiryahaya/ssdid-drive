@@ -8,14 +8,18 @@ import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.PqcAlgorithm
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
+import my.ssdid.drive.data.remote.dto.CreateInvitationRequest
 import my.ssdid.drive.data.remote.dto.InviteMemberRequest
 import my.ssdid.drive.data.remote.dto.TenantDto
 import my.ssdid.drive.data.remote.dto.TenantSwitchRequest
 import my.ssdid.drive.data.remote.dto.UpdateMemberRoleRequest
+import my.ssdid.drive.domain.model.CreatedInvitation
 import my.ssdid.drive.domain.model.Invitation
 import my.ssdid.drive.domain.model.InvitationAccepted
+import my.ssdid.drive.domain.model.InvitationStatus
 import my.ssdid.drive.domain.model.Inviter
 import my.ssdid.drive.domain.model.MemberStatus
+import my.ssdid.drive.domain.model.SentInvitation
 import my.ssdid.drive.domain.model.PublicKeys
 import my.ssdid.drive.domain.model.Tenant
 import my.ssdid.drive.domain.model.TenantConfig
@@ -471,6 +475,104 @@ class TenantRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to decline invitation", e))
+        }
+    }
+
+    // ==================== Create & Sent Invitations ====================
+
+    override suspend fun createInvitation(
+        email: String?,
+        role: UserRole,
+        message: String?
+    ): Result<CreatedInvitation> {
+        return try {
+            val roleString = when (role) {
+                UserRole.OWNER -> "owner"
+                UserRole.ADMIN -> "admin"
+                else -> "member"
+            }
+            val response = apiService.createInvitation(
+                CreateInvitationRequest(
+                    email = email,
+                    role = roleString,
+                    message = message
+                )
+            )
+
+            if (response.isSuccessful) {
+                val dto = response.body()!!.data
+                Result.success(
+                    CreatedInvitation(
+                        id = dto.id,
+                        shortCode = dto.shortCode,
+                        email = dto.email,
+                        role = UserRole.fromString(dto.role),
+                        status = InvitationStatus.fromString(dto.status),
+                        message = dto.message,
+                        createdAt = dto.createdAt,
+                        expiresAt = dto.expiresAt
+                    )
+                )
+            } else {
+                when (response.code()) {
+                    401 -> Result.error(AppException.Unauthorized())
+                    403 -> Result.error(AppException.Forbidden("Not authorized to create invitations"))
+                    409 -> Result.error(AppException.Conflict("User already has a pending invitation or is a member"))
+                    else -> Result.error(AppException.Unknown("Failed to create invitation: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to create invitation", e))
+        }
+    }
+
+    override suspend fun getSentInvitations(page: Int, perPage: Int): Result<List<SentInvitation>> {
+        return try {
+            val response = apiService.getSentInvitations(page, perPage)
+
+            if (response.isSuccessful) {
+                val invitations = response.body()!!.data.map { dto ->
+                    SentInvitation(
+                        id = dto.id,
+                        shortCode = dto.shortCode,
+                        email = dto.email,
+                        role = UserRole.fromString(dto.role),
+                        status = InvitationStatus.fromString(dto.status),
+                        message = dto.message,
+                        createdAt = dto.createdAt,
+                        expiresAt = dto.expiresAt
+                    )
+                }
+                Result.success(invitations)
+            } else {
+                when (response.code()) {
+                    401 -> Result.error(AppException.Unauthorized())
+                    403 -> Result.error(AppException.Forbidden("Not authorized to view sent invitations"))
+                    else -> Result.error(AppException.Unknown("Failed to get sent invitations: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to get sent invitations", e))
+        }
+    }
+
+    override suspend fun revokeInvitation(invitationId: String): Result<Unit> {
+        return try {
+            val response = apiService.revokeInvitation(invitationId)
+
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                when (response.code()) {
+                    401 -> Result.error(AppException.Unauthorized())
+                    403 -> Result.error(AppException.Forbidden("Not authorized to revoke this invitation"))
+                    404 -> Result.error(AppException.NotFound("Invitation not found"))
+                    409 -> Result.error(AppException.Conflict("Invitation is no longer pending"))
+                    else -> Result.error(AppException.Unknown("Failed to revoke invitation: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to revoke invitation", e))
         }
     }
 

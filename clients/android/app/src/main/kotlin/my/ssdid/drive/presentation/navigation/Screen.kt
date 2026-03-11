@@ -48,6 +48,9 @@ sealed class Screen(val route: String) {
     data object Profile : Screen("settings/profile")
     data object Security : Screen("settings/security")
     data object Invitations : Screen("settings/invitations")
+    data object CreateInvitation : Screen("settings/invitations/create")
+    data object SentInvitations : Screen("settings/invitations/sent")
+    data object Members : Screen("settings/members")
 
     // File operations
     data object FilePreview : Screen("file/{fileId}/preview") {

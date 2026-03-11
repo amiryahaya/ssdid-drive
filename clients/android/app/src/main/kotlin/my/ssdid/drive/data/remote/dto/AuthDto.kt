@@ -424,3 +424,61 @@ data class AcceptInviteResponseData(
     @SerializedName("expires_in") val expiresIn: Int? = null,
     @SerializedName("token_type") val tokenType: String? = null
 )
+
+// ==================== Create Invitation DTOs ====================
+
+/**
+ * Request to create a new invitation.
+ * POST /api/invitations
+ */
+data class CreateInvitationRequest(
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("role") val role: String = "member",
+    @SerializedName("message") val message: String? = null
+)
+
+/**
+ * Response after creating an invitation.
+ */
+data class CreateInvitationResponse(
+    @SerializedName("data") val data: CreatedInvitationDto
+)
+
+data class CreatedInvitationDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("short_code") val shortCode: String,
+    @SerializedName("email") val email: String?,
+    @SerializedName("role") val role: String,
+    @SerializedName("status") val status: String,
+    @SerializedName("message") val message: String?,
+    @SerializedName("created_at") val createdAt: String?,
+    @SerializedName("expires_at") val expiresAt: String?
+)
+
+// ==================== Sent Invitations DTOs ====================
+
+/**
+ * Response for listing sent invitations.
+ */
+data class SentInvitationsResponse(
+    @SerializedName("data") val data: List<SentInvitationDto>,
+    @SerializedName("meta") val meta: PaginationMeta? = null
+)
+
+data class SentInvitationDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("short_code") val shortCode: String?,
+    @SerializedName("email") val email: String?,
+    @SerializedName("role") val role: String,
+    @SerializedName("status") val status: String,
+    @SerializedName("message") val message: String?,
+    @SerializedName("created_at") val createdAt: String?,
+    @SerializedName("expires_at") val expiresAt: String?
+)
+
+data class PaginationMeta(
+    @SerializedName("page") val page: Int,
+    @SerializedName("per_page") val perPage: Int,
+    @SerializedName("total") val total: Int,
+    @SerializedName("total_pages") val totalPages: Int
+)

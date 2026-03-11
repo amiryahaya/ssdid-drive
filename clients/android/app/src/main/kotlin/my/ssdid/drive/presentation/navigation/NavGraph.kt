@@ -24,7 +24,10 @@ import my.ssdid.drive.presentation.recovery.PendingRequestsScreen
 import my.ssdid.drive.presentation.recovery.RecoverySetupScreen
 import my.ssdid.drive.presentation.recovery.TrusteeSelectionScreen
 import my.ssdid.drive.presentation.files.upload.ShareIntentScreen
+import my.ssdid.drive.presentation.settings.CreateInvitationScreen
 import my.ssdid.drive.presentation.settings.InvitationsScreen
+import my.ssdid.drive.presentation.settings.MembersScreen
+import my.ssdid.drive.presentation.settings.SentInvitationsScreen
 import my.ssdid.drive.presentation.settings.SettingsScreen
 import my.ssdid.drive.presentation.sharing.ReceivedSharesScreen
 import my.ssdid.drive.presentation.sharing.CreatedSharesScreen
@@ -247,15 +250,45 @@ fun NavGraph(
                 onNavigateToInvitations = {
                     navController.navigate(Screen.Invitations.route)
                 },
+                onNavigateToCreateInvitation = {
+                    navController.navigate(Screen.CreateInvitation.route)
+                },
+                onNavigateToSentInvitations = {
+                    navController.navigate(Screen.SentInvitations.route)
+                },
+                onNavigateToMembers = {
+                    navController.navigate(Screen.Members.route)
+                },
                 onNavigateToPiiChat = {
                     navController.navigate(Screen.PiiConversations.route)
                 }
             )
         }
 
-        // Invitations
+        // Invitations - Received (pending)
         composable(Screen.Invitations.route) {
             InvitationsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Invitations - Create
+        composable(Screen.CreateInvitation.route) {
+            CreateInvitationScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Invitations - Sent
+        composable(Screen.SentInvitations.route) {
+            SentInvitationsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Members management
+        composable(Screen.Members.route) {
+            MembersScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

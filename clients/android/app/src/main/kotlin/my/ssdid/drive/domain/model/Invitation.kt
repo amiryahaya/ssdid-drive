@@ -93,6 +93,60 @@ data class TokenInvitation(
 /**
  * Possible error reasons for invalid invitations.
  */
+// ==================== Sent Invitation (for creators) ====================
+
+/**
+ * Domain model representing an invitation sent by the current user.
+ */
+data class SentInvitation(
+    val id: String,
+    val shortCode: String?,
+    val email: String?,
+    val role: UserRole,
+    val status: InvitationStatus,
+    val message: String?,
+    val createdAt: String?,
+    val expiresAt: String?
+)
+
+/**
+ * Domain model representing a newly created invitation.
+ */
+data class CreatedInvitation(
+    val id: String,
+    val shortCode: String,
+    val email: String?,
+    val role: UserRole,
+    val status: InvitationStatus,
+    val message: String?,
+    val createdAt: String?,
+    val expiresAt: String?
+)
+
+/**
+ * Status of an invitation.
+ */
+enum class InvitationStatus {
+    PENDING,
+    ACCEPTED,
+    DECLINED,
+    EXPIRED,
+    REVOKED;
+
+    companion object {
+        fun fromString(value: String): InvitationStatus {
+            return when (value.lowercase()) {
+                "pending" -> PENDING
+                "accepted" -> ACCEPTED
+                "declined" -> DECLINED
+                "expired" -> EXPIRED
+                "revoked" -> REVOKED
+                else -> PENDING
+            }
+        }
+    }
+}
+
 enum class TokenInvitationError {
     EXPIRED,
     REVOKED,

@@ -7,7 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import my.ssdid.drive.domain.model.UserRole
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,6 +29,9 @@ fun SettingsScreen(
     onNavigateToTrusteeDashboard: () -> Unit = {},
     onNavigateToInitiateRecovery: () -> Unit = {},
     onNavigateToInvitations: () -> Unit = {},
+    onNavigateToCreateInvitation: () -> Unit = {},
+    onNavigateToSentInvitations: () -> Unit = {},
+    onNavigateToMembers: () -> Unit = {},
     onNavigateToPiiChat: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -96,9 +103,13 @@ fun SettingsScreen(
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-                    // Invitations Section
-                    InvitationsSectionButton(
-                        onNavigateToInvitations = onNavigateToInvitations
+                    // Organization Section (Members + Invitations)
+                    OrganizationSection(
+                        userRole = uiState.user?.getEffectiveRole(),
+                        onNavigateToMembers = onNavigateToMembers,
+                        onNavigateToInvitations = onNavigateToInvitations,
+                        onNavigateToCreateInvitation = onNavigateToCreateInvitation,
+                        onNavigateToSentInvitations = onNavigateToSentInvitations
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -277,16 +288,78 @@ fun SettingsScreen(
     }
 }
 
+@Composable
+private fun OrganizationSection(
+    userRole: UserRole?,
+    onNavigateToMembers: () -> Unit,
+    onNavigateToInvitations: () -> Unit,
+    onNavigateToCreateInvitation: () -> Unit,
+    onNavigateToSentInvitations: () -> Unit
+) {
+    val isAdminOrOwner = userRole == UserRole.ADMIN || userRole == UserRole.OWNER
+
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "Organization",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+
+        // Members (Admin/Owner only)
+        if (isAdminOrOwner) {
+            SettingsNavigationCard(
+                icon = Icons.Default.People,
+                title = "Members",
+                subtitle = "View and manage organization members",
+                onClick = onNavigateToMembers
+            )
+        }
+
+        // Received Invitations (all users)
+        SettingsNavigationCard(
+            icon = Icons.Default.Mail,
+            title = "Received Invitations",
+            subtitle = "View and respond to pending invitations",
+            onClick = onNavigateToInvitations
+        )
+
+        // Create Invitation (Admin/Owner only)
+        if (isAdminOrOwner) {
+            SettingsNavigationCard(
+                icon = Icons.Default.PersonAdd,
+                title = "Create Invitation",
+                subtitle = "Invite someone to join your organization",
+                onClick = onNavigateToCreateInvitation
+            )
+        }
+
+        // Sent Invitations (Admin/Owner only)
+        if (isAdminOrOwner) {
+            SettingsNavigationCard(
+                icon = Icons.AutoMirrored.Filled.Send,
+                title = "Sent Invitations",
+                subtitle = "View and manage invitations you have sent",
+                onClick = onNavigateToSentInvitations
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InvitationsSectionButton(
-    onNavigateToInvitations: () -> Unit
+private fun SettingsNavigationCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
 ) {
     Card(
-        onClick = onNavigateToInvitations,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
@@ -298,18 +371,18 @@ private fun InvitationsSectionButton(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Mail,
+                imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Organization Invitations",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "View and respond to pending invitations",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

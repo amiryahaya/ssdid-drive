@@ -1,8 +1,10 @@
 package my.ssdid.drive.domain.repository
 
 import my.ssdid.drive.crypto.PqcAlgorithm
+import my.ssdid.drive.domain.model.CreatedInvitation
 import my.ssdid.drive.domain.model.Invitation
 import my.ssdid.drive.domain.model.InvitationAccepted
+import my.ssdid.drive.domain.model.SentInvitation
 import my.ssdid.drive.domain.model.Tenant
 import my.ssdid.drive.domain.model.TenantConfig
 import my.ssdid.drive.domain.model.TenantContext
@@ -161,4 +163,38 @@ interface TenantRepository {
      * @return Result indicating success or failure
      */
     suspend fun declineInvitation(invitationId: String): Result<Unit>
+
+    // ==================== Create & Sent Invitations ====================
+
+    /**
+     * Create a new invitation.
+     * Requires admin or owner role.
+     *
+     * @param email Optional email of the person to invite
+     * @param role The role to assign (defaults to member)
+     * @param message Optional message to include with the invitation
+     * @return Result containing the created invitation with short code
+     */
+    suspend fun createInvitation(
+        email: String? = null,
+        role: UserRole = UserRole.USER,
+        message: String? = null
+    ): Result<CreatedInvitation>
+
+    /**
+     * Get invitations sent by the current user.
+     *
+     * @param page Page number for pagination
+     * @param perPage Items per page
+     * @return Result containing list of sent invitations
+     */
+    suspend fun getSentInvitations(page: Int = 1, perPage: Int = 20): Result<List<SentInvitation>>
+
+    /**
+     * Revoke a pending invitation.
+     *
+     * @param invitationId The ID of the invitation to revoke
+     * @return Result indicating success or failure
+     */
+    suspend fun revokeInvitation(invitationId: String): Result<Unit>
 }
