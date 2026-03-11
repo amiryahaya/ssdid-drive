@@ -405,7 +405,8 @@ sudo cp -r ~/ssdid-drive/repo/clients/landing/* /var/www/landing/
 
 # Deploy admin SPA (build first, then copy)
 cd ~/ssdid-drive/repo/clients/admin && npm ci && npm run build
-sudo cp -r dist/* /var/www/admin/
+# Build output goes to src/SsdidDrive.Api/wwwroot/admin/ (configured in vite.config.ts)
+sudo cp -r ~/ssdid-drive/repo/src/SsdidDrive.Api/wwwroot/admin/* /var/www/admin/
 ```
 
 Or use the deploy script from your local machine:
