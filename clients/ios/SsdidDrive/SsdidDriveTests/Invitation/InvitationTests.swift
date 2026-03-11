@@ -486,4 +486,171 @@ final class InvitationTests: XCTestCase {
         XCTAssertNil(data.user.displayName)
         XCTAssertNil(data.user.tenantId)
     }
+
+    // MARK: - UserRole Owner Tests
+
+    func testUserRole_displayName_owner() {
+        XCTAssertEqual(UserRole.owner.displayName, "Owner")
+    }
+
+    func testUserRole_rawValue_owner() {
+        XCTAssertEqual(UserRole.owner.rawValue, "owner")
+    }
+
+    // MARK: - TenantMember Tests
+
+    func testTenantMember_initials_twoWordName() throws {
+        let json = """
+        {
+            "id": "usr_123",
+            "email": "john@example.com",
+            "display_name": "John Doe",
+            "role": "member",
+            "joined_at": "2024-01-15T10:30:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let member = try decoder.decode(TenantMember.self, from: json)
+        XCTAssertEqual(member.initials, "JD")
+    }
+
+    func testTenantMember_initials_singleWordName() throws {
+        let json = """
+        {
+            "id": "usr_123",
+            "email": "prince@example.com",
+            "display_name": "Prince",
+            "role": "member",
+            "joined_at": "2024-01-15T10:30:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let member = try decoder.decode(TenantMember.self, from: json)
+        XCTAssertEqual(member.initials, "PR")
+    }
+
+    func testTenantMember_initials_emailFallback() throws {
+        let json = """
+        {
+            "id": "usr_123",
+            "email": "hello@example.com",
+            "display_name": null,
+            "role": "member",
+            "joined_at": "2024-01-15T10:30:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let member = try decoder.decode(TenantMember.self, from: json)
+        XCTAssertEqual(member.initials, "HE")
+    }
+
+    func testTenantMember_name_usesDisplayName() throws {
+        let json = """
+        {
+            "id": "usr_123",
+            "email": "john@example.com",
+            "display_name": "John Doe",
+            "role": "member",
+            "joined_at": "2024-01-15T10:30:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let member = try decoder.decode(TenantMember.self, from: json)
+        XCTAssertEqual(member.name, "John Doe")
+    }
+
+    func testTenantMember_name_fallsBackToEmailPrefix() throws {
+        let json = """
+        {
+            "id": "usr_123",
+            "email": "johndoe@example.com",
+            "display_name": null,
+            "role": "member",
+            "joined_at": "2024-01-15T10:30:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let member = try decoder.decode(TenantMember.self, from: json)
+        XCTAssertEqual(member.name, "Johndoe")
+    }
+
+    // MARK: - CodeInvitation Tests
+
+    func testCodeInvitation_isExpired_futureDate_returnsFalse() throws {
+        let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(86400))
+        let json = """
+        {
+            "id": "inv_123",
+            "tenant_name": "Test Corp",
+            "role": "member",
+            "short_code": "ABCD1234",
+            "expires_at": "\(expiresAt)"
+        }
+        """.data(using: .utf8)!
+
+        let invitation = try decoder.decode(CodeInvitation.self, from: json)
+        XCTAssertFalse(invitation.isExpired)
+    }
+
+    func testCodeInvitation_isExpired_pastDate_returnsTrue() throws {
+        let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-86400))
+        let json = """
+        {
+            "id": "inv_expired",
+            "tenant_name": "Test Corp",
+            "role": "member",
+            "short_code": "EXPR1234",
+            "expires_at": "\(expiresAt)"
+        }
+        """.data(using: .utf8)!
+
+        let invitation = try decoder.decode(CodeInvitation.self, from: json)
+        XCTAssertTrue(invitation.isExpired)
+    }
+
+    // MARK: - SentInvitation Tests
+
+    func testSentInvitation_displayEmail_withEmail() throws {
+        let createdAt = ISO8601DateFormatter().string(from: Date())
+        let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(86400))
+        let json = """
+        {
+            "id": "sinv_001",
+            "email": "user@example.com",
+            "role": "member",
+            "short_code": "CODE1234",
+            "status": "pending",
+            "message": null,
+            "tenant_id": "ten_abc",
+            "tenant_name": "Test Corp",
+            "created_at": "\(createdAt)",
+            "expires_at": "\(expiresAt)"
+        }
+        """.data(using: .utf8)!
+
+        let invitation = try decoder.decode(SentInvitation.self, from: json)
+        XCTAssertEqual(invitation.displayEmail, "user@example.com")
+    }
+
+    func testSentInvitation_displayEmail_withoutEmail() throws {
+        let createdAt = ISO8601DateFormatter().string(from: Date())
+        let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(86400))
+        let json = """
+        {
+            "id": "sinv_002",
+            "email": null,
+            "role": "member",
+            "short_code": "OPEN1234",
+            "status": "pending",
+            "message": null,
+            "tenant_id": "ten_abc",
+            "tenant_name": "Test Corp",
+            "created_at": "\(createdAt)",
+            "expires_at": "\(expiresAt)"
+        }
+        """.data(using: .utf8)!
+
+        let invitation = try decoder.decode(SentInvitation.self, from: json)
+        XCTAssertEqual(invitation.displayEmail, "Open invite")
+    }
 }

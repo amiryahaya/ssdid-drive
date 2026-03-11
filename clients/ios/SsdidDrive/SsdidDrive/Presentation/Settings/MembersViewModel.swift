@@ -11,7 +11,7 @@ final class MembersViewModel: BaseViewModel {
 
     // MARK: - Properties
 
-    private let apiClient: APIClient
+    private let apiClient: any APIClientProtocol
     private let tenantId: String
     private let callerRole: UserRole
     private let currentUserId: String?
@@ -29,7 +29,7 @@ final class MembersViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient, tenantId: String, callerRole: UserRole, currentUserId: String?) {
+    init(apiClient: any APIClientProtocol, tenantId: String, callerRole: UserRole, currentUserId: String?) {
         self.apiClient = apiClient
         self.tenantId = tenantId
         self.callerRole = callerRole
@@ -51,6 +51,8 @@ final class MembersViewModel: BaseViewModel {
                 let response: TenantMembersResponse = try await apiClient.request(
                     endpoint,
                     method: .get,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
@@ -113,6 +115,7 @@ final class MembersViewModel: BaseViewModel {
                     endpoint,
                     method: .put,
                     body: request,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
@@ -149,6 +152,8 @@ final class MembersViewModel: BaseViewModel {
                 try await apiClient.requestNoContent(
                     endpoint,
                     method: .delete,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 

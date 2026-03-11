@@ -2,19 +2,11 @@ import Foundation
 @testable import SsdidDrive
 
 /// Mock API client for testing network layer
-final class MockAPIClient {
+final class MockAPIClient: APIClientProtocol, @unchecked Sendable {
 
     // MARK: - Types
 
-    typealias RequestHandler = (String, HTTPMethod, Any?) throws -> Data
-
-    enum HTTPMethod: String {
-        case get = "GET"
-        case post = "POST"
-        case put = "PUT"
-        case patch = "PATCH"
-        case delete = "DELETE"
-    }
+    typealias RequestHandler = (String, APIClient.HTTPMethod, Any?) throws -> Data
 
     enum MockAPIError: Error, LocalizedError {
         case notConfigured
@@ -48,7 +40,7 @@ final class MockAPIClient {
     var requestHandler: RequestHandler?
 
     /// Track all requests made
-    private(set) var requestHistory: [(endpoint: String, method: HTTPMethod, body: Data?)] = []
+    private(set) var requestHistory: [(endpoint: String, method: APIClient.HTTPMethod, body: Data?)] = []
 
     /// Artificial delay for simulating network latency (in seconds)
     var artificialDelay: TimeInterval = 0
@@ -80,6 +72,11 @@ final class MockAPIClient {
         responses[endpoint] = .failure(MockAPIError.httpError(statusCode: statusCode, message: message))
     }
 
+    /// Set an APIClient.APIError for an endpoint
+    func setAPIError(_ error: APIClient.APIError, for endpoint: String) {
+        responses[endpoint] = .failure(error)
+    }
+
     /// Clear all configured responses
     func clearResponses() {
         responses.removeAll()
@@ -99,13 +96,15 @@ final class MockAPIClient {
         shouldFailAllRequests = false
     }
 
-    // MARK: - Request Methods
+    // MARK: - APIClientProtocol Conformance
 
     /// Make a mock request and return decoded response
     func request<T: Decodable>(
         _ endpoint: String,
-        method: HTTPMethod = .get,
-        body: Encodable? = nil
+        method: APIClient.HTTPMethod = .get,
+        body: Encodable? = nil,
+        queryItems: [URLQueryItem]? = nil,
+        requiresAuth: Bool = true
     ) async throws -> T {
         // Track the request
         var bodyData: Data?
@@ -146,8 +145,10 @@ final class MockAPIClient {
     /// Make a mock request without expecting a response body
     func requestNoContent(
         _ endpoint: String,
-        method: HTTPMethod = .get,
-        body: Encodable? = nil
+        method: APIClient.HTTPMethod = .get,
+        body: Encodable? = nil,
+        queryItems: [URLQueryItem]? = nil,
+        requiresAuth: Bool = true
     ) async throws {
         // Track the request
         var bodyData: Data?
@@ -192,7 +193,7 @@ final class MockAPIClient {
     }
 
     /// Get the last request made to a specific endpoint
-    func lastRequest(for endpoint: String) -> (endpoint: String, method: HTTPMethod, body: Data?)? {
+    func lastRequest(for endpoint: String) -> (endpoint: String, method: APIClient.HTTPMethod, body: Data?)? {
         requestHistory.last { $0.endpoint == endpoint }
     }
 

@@ -62,3 +62,12 @@ window.EventSource = EventSourceMock as unknown as typeof EventSource;
 HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 HTMLElement.prototype.setPointerCapture = vi.fn();
 HTMLElement.prototype.releasePointerCapture = vi.fn();
+
+// Mock global.fetch if not already mocked (individual tests may override)
+if (!vi.isMockFunction(global.fetch)) {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({}),
+  });
+}

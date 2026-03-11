@@ -27,7 +27,7 @@ final class InvitationsListViewModel: BaseViewModel {
 
     // MARK: - Properties
 
-    private let apiClient: APIClient
+    private let apiClient: any APIClientProtocol
 
     // MARK: - Computed Properties
 
@@ -41,7 +41,7 @@ final class InvitationsListViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient) {
+    init(apiClient: any APIClientProtocol) {
         self.apiClient = apiClient
         super.init()
     }
@@ -57,12 +57,16 @@ final class InvitationsListViewModel: BaseViewModel {
                 async let receivedTask: ReceivedInvitationsResponse = apiClient.request(
                     Constants.API.Endpoints.receivedInvitations,
                     method: .get,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
                 async let sentTask: SentInvitationsResponse = apiClient.request(
                     Constants.API.Endpoints.sentInvitations,
                     method: .get,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
@@ -94,6 +98,8 @@ final class InvitationsListViewModel: BaseViewModel {
                 let _: AcceptCodeInvitationResponse = try await apiClient.request(
                     "/api/invitations/\(invitation.id)/accept",
                     method: .post,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
@@ -113,6 +119,8 @@ final class InvitationsListViewModel: BaseViewModel {
                 try await apiClient.requestNoContent(
                     "/api/invitations/\(invitation.id)/decline",
                     method: .post,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 
@@ -137,6 +145,8 @@ final class InvitationsListViewModel: BaseViewModel {
                 try await apiClient.requestNoContent(
                     endpoint,
                     method: .delete,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 

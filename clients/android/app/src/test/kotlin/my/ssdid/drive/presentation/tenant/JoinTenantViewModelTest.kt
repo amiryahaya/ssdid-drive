@@ -1,12 +1,12 @@
-package com.securesharing.presentation.tenant
+package my.ssdid.drive.presentation.tenant
 
 import app.cash.turbine.test
-import com.securesharing.domain.model.InvitationAccepted
-import com.securesharing.domain.model.InviteCodeInfo
-import com.securesharing.domain.model.UserRole
-import com.securesharing.domain.repository.TenantRepository
-import com.securesharing.util.AppException
-import com.securesharing.util.Result
+import my.ssdid.drive.domain.model.InvitationAccepted
+import my.ssdid.drive.domain.model.InviteCodeInfo
+import my.ssdid.drive.domain.model.UserRole
+import my.ssdid.drive.domain.repository.TenantRepository
+import my.ssdid.drive.util.AppException
+import my.ssdid.drive.util.Result
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

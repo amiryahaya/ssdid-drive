@@ -69,11 +69,12 @@ class CreateInvitationViewModel @Inject constructor(
 
     fun createInvitation() {
         val state = _uiState.value
+        val trimmedEmail = state.email.trim()
 
         // Validate email if provided
-        if (state.email.isNotBlank()) {
+        if (trimmedEmail.isNotBlank()) {
             val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
-            if (!emailRegex.matches(state.email)) {
+            if (!emailRegex.matches(trimmedEmail)) {
                 _uiState.update { it.copy(emailError = "Invalid email format") }
                 return
             }
@@ -82,7 +83,7 @@ class CreateInvitationViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true, error = null) }
 
-            val email = state.email.ifBlank { null }
+            val email = trimmedEmail.ifBlank { null }
             val message = state.message.ifBlank { null }
 
             when (val result = tenantRepository.createInvitation(

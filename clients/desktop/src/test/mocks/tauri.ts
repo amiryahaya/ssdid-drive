@@ -192,6 +192,11 @@ export function createTauriMocks() {
     getNotifications: vi.fn().mockResolvedValue(mockNotifications),
     markNotificationRead: vi.fn().mockResolvedValue(undefined),
     markAllNotificationsRead: vi.fn().mockResolvedValue(undefined),
+    // Invitation / tenant mocks
+    acceptTenantInvitation: vi.fn().mockResolvedValue(undefined),
+    declineTenantInvitation: vi.fn().mockResolvedValue(undefined),
+    getApiBaseUrl: vi.fn().mockResolvedValue({ api_base_url: 'http://localhost:5147' }),
+    getAuthToken: vi.fn().mockResolvedValue('mock-auth-token'),
   };
 }
 
@@ -257,6 +262,15 @@ export async function setupTauriMocks(mocks = createTauriMocks()) {
         return mocks.markNotificationRead(typedArgs?.notificationId as string);
       case 'mark_all_notifications_read':
         return mocks.markAllNotificationsRead();
+      // Invitation / tenant commands
+      case 'accept_tenant_invitation':
+        return mocks.acceptTenantInvitation(typedArgs?.invitationId as string);
+      case 'decline_tenant_invitation':
+        return mocks.declineTenantInvitation(typedArgs?.invitationId as string);
+      case 'get_api_base_url':
+        return mocks.getApiBaseUrl();
+      case 'get_auth_token':
+        return mocks.getAuthToken();
       default:
         console.warn(`Unhandled mock command: ${cmd}`);
         return undefined;

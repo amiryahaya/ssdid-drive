@@ -29,7 +29,7 @@ final class CreateInvitationViewModel: ObservableObject {
 
     // MARK: - Properties
 
-    private let apiClient: APIClient
+    private let apiClient: any APIClientProtocol
     private let callerRole: UserRole
     weak var delegate: CreateInvitationViewModelDelegate?
 
@@ -79,7 +79,7 @@ final class CreateInvitationViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient, callerRole: UserRole) {
+    init(apiClient: any APIClientProtocol, callerRole: UserRole) {
         self.apiClient = apiClient
         self.callerRole = callerRole
     }
@@ -107,6 +107,7 @@ final class CreateInvitationViewModel: ObservableObject {
                     Constants.API.Endpoints.createInvitation,
                     method: .post,
                     body: request,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 

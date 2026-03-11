@@ -226,4 +226,93 @@ describe('JoinTenantPage', () => {
 
     expect(screen.getByText('Protected with post-quantum cryptography')).toBeInTheDocument();
   });
+
+  it('should trigger lookup on Enter key press', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(mockInvitationPreview),
+    });
+
+    const { user } = render(<JoinTenantPage />);
+
+    const input = screen.getByPlaceholderText('ACME-7K9X');
+    await user.type(input, 'ACME-7K9X');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+  });
+
+  it('should strip non-alphanumeric characters except hyphens from input', async () => {
+    const { user } = render(<JoinTenantPage />);
+
+    const input = screen.getByPlaceholderText('ACME-7K9X');
+    await user.type(input, 'acme!@#$%^&*()-7k9x');
+
+    // Only uppercase alphanumeric and hyphens should remain
+    expect(input).toHaveValue('ACME-7K9X');
+  });
+
+  it('should clear preview and code when Cancel is clicked', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(mockInvitationPreview),
+    });
+
+    const { user } = render(<JoinTenantPage />);
+
+    const input = screen.getByPlaceholderText('ACME-7K9X');
+    await user.type(input, 'ACME-7K9X');
+    await user.click(screen.getByRole('button', { name: 'Look Up' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    // Preview should be gone, input should be visible again with empty value
+    expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
+    const newInput = screen.getByPlaceholderText('ACME-7K9X');
+    expect(newInput).toHaveValue('');
+  });
+
+  it('should show Joining... loading state while joining', async () => {
+    useAuthStore.setState({ isAuthenticated: true, isLocked: false });
+
+    // Make acceptInvitation hang to test loading state
+    const mockAcceptInvitation = vi.fn().mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 1000))
+    );
+    const mockLoadTenants = vi.fn().mockResolvedValue(undefined);
+    useTenantStore.setState({
+      acceptInvitation: mockAcceptInvitation,
+      loadTenants: mockLoadTenants,
+    });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(mockInvitationPreview),
+    });
+
+    const { user } = render(<JoinTenantPage />);
+
+    const input = screen.getByPlaceholderText('ACME-7K9X');
+    await user.type(input, 'ACME-7K9X');
+    await user.click(screen.getByRole('button', { name: 'Look Up' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Joining...')).toBeInTheDocument();
+    });
+  });
 });

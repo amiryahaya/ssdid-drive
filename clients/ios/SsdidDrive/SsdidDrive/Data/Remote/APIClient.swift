@@ -2,8 +2,27 @@ import Foundation
 import CryptoKit
 import Security
 
+/// Protocol for API client abstraction (enables testing with mock)
+protocol APIClientProtocol: Sendable {
+    func request<T: Decodable>(
+        _ endpoint: String,
+        method: APIClient.HTTPMethod,
+        body: (any Encodable)?,
+        queryItems: [URLQueryItem]?,
+        requiresAuth: Bool
+    ) async throws -> T
+
+    func requestNoContent(
+        _ endpoint: String,
+        method: APIClient.HTTPMethod,
+        body: (any Encodable)?,
+        queryItems: [URLQueryItem]?,
+        requiresAuth: Bool
+    ) async throws
+}
+
 /// HTTP client for API communication with SSL certificate pinning
-actor APIClient {
+actor APIClient: APIClientProtocol {
 
     // MARK: - Types
 

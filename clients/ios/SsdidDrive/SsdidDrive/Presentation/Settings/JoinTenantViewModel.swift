@@ -33,7 +33,7 @@ final class JoinTenantViewModel: ObservableObject {
 
     // MARK: - Properties
 
-    private let apiClient: APIClient
+    private let apiClient: any APIClientProtocol
     private let tenantRepository: TenantRepository?
     private let isAuthenticated: Bool
     weak var delegate: JoinTenantViewModelDelegate?
@@ -61,14 +61,14 @@ final class JoinTenantViewModel: ObservableObject {
     // MARK: - Initialization
 
     /// Initialize for authenticated users (from settings)
-    init(apiClient: APIClient, tenantRepository: TenantRepository) {
+    init(apiClient: any APIClientProtocol, tenantRepository: TenantRepository) {
         self.apiClient = apiClient
         self.tenantRepository = tenantRepository
         self.isAuthenticated = true
     }
 
     /// Initialize for unauthenticated users (from login screen)
-    init(apiClient: APIClient) {
+    init(apiClient: any APIClientProtocol) {
         self.apiClient = apiClient
         self.tenantRepository = nil
         self.isAuthenticated = false
@@ -89,6 +89,8 @@ final class JoinTenantViewModel: ObservableObject {
                 let response: CodeInvitationResponse = try await apiClient.request(
                     "/api/invitations/code/\(codeValue)",
                     method: .get,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: false
                 )
 
@@ -129,6 +131,8 @@ final class JoinTenantViewModel: ObservableObject {
                 let _: AcceptCodeInvitationResponse = try await apiClient.request(
                     "/api/invitations/\(invitation.id)/accept",
                     method: .post,
+                    body: nil,
+                    queryItems: nil,
                     requiresAuth: true
                 )
 

@@ -7,6 +7,9 @@ import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.PqcAlgorithm
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
+import my.ssdid.drive.data.remote.dto.CreateInvitationRequest
+import my.ssdid.drive.data.remote.dto.CreateInvitationResponse
+import my.ssdid.drive.data.remote.dto.CreatedInvitationDto
 import my.ssdid.drive.data.remote.dto.InvitationAcceptedDto
 import my.ssdid.drive.data.remote.dto.InvitationAcceptedResponse
 import my.ssdid.drive.data.remote.dto.InvitationCreatedResponse
@@ -14,7 +17,11 @@ import my.ssdid.drive.data.remote.dto.InvitationCreatedDto
 import my.ssdid.drive.data.remote.dto.InvitationDto
 import my.ssdid.drive.data.remote.dto.InvitationsResponse
 import my.ssdid.drive.data.remote.dto.InviteMemberRequest
+import my.ssdid.drive.data.remote.dto.InviteCodeInfoDto
+import my.ssdid.drive.data.remote.dto.InviteCodeInfoResponse
 import my.ssdid.drive.data.remote.dto.InviterDto
+import my.ssdid.drive.data.remote.dto.SentInvitationDto
+import my.ssdid.drive.data.remote.dto.SentInvitationsResponse
 import my.ssdid.drive.data.remote.dto.MemberDto
 import my.ssdid.drive.data.remote.dto.MemberResponse
 import my.ssdid.drive.data.remote.dto.MembersResponse
@@ -29,6 +36,7 @@ import my.ssdid.drive.data.remote.dto.UpdateMemberRoleRequest
 import my.ssdid.drive.data.remote.dto.UsersResponse
 import my.ssdid.drive.data.remote.dto.UserDto
 import my.ssdid.drive.data.remote.dto.PublicKeysDto
+import my.ssdid.drive.domain.model.InvitationStatus
 import my.ssdid.drive.domain.model.MemberStatus
 import my.ssdid.drive.domain.model.UserRole
 import my.ssdid.drive.util.AppException
@@ -834,6 +842,306 @@ class TenantRepositoryImplTest {
 
         assertTrue(result is Result.Error)
         assertTrue((result as Result.Error).exception is AppException.Network)
+    }
+
+    // ==================== createInvitation Tests ====================
+
+    @Test
+    fun `createInvitation returns created invitation on success`() = runTest {
+        val dto = CreatedInvitationDto(
+            id = "inv-new",
+            shortCode = "ACME-1234",
+            email = "new@test.com",
+            role = "member",
+            status = "pending",
+            message = "Welcome!",
+            createdAt = "2024-06-01T00:00:00Z",
+            expiresAt = "2024-07-01T00:00:00Z"
+        )
+        coEvery { apiService.createInvitation(any()) } returns
+            Response.success(CreateInvitationResponse(data = dto))
+
+        val result = repository.createInvitation(
+            email = "new@test.com",
+            role = UserRole.USER,
+            message = "Welcome!"
+        )
+
+        assertTrue(result is Result.Success)
+        val created = (result as Result.Success).data
+        assertEquals("inv-new", created.id)
+        assertEquals("ACME-1234", created.shortCode)
+        assertEquals("new@test.com", created.email)
+        assertEquals(UserRole.USER, created.role)
+        assertEquals(InvitationStatus.PENDING, created.status)
+        assertEquals("Welcome!", created.message)
+    }
+
+    @Test
+    fun `createInvitation returns unauthorized on 401`() = runTest {
+        coEvery { apiService.createInvitation(any()) } returns
+            Response.error(401, "Unauthorized".toResponseBody())
+
+        val result = repository.createInvitation(email = "test@test.com")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Unauthorized)
+    }
+
+    @Test
+    fun `createInvitation returns forbidden on 403`() = runTest {
+        coEvery { apiService.createInvitation(any()) } returns
+            Response.error(403, "Forbidden".toResponseBody())
+
+        val result = repository.createInvitation(email = "test@test.com")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Forbidden)
+    }
+
+    @Test
+    fun `createInvitation returns conflict on 409`() = runTest {
+        coEvery { apiService.createInvitation(any()) } returns
+            Response.error(409, "Conflict".toResponseBody())
+
+        val result = repository.createInvitation(email = "existing@test.com")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Conflict)
+    }
+
+    @Test
+    fun `createInvitation returns network error on exception`() = runTest {
+        coEvery { apiService.createInvitation(any()) } throws
+            java.io.IOException("Network error")
+
+        val result = repository.createInvitation(email = "test@test.com")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Network)
+    }
+
+    // ==================== getSentInvitations Tests ====================
+
+    @Test
+    fun `getSentInvitations returns invitation list on success`() = runTest {
+        val invitations = listOf(
+            SentInvitationDto(
+                id = "inv-1", shortCode = "CODE-1", email = "a@test.com",
+                role = "member", status = "pending", message = null,
+                createdAt = "2024-06-01T00:00:00Z", expiresAt = "2024-07-01T00:00:00Z"
+            ),
+            SentInvitationDto(
+                id = "inv-2", shortCode = "CODE-2", email = null,
+                role = "admin", status = "accepted", message = "Hi",
+                createdAt = "2024-06-02T00:00:00Z", expiresAt = "2024-07-02T00:00:00Z"
+            )
+        )
+        coEvery { apiService.getSentInvitations(any(), any()) } returns
+            Response.success(SentInvitationsResponse(data = invitations))
+
+        val result = repository.getSentInvitations()
+
+        assertTrue(result is Result.Success)
+        assertEquals(2, (result as Result.Success).data.size)
+        assertEquals("inv-1", result.data[0].id)
+        assertEquals(UserRole.USER, result.data[0].role)
+        assertEquals(InvitationStatus.PENDING, result.data[0].status)
+        assertEquals(UserRole.ADMIN, result.data[1].role)
+        assertEquals(InvitationStatus.ACCEPTED, result.data[1].status)
+    }
+
+    @Test
+    fun `getSentInvitations returns unauthorized on 401`() = runTest {
+        coEvery { apiService.getSentInvitations(any(), any()) } returns
+            Response.error(401, "Unauthorized".toResponseBody())
+
+        val result = repository.getSentInvitations()
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Unauthorized)
+    }
+
+    @Test
+    fun `getSentInvitations returns forbidden on 403`() = runTest {
+        coEvery { apiService.getSentInvitations(any(), any()) } returns
+            Response.error(403, "Forbidden".toResponseBody())
+
+        val result = repository.getSentInvitations()
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Forbidden)
+    }
+
+    @Test
+    fun `getSentInvitations returns network error on exception`() = runTest {
+        coEvery { apiService.getSentInvitations(any(), any()) } throws
+            java.io.IOException("Network error")
+
+        val result = repository.getSentInvitations()
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Network)
+    }
+
+    // ==================== revokeInvitation Tests ====================
+
+    @Test
+    fun `revokeInvitation succeeds`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } returns
+            Response.success(Unit)
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Success)
+    }
+
+    @Test
+    fun `revokeInvitation returns unauthorized on 401`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } returns
+            Response.error(401, "Unauthorized".toResponseBody())
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Unauthorized)
+    }
+
+    @Test
+    fun `revokeInvitation returns forbidden on 403`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } returns
+            Response.error(403, "Forbidden".toResponseBody())
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Forbidden)
+    }
+
+    @Test
+    fun `revokeInvitation returns not found on 404`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } returns
+            Response.error(404, "Not Found".toResponseBody())
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.NotFound)
+    }
+
+    @Test
+    fun `revokeInvitation returns conflict on 409`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } returns
+            Response.error(409, "Conflict".toResponseBody())
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Conflict)
+    }
+
+    @Test
+    fun `revokeInvitation returns network error on exception`() = runTest {
+        coEvery { apiService.revokeInvitation(testInvitationId) } throws
+            java.io.IOException("Network error")
+
+        val result = repository.revokeInvitation(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Network)
+    }
+
+    // ==================== lookupInviteCode Tests ====================
+
+    @Test
+    fun `lookupInviteCode returns invite info on success`() = runTest {
+        val dto = InviteCodeInfoDto(
+            id = "inv-123",
+            tenantName = "Acme Corp",
+            role = "member",
+            shortCode = "ACME-7K9X",
+            expiresAt = "2024-07-01T00:00:00Z"
+        )
+        coEvery { apiService.getInviteByCode("ACME-7K9X") } returns
+            Response.success(InviteCodeInfoResponse(data = dto))
+
+        val result = repository.lookupInviteCode("ACME-7K9X")
+
+        assertTrue(result is Result.Success)
+        val info = (result as Result.Success).data
+        assertEquals("inv-123", info.id)
+        assertEquals("Acme Corp", info.tenantName)
+        assertEquals(UserRole.USER, info.role)
+        assertEquals("ACME-7K9X", info.shortCode)
+    }
+
+    @Test
+    fun `lookupInviteCode returns not found on 404`() = runTest {
+        coEvery { apiService.getInviteByCode("BAD-CODE") } returns
+            Response.error(404, "Not Found".toResponseBody())
+
+        val result = repository.lookupInviteCode("BAD-CODE")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.NotFound)
+    }
+
+    @Test
+    fun `lookupInviteCode returns error on 410 expired`() = runTest {
+        coEvery { apiService.getInviteByCode("OLD-CODE") } returns
+            Response.error(410, "Gone".toResponseBody())
+
+        val result = repository.lookupInviteCode("OLD-CODE")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception.message!!.contains("expired"))
+    }
+
+    @Test
+    fun `lookupInviteCode returns network error on exception`() = runTest {
+        coEvery { apiService.getInviteByCode(any()) } throws
+            java.io.IOException("Network error")
+
+        val result = repository.lookupInviteCode("ANY-CODE")
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.Network)
+    }
+
+    // ==================== acceptInvitationById Tests ====================
+
+    @Test
+    fun `acceptInvitationById delegates to acceptInvitation`() = runTest {
+        val acceptedDto = InvitationAcceptedDto(
+            id = testInvitationId,
+            tenantId = testTenantId,
+            role = "member",
+            status = "accepted",
+            joinedAt = "2024-06-01T00:00:00Z"
+        )
+        coEvery { apiService.acceptInvitation(testInvitationId) } returns
+            Response.success(InvitationAcceptedResponse(data = acceptedDto))
+        coEvery { apiService.getUserTenants() } returns
+            Response.success(TenantsResponse(data = listOf(createTestTenantDto())))
+
+        val result = repository.acceptInvitationById(testInvitationId)
+
+        assertTrue(result is Result.Success)
+        val accepted = (result as Result.Success).data
+        assertEquals(testInvitationId, accepted.id)
+        assertEquals(testTenantId, accepted.tenantId)
+        assertEquals(UserRole.USER, accepted.role)
+    }
+
+    @Test
+    fun `acceptInvitationById returns error on failure`() = runTest {
+        coEvery { apiService.acceptInvitation(testInvitationId) } returns
+            Response.error(404, "Not Found".toResponseBody())
+
+        val result = repository.acceptInvitationById(testInvitationId)
+
+        assertTrue(result is Result.Error)
+        assertTrue((result as Result.Error).exception is AppException.NotFound)
     }
 
     // ==================== getPqcAlgorithm Tests ====================
