@@ -44,12 +44,12 @@ struct TenantContext: Codable, Equatable {
 
     /// Check if user is admin or owner in current tenant
     var isAdminOrOwner: Bool {
-        currentRole == .admin
+        currentRole == .admin || currentRole == .owner
     }
 
     /// Check if user can manage other users
     var canManageUsers: Bool {
-        currentRole == .admin
+        currentRole == .admin || currentRole == .owner
     }
 
     /// Check if user has multiple tenants

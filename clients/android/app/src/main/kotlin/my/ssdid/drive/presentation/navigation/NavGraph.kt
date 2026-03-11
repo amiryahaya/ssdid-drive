@@ -29,6 +29,7 @@ import my.ssdid.drive.presentation.settings.InvitationsScreen
 import my.ssdid.drive.presentation.settings.MembersScreen
 import my.ssdid.drive.presentation.settings.SentInvitationsScreen
 import my.ssdid.drive.presentation.settings.SettingsScreen
+import my.ssdid.drive.presentation.tenant.JoinTenantScreen
 import my.ssdid.drive.presentation.sharing.ReceivedSharesScreen
 import my.ssdid.drive.presentation.sharing.CreatedSharesScreen
 import my.ssdid.drive.presentation.sharing.ShareFileScreen
@@ -261,7 +262,28 @@ fun NavGraph(
                 },
                 onNavigateToPiiChat = {
                     navController.navigate(Screen.PiiConversations.route)
+                },
+                onNavigateToJoinTenant = {
+                    navController.navigate(Screen.JoinTenant.route)
                 }
+            )
+        }
+
+        // Join Tenant (invite code entry)
+        composable(Screen.JoinTenant.route) {
+            JoinTenantScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onJoinSuccess = {
+                    navController.navigate(Screen.Files.route) {
+                        popUpTo(Screen.JoinTenant.route) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.JoinTenant.route) { inclusive = true }
+                    }
+                },
+                isLoggedIn = true
             )
         }
 

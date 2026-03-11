@@ -11,6 +11,7 @@ protocol JoinTenantViewModelDelegate: AnyObject {
 /// Supports two flows:
 /// - Authenticated users: look up code, preview, accept
 /// - Unauthenticated users: look up code, preview, redirect to login with invite context
+@MainActor
 final class JoinTenantViewModel: ObservableObject {
 
     // MARK: - State
@@ -91,28 +92,22 @@ final class JoinTenantViewModel: ObservableObject {
                     requiresAuth: false
                 )
 
-                await MainActor.run {
-                    let invite = response.data
-                    if invite.isExpired {
-                        self.state = .error("This invite code has expired.")
-                    } else {
-                        self.invitation = invite
-                        self.state = .preview
-                    }
+                let invite = response.data
+                if invite.isExpired {
+                    self.state = .error("This invite code has expired.")
+                } else {
+                    self.invitation = invite
+                    self.state = .preview
                 }
             } catch let error as APIClient.APIError {
-                await MainActor.run {
-                    switch error {
-                    case .notFound:
-                        self.state = .error("Invalid invite code. Please check and try again.")
-                    default:
-                        self.state = .error(error.errorDescription ?? "An error occurred.")
-                    }
+                switch error {
+                case .notFound:
+                    self.state = .error("Invalid invite code. Please check and try again.")
+                default:
+                    self.state = .error(error.errorDescription ?? "An error occurred.")
                 }
             } catch {
-                await MainActor.run {
-                    self.state = .error(error.localizedDescription)
-                }
+                self.state = .error(error.localizedDescription)
             }
         }
     }
@@ -142,23 +137,17 @@ final class JoinTenantViewModel: ObservableObject {
                     _ = try? await tenantRepository.refreshTenants()
                 }
 
-                await MainActor.run {
-                    self.state = .success
-                    self.delegate?.joinTenantDidComplete()
-                }
+                self.state = .success
+                self.delegate?.joinTenantDidComplete()
             } catch let error as APIClient.APIError {
-                await MainActor.run {
-                    switch error {
-                    case .httpError(409, _):
-                        self.state = .error("You are already a member of this organization.")
-                    default:
-                        self.state = .error(error.errorDescription ?? "Failed to join organization.")
-                    }
+                switch error {
+                case .httpError(409, _):
+                    self.state = .error("You are already a member of this organization.")
+                default:
+                    self.state = .error(error.errorDescription ?? "Failed to join organization.")
                 }
             } catch {
-                await MainActor.run {
-                    self.state = .error(error.localizedDescription)
-                }
+                self.state = .error(error.localizedDescription)
             }
         }
     }

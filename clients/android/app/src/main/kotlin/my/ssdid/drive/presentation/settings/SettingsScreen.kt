@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SmartToy
@@ -33,6 +34,7 @@ fun SettingsScreen(
     onNavigateToSentInvitations: () -> Unit = {},
     onNavigateToMembers: () -> Unit = {},
     onNavigateToPiiChat: () -> Unit = {},
+    onNavigateToJoinTenant: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -111,6 +113,17 @@ fun SettingsScreen(
                         onNavigateToCreateInvitation = onNavigateToCreateInvitation,
                         onNavigateToSentInvitations = onNavigateToSentInvitations
                     )
+
+                    // Join Organization (invite code entry)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsNavigationCard(
+                            icon = Icons.Default.GroupAdd,
+                            title = "Join Organization",
+                            subtitle = "Enter an invite code to join a new organization",
+                            onClick = onNavigateToJoinTenant
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 

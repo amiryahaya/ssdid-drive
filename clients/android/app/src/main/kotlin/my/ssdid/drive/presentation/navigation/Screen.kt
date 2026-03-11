@@ -52,6 +52,9 @@ sealed class Screen(val route: String) {
     data object SentInvitations : Screen("settings/invitations/sent")
     data object Members : Screen("settings/members")
 
+    // Tenant screens
+    data object JoinTenant : Screen("join-tenant")
+
     // File operations
     data object FilePreview : Screen("file/{fileId}/preview") {
         fun createRoute(fileId: String) = "file/$fileId/preview"

@@ -1,4 +1,4 @@
-package com.securesharing.presentation.tenant
+package my.ssdid.drive.presentation.tenant
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +25,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.securesharing.domain.model.InviteCodeInfo
+import my.ssdid.drive.domain.model.InviteCodeInfo
 
 /**
  * Screen for entering an invite code to join a tenant.
@@ -58,7 +58,10 @@ fun JoinTenantScreen(
                 title = { Text("Join Organization") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Navigate back"
+                        )
                     }
                 }
             )
@@ -77,7 +80,7 @@ fun JoinTenantScreen(
             // Header icon
             Icon(
                 imageVector = Icons.Default.GroupAdd,
-                contentDescription = null,
+                contentDescription = "Join organization",
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -203,7 +206,7 @@ private fun InvitePreviewCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Business,
-                    contentDescription = null,
+                    contentDescription = "Organization",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -230,7 +233,7 @@ private fun InvitePreviewCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Shield,
-                    contentDescription = null,
+                    contentDescription = "Role",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -256,7 +259,7 @@ private fun InvitePreviewCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Schedule,
-                    contentDescription = null,
+                    contentDescription = "Expiry date",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -282,7 +285,7 @@ private fun InvitePreviewCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Error,
-                        contentDescription = null,
+                        contentDescription = "Error",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(16.dp)
                     )
@@ -327,7 +330,7 @@ private fun InvitePreviewCard(
                     }
                 }
             } else {
-                // Not logged in — redirect to login/register
+                // Not logged in -- redirect to login/register
                 Button(
                     onClick = onContinueToLogin,
                     modifier = Modifier.fillMaxWidth()

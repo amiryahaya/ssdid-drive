@@ -75,6 +75,17 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
+function handleResponseStatus(resp: Response): void {
+  if (resp.status === 401) {
+    // Trigger redirect to login by clearing auth state
+    // This import is safe because zustand stores are singletons
+    import('@/stores/authStore').then(({ useAuthStore }) => {
+      useAuthStore.getState().logout();
+    });
+    throw new Error('Session expired. Please log in again.');
+  }
+}
+
 interface InvitationState {
   // State
   receivedInvitations: ReceivedInvitation[];
@@ -132,6 +143,7 @@ export const useInvitationStore = create<InvitationState>()((set, get) => ({
         { headers }
       );
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         throw new Error(`Failed to load invitations (${resp.status})`);
       }
@@ -165,6 +177,7 @@ export const useInvitationStore = create<InvitationState>()((set, get) => ({
         { headers }
       );
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         throw new Error(`Failed to load sent invitations (${resp.status})`);
       }
@@ -196,6 +209,7 @@ export const useInvitationStore = create<InvitationState>()((set, get) => ({
         body: JSON.stringify(request),
       });
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => null);
         throw new Error(
@@ -228,6 +242,7 @@ export const useInvitationStore = create<InvitationState>()((set, get) => ({
         headers,
       });
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         throw new Error(`Failed to revoke invitation (${resp.status})`);
       }
@@ -293,14 +308,18 @@ export const useInvitationStore = create<InvitationState>()((set, get) => ({
       const baseUrl = await getApiBaseUrl();
       const headers = await getAuthHeaders();
 
+      if (!headers.Authorization) {
+        // No auth token — skip loading
+        return;
+      }
+
       const resp = await fetch(
-        `${baseUrl}/api/invitations?page=1&per_page=1`,
+        `${baseUrl}/api/invitations?page=1&per_page=1&status=pending`,
         { headers }
       );
 
       if (resp.ok) {
         const data: PaginatedResponse<ReceivedInvitation> = await resp.json();
-        // The total represents pending received invitations
         set({ pendingReceivedCount: data.total });
       }
     } catch {

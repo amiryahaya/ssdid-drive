@@ -7,6 +7,9 @@ struct MembersView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var memberToChangeRole: TenantMember?
     @State private var memberToRemove: TenantMember?
+    @State private var showingError = false
+    @State private var showingChangeRole = false
+    @State private var showingRemoveConfirmation = false
 
     var body: some View {
         NavigationView {
@@ -31,16 +34,22 @@ struct MembersView: View {
             .onAppear {
                 viewModel.loadMembers()
             }
-            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            .onChange(of: viewModel.errorMessage) { newValue in
+                showingError = newValue != nil
+            }
+            .alert("Error", isPresented: $showingError) {
                 Button("OK") {
                     viewModel.clearError()
                 }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
+            .onChange(of: memberToChangeRole) { newValue in
+                showingChangeRole = newValue != nil
+            }
             .confirmationDialog(
                 "Change Role",
-                isPresented: .constant(memberToChangeRole != nil),
+                isPresented: $showingChangeRole,
                 presenting: memberToChangeRole
             ) { member in
                 ForEach(viewModel.assignableRoles, id: \.self) { role in
@@ -57,9 +66,12 @@ struct MembersView: View {
             } message: { member in
                 Text("Select a new role for \(member.name)")
             }
+            .onChange(of: memberToRemove) { newValue in
+                showingRemoveConfirmation = newValue != nil
+            }
             .alert(
                 "Remove Member",
-                isPresented: .constant(memberToRemove != nil),
+                isPresented: $showingRemoveConfirmation,
                 presenting: memberToRemove
             ) { member in
                 Button("Remove", role: .destructive) {

@@ -482,3 +482,25 @@ data class PaginationMeta(
     @SerializedName("total") val total: Int,
     @SerializedName("total_pages") val totalPages: Int
 )
+
+// ==================== Invite Code DTOs (Short Code Lookup) ====================
+
+/**
+ * Response for looking up an invitation by short code.
+ * GET /api/invitations/code/{code}
+ */
+data class InviteCodeInfoResponse(
+    @SerializedName("data") val data: InviteCodeInfoDto
+)
+
+/**
+ * Public invitation information retrieved by short code.
+ * Shown to users before they join a tenant.
+ */
+data class InviteCodeInfoDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("tenant_name") val tenantName: String,
+    @SerializedName("role") val role: String,
+    @SerializedName("short_code") val shortCode: String,
+    @SerializedName("expires_at") val expiresAt: String
+)

@@ -254,7 +254,7 @@ private fun InvitationCreatedContent(
     ) {
         Icon(
             imageVector = Icons.Default.Share,
-            contentDescription = null,
+            contentDescription = "Invitation created",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.primary
         )
@@ -321,7 +321,7 @@ private fun InvitationCreatedContent(
             ) {
                 Icon(
                     Icons.Default.ContentCopy,
-                    contentDescription = null,
+                    contentDescription = "Copy code",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -343,7 +343,7 @@ private fun InvitationCreatedContent(
             ) {
                 Icon(
                     Icons.Default.Share,
-                    contentDescription = null,
+                    contentDescription = "Share invitation",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))

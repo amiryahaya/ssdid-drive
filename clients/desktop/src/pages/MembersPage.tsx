@@ -73,7 +73,7 @@ function RoleBadge({ role }: { role: TenantRole }) {
 interface MemberRowProps {
   member: TenantMember;
   isCurrentUser: boolean;
-  isOwner: boolean;
+  currentUserRole: TenantRole | null;
   tenantId: string;
   onRoleChange: (userId: string, role: TenantRole) => void;
   onRemove: (member: TenantMember) => void;
@@ -83,13 +83,18 @@ interface MemberRowProps {
 function MemberRow({
   member,
   isCurrentUser,
-  isOwner,
+  currentUserRole,
   tenantId: _tenantId,
   onRoleChange,
   onRemove,
   isUpdating,
 }: MemberRowProps) {
-  const canEdit = isOwner && !isCurrentUser && member.role !== 'owner';
+  // Owner can manage admins and members; admin can manage members only
+  const canEdit =
+    !isCurrentUser &&
+    member.role !== 'owner' &&
+    (currentUserRole === 'owner' ||
+      (currentUserRole === 'admin' && member.role === 'member'));
 
   return (
     <div
@@ -137,7 +142,9 @@ function MemberRow({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="member">Member</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
+              {currentUserRole === 'owner' && (
+                <SelectItem value="admin">Admin</SelectItem>
+              )}
             </SelectContent>
           </Select>
         ) : (
@@ -164,7 +171,7 @@ function MemberRow({
 
 export function MembersPage() {
   const currentUser = useAuthStore((state) => state.user);
-  const { currentTenant, canManageTenant, currentTenantId } = useTenantStore();
+  const { currentTenant, currentTenantId, currentRole } = useTenantStore();
   const {
     members,
     isLoading,
@@ -285,7 +292,7 @@ export function MembersPage() {
               key={member.user_id}
               member={member}
               isCurrentUser={member.user_id === currentUser?.id}
-              isOwner={canManageTenant}
+              currentUserRole={currentRole}
               tenantId={tenantId ?? ''}
               onRoleChange={handleRoleChange}
               onRemove={setMemberToRemove}

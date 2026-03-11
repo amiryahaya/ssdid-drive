@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.graphics.Color
 import my.ssdid.drive.domain.model.InvitationStatus
 import my.ssdid.drive.domain.model.SentInvitation
 import my.ssdid.drive.domain.model.UserRole
@@ -93,7 +94,10 @@ fun SentInvitationsScreen(
                             SentInvitationCard(
                                 invitation = invitation,
                                 isRevoking = uiState.isRevoking,
-                                onRevoke = { viewModel.revokeInvitation(invitation.id) }
+                                onRevoke = { viewModel.revokeInvitation(invitation.id) },
+                                onCodeCopied = {
+                                    viewModel.showCopiedMessage()
+                                }
                             )
                         }
                     }
@@ -113,7 +117,7 @@ private fun EmptySentInvitationsContent(
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.Send,
-            contentDescription = null,
+            contentDescription = "No sent invitations",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -137,7 +141,8 @@ private fun EmptySentInvitationsContent(
 private fun SentInvitationCard(
     invitation: SentInvitation,
     isRevoking: Boolean,
-    onRevoke: () -> Unit
+    onRevoke: () -> Unit,
+    onCodeCopied: () -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
     var showRevokeDialog by remember { mutableStateOf(false) }
@@ -200,6 +205,7 @@ private fun SentInvitationCard(
                             IconButton(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(invitation.shortCode))
+                                    onCodeCopied()
                                 },
                                 modifier = Modifier.size(20.dp)
                             ) {
@@ -242,7 +248,7 @@ private fun SentInvitationCard(
                     ) {
                         Icon(
                             Icons.Default.Block,
-                            contentDescription = null,
+                            contentDescription = "Revoke invitation",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -288,9 +294,11 @@ private fun SentInvitationCard(
 
 @Composable
 private fun InvitationStatusBadge(status: InvitationStatus) {
+    val pendingColor = Color(0xFFB8860B) // Dark goldenrod for pending (yellow-ish)
+    val acceptedColor = Color(0xFF2E7D32) // Green for accepted
     val (text, containerColor) = when (status) {
-        InvitationStatus.PENDING -> "Pending" to MaterialTheme.colorScheme.tertiary
-        InvitationStatus.ACCEPTED -> "Accepted" to MaterialTheme.colorScheme.primary
+        InvitationStatus.PENDING -> "Pending" to pendingColor
+        InvitationStatus.ACCEPTED -> "Accepted" to acceptedColor
         InvitationStatus.DECLINED -> "Declined" to MaterialTheme.colorScheme.error
         InvitationStatus.EXPIRED -> "Expired" to MaterialTheme.colorScheme.outline
         InvitationStatus.REVOKED -> "Revoked" to MaterialTheme.colorScheme.outline

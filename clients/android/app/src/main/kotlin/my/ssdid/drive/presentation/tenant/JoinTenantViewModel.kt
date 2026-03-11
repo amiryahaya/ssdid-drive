@@ -1,10 +1,10 @@
-package com.securesharing.presentation.tenant
+package my.ssdid.drive.presentation.tenant
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.securesharing.domain.model.InviteCodeInfo
-import com.securesharing.domain.repository.TenantRepository
-import com.securesharing.util.Result
+import my.ssdid.drive.domain.model.InviteCodeInfo
+import my.ssdid.drive.domain.repository.TenantRepository
+import my.ssdid.drive.util.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -120,7 +120,7 @@ class JoinTenantViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isJoining = false,
-                            joinError = result.exception.message ?: "Failed to join tenant"
+                            joinError = result.exception.message ?: "Failed to join organization"
                         )
                     }
                 }

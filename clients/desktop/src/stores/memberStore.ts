@@ -34,6 +34,15 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
+function handleResponseStatus(resp: Response): void {
+  if (resp.status === 401) {
+    import('@/stores/authStore').then(({ useAuthStore }) => {
+      useAuthStore.getState().logout();
+    });
+    throw new Error('Session expired. Please log in again.');
+  }
+}
+
 interface MemberState {
   members: TenantMember[];
   isLoading: boolean;
@@ -63,6 +72,7 @@ export const useMemberStore = create<MemberState>()((set, get) => ({
         { headers }
       );
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         throw new Error(`Failed to load members (${resp.status})`);
       }
@@ -90,6 +100,7 @@ export const useMemberStore = create<MemberState>()((set, get) => ({
         }
       );
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => null);
         throw new Error(
@@ -123,6 +134,7 @@ export const useMemberStore = create<MemberState>()((set, get) => ({
         }
       );
 
+      handleResponseStatus(resp);
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => null);
         throw new Error(

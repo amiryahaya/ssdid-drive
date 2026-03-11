@@ -68,17 +68,13 @@ final class InvitationsListViewModel: BaseViewModel {
 
                 let (received, sent) = try await (receivedTask, sentTask)
 
-                await MainActor.run {
-                    self.receivedInvitations = received.data
-                    self.sentInvitations = sent.data
-                    self.isLoading = false
-                    self.isRefreshing = false
-                }
+                self.receivedInvitations = received.data
+                self.sentInvitations = sent.data
+                self.isLoading = false
+                self.isRefreshing = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                    self.isRefreshing = false
-                }
+                handleError(error)
+                self.isRefreshing = false
             }
         }
     }
@@ -101,14 +97,10 @@ final class InvitationsListViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    self.receivedInvitations.removeAll { $0.id == invitation.id }
-                    self.isLoading = false
-                }
+                self.receivedInvitations.removeAll { $0.id == invitation.id }
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                }
+                handleError(error)
             }
         }
     }
@@ -124,14 +116,10 @@ final class InvitationsListViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    self.receivedInvitations.removeAll { $0.id == invitation.id }
-                    self.isLoading = false
-                }
+                self.receivedInvitations.removeAll { $0.id == invitation.id }
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                }
+                handleError(error)
             }
         }
     }
@@ -152,19 +140,26 @@ final class InvitationsListViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    if let index = self.sentInvitations.firstIndex(where: { $0.id == invitation.id }) {
-                        // Update status locally instead of removing
-                        var updated = self.sentInvitations[index]
-                        // Since SentInvitation is a struct, we need to replace it
-                        self.sentInvitations.remove(at: index)
-                    }
-                    self.isLoading = false
+                if let index = self.sentInvitations.firstIndex(where: { $0.id == invitation.id }) {
+                    // Update status locally to .revoked instead of removing
+                    let original = self.sentInvitations[index]
+                    let revoked = SentInvitation(
+                        id: original.id,
+                        email: original.email,
+                        role: original.role,
+                        shortCode: original.shortCode,
+                        status: .revoked,
+                        message: original.message,
+                        tenantId: original.tenantId,
+                        tenantName: original.tenantName,
+                        createdAt: original.createdAt,
+                        expiresAt: original.expiresAt
+                    )
+                    self.sentInvitations[index] = revoked
                 }
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                }
+                handleError(error)
             }
         }
     }

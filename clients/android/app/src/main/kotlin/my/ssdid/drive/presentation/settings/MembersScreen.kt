@@ -142,7 +142,7 @@ private fun EmptyMembersContent(
     ) {
         Icon(
             imageVector = Icons.Default.People,
-            contentDescription = null,
+            contentDescription = "No members",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -276,7 +276,7 @@ private fun MemberCard(
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.SwapHoriz,
-                                    contentDescription = null,
+                                    contentDescription = "Change role",
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -295,7 +295,7 @@ private fun MemberCard(
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.PersonRemove,
-                                    contentDescription = null,
+                                    contentDescription = "Remove member",
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )

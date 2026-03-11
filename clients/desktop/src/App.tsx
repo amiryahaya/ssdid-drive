@@ -77,6 +77,21 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function JoinTenantRoute() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLocked = useAuthStore((state) => state.isLocked);
+
+  if (isAuthenticated && !isLocked) {
+    return (
+      <MainLayout>
+        <JoinTenantPage />
+      </MainLayout>
+    );
+  }
+
+  return <JoinTenantPage />;
+}
+
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const applyTheme = useSettingsStore((state) => state.applyTheme);
@@ -116,7 +131,7 @@ function App() {
         />
         <Route
           path="/join"
-          element={<JoinTenantPage />}
+          element={<JoinTenantRoute />}
         />
         <Route
           path="/onboarding"

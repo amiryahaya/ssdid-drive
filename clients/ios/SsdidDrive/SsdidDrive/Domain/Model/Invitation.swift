@@ -51,12 +51,15 @@ enum TokenInvitationError: String, Codable, Equatable {
 
 /// User role in a tenant
 enum UserRole: String, Codable, Equatable {
+    case owner
     case admin
     case member
     case viewer
 
     var displayName: String {
         switch self {
+        case .owner:
+            return "Owner"
         case .admin:
             return "Admin"
         case .member:

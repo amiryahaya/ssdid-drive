@@ -19,6 +19,7 @@ import my.ssdid.drive.data.remote.dto.FoldersResponse
 import my.ssdid.drive.data.remote.dto.InvitationAcceptedResponse
 import my.ssdid.drive.data.remote.dto.InvitationCreatedResponse
 import my.ssdid.drive.data.remote.dto.InvitationsResponse
+import my.ssdid.drive.data.remote.dto.InviteCodeInfoResponse
 import my.ssdid.drive.data.remote.dto.InviteInfoResponse
 import my.ssdid.drive.data.remote.dto.InviteMemberRequest
 import my.ssdid.drive.data.remote.dto.MemberResponse
@@ -176,6 +177,16 @@ interface ApiService {
      */
     @DELETE("invitations/{id}")
     suspend fun revokeInvitation(@Path("id") invitationId: String): Response<Unit>
+
+    // ==================== Invite Code (Short Code Lookup) ====================
+
+    /**
+     * Look up an invitation by short code (e.g. "ACME-7K9X").
+     * Public endpoint -- no auth required.
+     * Returns tenant name, role, and expiry for preview.
+     */
+    @GET("invitations/code/{code}")
+    suspend fun getInviteByCode(@Path("code") code: String): Response<InviteCodeInfoResponse>
 
     // ==================== Invitation Token (Public - Unauthenticated) ====================
 

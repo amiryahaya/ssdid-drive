@@ -659,6 +659,9 @@ final class TenantCell: UITableViewCell {
             // Configure role badge
             roleBadge.text = "  \(tenant.role.displayName)  "
             switch tenant.role {
+            case .owner:
+                roleBadge.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.2)
+                roleBadge.textColor = .systemOrange
             case .admin:
                 roleBadge.backgroundColor = UIColor.systemPurple.withAlphaComponent(0.2)
                 roleBadge.textColor = .systemPurple

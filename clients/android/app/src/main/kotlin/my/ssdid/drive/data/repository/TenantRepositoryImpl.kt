@@ -17,6 +17,7 @@ import my.ssdid.drive.domain.model.CreatedInvitation
 import my.ssdid.drive.domain.model.Invitation
 import my.ssdid.drive.domain.model.InvitationAccepted
 import my.ssdid.drive.domain.model.InvitationStatus
+import my.ssdid.drive.domain.model.InviteCodeInfo
 import my.ssdid.drive.domain.model.Inviter
 import my.ssdid.drive.domain.model.MemberStatus
 import my.ssdid.drive.domain.model.SentInvitation
@@ -574,6 +575,39 @@ class TenantRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to revoke invitation", e))
         }
+    }
+
+    // ==================== Invite Code ====================
+
+    override suspend fun lookupInviteCode(code: String): Result<InviteCodeInfo> {
+        return try {
+            val response = apiService.getInviteByCode(code)
+
+            if (response.isSuccessful) {
+                val dto = response.body()!!.data
+                val info = InviteCodeInfo(
+                    id = dto.id,
+                    tenantName = dto.tenantName,
+                    role = UserRole.fromString(dto.role),
+                    shortCode = dto.shortCode,
+                    expiresAt = dto.expiresAt
+                )
+                Result.success(info)
+            } else {
+                when (response.code()) {
+                    404 -> Result.error(AppException.NotFound("Invalid invite code"))
+                    410 -> Result.error(AppException.Unknown("This invite code has expired"))
+                    else -> Result.error(AppException.Unknown("Failed to look up invite code: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to look up invite code", e))
+        }
+    }
+
+    override suspend fun acceptInvitationById(invitationId: String): Result<InvitationAccepted> {
+        // Reuses the same API endpoint as acceptInvitation
+        return acceptInvitation(invitationId)
     }
 
     // ==================== Extension Functions ====================

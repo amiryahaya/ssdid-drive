@@ -5,6 +5,7 @@ struct TenantSwitcherView: View {
 
     @ObservedObject var viewModel: TenantSwitcherViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingError = false
 
     var body: some View {
         NavigationView {
@@ -26,7 +27,10 @@ struct TenantSwitcherView: View {
                     }
                 }
             }
-            .alert("Error", isPresented: .constant(viewModel.error != nil)) {
+            .onChange(of: viewModel.error) { newValue in
+                showingError = newValue != nil
+            }
+            .alert("Error", isPresented: $showingError) {
                 Button("OK") {
                     viewModel.clearError()
                 }
@@ -159,6 +163,8 @@ struct RoleBadge: View {
 
     private var backgroundColor: Color {
         switch role {
+        case .owner:
+            return Color.orange.opacity(0.2)
         case .admin:
             return Color.purple.opacity(0.2)
         case .member:
@@ -170,6 +176,8 @@ struct RoleBadge: View {
 
     private var foregroundColor: Color {
         switch role {
+        case .owner:
+            return .orange
         case .admin:
             return .purple
         case .member:

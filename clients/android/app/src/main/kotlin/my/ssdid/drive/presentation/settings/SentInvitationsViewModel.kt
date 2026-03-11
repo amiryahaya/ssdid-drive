@@ -91,4 +91,8 @@ class SentInvitationsViewModel @Inject constructor(
     fun clearSuccessMessage() {
         _uiState.update { it.copy(successMessage = null) }
     }
+
+    fun showCopiedMessage() {
+        _uiState.update { it.copy(successMessage = "Code copied to clipboard") }
+    }
 }

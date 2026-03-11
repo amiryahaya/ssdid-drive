@@ -4,6 +4,7 @@ import my.ssdid.drive.crypto.PqcAlgorithm
 import my.ssdid.drive.domain.model.CreatedInvitation
 import my.ssdid.drive.domain.model.Invitation
 import my.ssdid.drive.domain.model.InvitationAccepted
+import my.ssdid.drive.domain.model.InviteCodeInfo
 import my.ssdid.drive.domain.model.SentInvitation
 import my.ssdid.drive.domain.model.Tenant
 import my.ssdid.drive.domain.model.TenantConfig
@@ -197,4 +198,24 @@ interface TenantRepository {
      * @return Result indicating success or failure
      */
     suspend fun revokeInvitation(invitationId: String): Result<Unit>
+
+    // ==================== Invite Code ====================
+
+    /**
+     * Look up an invitation by short code (e.g. "ACME-7K9X").
+     * Public endpoint -- no auth required.
+     *
+     * @param code The short invite code
+     * @return Result containing the invite code info for preview
+     */
+    suspend fun lookupInviteCode(code: String): Result<InviteCodeInfo>
+
+    /**
+     * Accept an invitation by its ID (after looking up by short code).
+     * Requires auth -- used for existing logged-in users.
+     *
+     * @param invitationId The ID from the invite code lookup
+     * @return Result containing the accepted invitation details
+     */
+    suspend fun acceptInvitationById(invitationId: String): Result<InvitationAccepted>
 }

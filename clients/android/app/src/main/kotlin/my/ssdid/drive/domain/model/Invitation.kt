@@ -165,3 +165,17 @@ enum class TokenInvitationError {
         }
     }
 }
+
+// ==================== Invite Code (Short Code Lookup) ====================
+
+/**
+ * Domain model for an invitation looked up by short code.
+ * Used in the "Join Tenant" screen.
+ */
+data class InviteCodeInfo(
+    val id: String,
+    val tenantName: String,
+    val role: UserRole,
+    val shortCode: String,
+    val expiresAt: String
+)

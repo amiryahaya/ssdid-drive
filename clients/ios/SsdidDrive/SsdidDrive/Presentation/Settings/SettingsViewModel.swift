@@ -282,7 +282,7 @@ final class SettingsViewModel: BaseViewModel {
 
     /// Whether the current user is admin or owner in the current tenant
     var isAdminOrOwner: Bool {
-        currentTenant?.role == .admin
+        currentTenant?.role == .admin || currentTenant?.role == .owner
     }
 
     /// Current user's role in the current tenant

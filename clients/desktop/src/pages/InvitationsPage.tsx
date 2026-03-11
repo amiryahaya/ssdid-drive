@@ -393,8 +393,11 @@ export function InvitationsPage() {
 
       {/* Tabs */}
       <div className="border-b">
-        <div className="flex gap-4">
+        <div className="flex gap-4" role="tablist" aria-label="Invitation tabs">
           <button
+            role="tab"
+            aria-selected={activeTab === 'received'}
+            aria-controls="tab-panel-received"
             onClick={() => setActiveTab('received')}
             className={cn(
               'pb-3 text-sm font-medium border-b-2 transition-colors',
@@ -406,6 +409,9 @@ export function InvitationsPage() {
             Received
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'sent'}
+            aria-controls="tab-panel-sent"
             onClick={() => setActiveTab('sent')}
             className={cn(
               'pb-3 text-sm font-medium border-b-2 transition-colors',
@@ -421,7 +427,7 @@ export function InvitationsPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-64" role="status" aria-label="Loading invitations">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : activeTab === 'received' ? (

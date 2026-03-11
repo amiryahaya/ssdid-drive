@@ -20,7 +20,7 @@ final class MembersViewModel: BaseViewModel {
 
     /// Whether the current user can manage members (change roles, remove)
     var canManageMembers: Bool {
-        callerRole == .admin
+        callerRole == .admin || callerRole == .owner
     }
 
     var isEmpty: Bool {
@@ -54,16 +54,12 @@ final class MembersViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    self.members = response.data
-                    self.isLoading = false
-                    self.isRefreshing = false
-                }
+                self.members = response.data
+                self.isLoading = false
+                self.isRefreshing = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                    self.isRefreshing = false
-                }
+                handleError(error)
+                self.isRefreshing = false
             }
         }
     }
@@ -90,8 +86,10 @@ final class MembersViewModel: BaseViewModel {
     /// Available roles to assign to a member
     var assignableRoles: [UserRole] {
         switch callerRole {
+        case .owner:
+            return [.admin, .member, .viewer]
         case .admin:
-            return [.member, .admin, .viewer]
+            return [.member, .viewer]
         default:
             return []
         }
@@ -118,24 +116,20 @@ final class MembersViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    // Update the member locally
-                    if let index = self.members.firstIndex(where: { $0.id == member.id }) {
-                        let updated = TenantMember(
-                            id: member.id,
-                            email: member.email,
-                            displayName: member.displayName,
-                            role: newRole,
-                            joinedAt: member.joinedAt
-                        )
-                        self.members[index] = updated
-                    }
-                    self.isLoading = false
+                // Update the member locally
+                if let index = self.members.firstIndex(where: { $0.id == member.id }) {
+                    let updated = TenantMember(
+                        id: member.id,
+                        email: member.email,
+                        displayName: member.displayName,
+                        role: newRole,
+                        joinedAt: member.joinedAt
+                    )
+                    self.members[index] = updated
                 }
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                }
+                handleError(error)
             }
         }
     }
@@ -158,14 +152,10 @@ final class MembersViewModel: BaseViewModel {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    self.members.removeAll { $0.id == member.id }
-                    self.isLoading = false
-                }
+                self.members.removeAll { $0.id == member.id }
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    handleError(error)
-                }
+                handleError(error)
             }
         }
     }

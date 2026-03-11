@@ -5,6 +5,9 @@ struct InvitationsListView: View {
 
     @ObservedObject var viewModel: InvitationsListViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingError = false
+    @State private var invitationToRevoke: SentInvitation?
+    @State private var showingRevokeConfirmation = false
 
     var body: some View {
         NavigationView {
@@ -39,12 +42,30 @@ struct InvitationsListView: View {
             .onAppear {
                 viewModel.loadAll()
             }
-            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            .onChange(of: viewModel.errorMessage) { newValue in
+                showingError = newValue != nil
+            }
+            .alert("Error", isPresented: $showingError) {
                 Button("OK") {
                     viewModel.clearError()
                 }
             } message: {
                 Text(viewModel.errorMessage ?? "")
+            }
+            .alert(
+                "Revoke Invitation",
+                isPresented: $showingRevokeConfirmation,
+                presenting: invitationToRevoke
+            ) { invitation in
+                Button("Revoke", role: .destructive) {
+                    viewModel.revokeInvitation(invitation)
+                    invitationToRevoke = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    invitationToRevoke = nil
+                }
+            } message: { invitation in
+                Text("Are you sure you want to revoke the invitation for \(invitation.displayEmail)? This cannot be undone.")
             }
         }
     }
@@ -100,7 +121,8 @@ struct InvitationsListView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if invitation.status == .pending {
                                     Button(role: .destructive) {
-                                        viewModel.revokeInvitation(invitation)
+                                        invitationToRevoke = invitation
+                                        showingRevokeConfirmation = true
                                     } label: {
                                         Label("Revoke", systemImage: "xmark.circle")
                                     }

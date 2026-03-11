@@ -7,6 +7,7 @@ protocol CreateInvitationViewModelDelegate: AnyObject {
 }
 
 /// View model for creating a new tenant invitation (Admin/Owner only)
+@MainActor
 final class CreateInvitationViewModel: ObservableObject {
 
     // MARK: - State
@@ -40,8 +41,10 @@ final class CreateInvitationViewModel: ObservableObject {
     /// Available roles the caller can assign
     var availableRoles: [UserRole] {
         switch callerRole {
-        case .admin:
+        case .owner:
             return [.member, .admin]
+        case .admin:
+            return [.member]
         default:
             return [.member]
         }
@@ -107,18 +110,12 @@ final class CreateInvitationViewModel: ObservableObject {
                     requiresAuth: true
                 )
 
-                await MainActor.run {
-                    self.createdInvitation = response.data
-                    self.state = .success
-                }
+                self.createdInvitation = response.data
+                self.state = .success
             } catch let error as APIClient.APIError {
-                await MainActor.run {
-                    self.state = .error(error.errorDescription ?? "Failed to create invitation.")
-                }
+                self.state = .error(error.errorDescription ?? "Failed to create invitation.")
             } catch {
-                await MainActor.run {
-                    self.state = .error(error.localizedDescription)
-                }
+                self.state = .error(error.localizedDescription)
             }
         }
     }

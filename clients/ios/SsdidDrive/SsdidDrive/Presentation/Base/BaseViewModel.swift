@@ -2,6 +2,7 @@ import Foundation
 import Combine
 
 /// Base view model with common functionality
+@MainActor
 class BaseViewModel: ObservableObject {
 
     // MARK: - Published Properties
