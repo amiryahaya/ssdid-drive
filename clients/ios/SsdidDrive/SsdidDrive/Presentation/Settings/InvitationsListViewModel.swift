@@ -1,0 +1,171 @@
+import Foundation
+import Combine
+
+/// View model for the invitations list (received + sent)
+final class InvitationsListViewModel: BaseViewModel {
+
+    // MARK: - Types
+
+    enum Tab: Int, CaseIterable {
+        case received = 0
+        case sent = 1
+
+        var title: String {
+            switch self {
+            case .received: return "Received"
+            case .sent: return "Sent"
+            }
+        }
+    }
+
+    // MARK: - Published Properties
+
+    @Published var selectedTab: Tab = .received
+    @Published var receivedInvitations: [TenantInvitation] = []
+    @Published var sentInvitations: [SentInvitation] = []
+    @Published var isRefreshing: Bool = false
+
+    // MARK: - Properties
+
+    private let apiClient: APIClient
+
+    // MARK: - Computed Properties
+
+    var isReceivedEmpty: Bool {
+        receivedInvitations.isEmpty && !isLoading
+    }
+
+    var isSentEmpty: Bool {
+        sentInvitations.isEmpty && !isLoading
+    }
+
+    // MARK: - Initialization
+
+    init(apiClient: APIClient) {
+        self.apiClient = apiClient
+        super.init()
+    }
+
+    // MARK: - Data Loading
+
+    func loadAll() {
+        isLoading = true
+        clearError()
+
+        Task {
+            do {
+                async let receivedTask: ReceivedInvitationsResponse = apiClient.request(
+                    Constants.API.Endpoints.receivedInvitations,
+                    method: .get,
+                    requiresAuth: true
+                )
+
+                async let sentTask: SentInvitationsResponse = apiClient.request(
+                    Constants.API.Endpoints.sentInvitations,
+                    method: .get,
+                    requiresAuth: true
+                )
+
+                let (received, sent) = try await (receivedTask, sentTask)
+
+                await MainActor.run {
+                    self.receivedInvitations = received.data
+                    self.sentInvitations = sent.data
+                    self.isLoading = false
+                    self.isRefreshing = false
+                }
+            } catch {
+                await MainActor.run {
+                    handleError(error)
+                    self.isRefreshing = false
+                }
+            }
+        }
+    }
+
+    func refresh() {
+        isRefreshing = true
+        loadAll()
+    }
+
+    // MARK: - Received Actions
+
+    func acceptInvitation(_ invitation: TenantInvitation) {
+        isLoading = true
+
+        Task {
+            do {
+                let _: AcceptCodeInvitationResponse = try await apiClient.request(
+                    "/api/invitations/\(invitation.id)/accept",
+                    method: .post,
+                    requiresAuth: true
+                )
+
+                await MainActor.run {
+                    self.receivedInvitations.removeAll { $0.id == invitation.id }
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    handleError(error)
+                }
+            }
+        }
+    }
+
+    func declineInvitation(_ invitation: TenantInvitation) {
+        isLoading = true
+
+        Task {
+            do {
+                try await apiClient.requestNoContent(
+                    "/api/invitations/\(invitation.id)/decline",
+                    method: .post,
+                    requiresAuth: true
+                )
+
+                await MainActor.run {
+                    self.receivedInvitations.removeAll { $0.id == invitation.id }
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    handleError(error)
+                }
+            }
+        }
+    }
+
+    // MARK: - Sent Actions
+
+    func revokeInvitation(_ invitation: SentInvitation) {
+        isLoading = true
+
+        let endpoint = Constants.API.Endpoints.revokeInvitation
+            .replacingOccurrences(of: "{id}", with: invitation.id)
+
+        Task {
+            do {
+                try await apiClient.requestNoContent(
+                    endpoint,
+                    method: .delete,
+                    requiresAuth: true
+                )
+
+                await MainActor.run {
+                    if let index = self.sentInvitations.firstIndex(where: { $0.id == invitation.id }) {
+                        // Update status locally instead of removing
+                        var updated = self.sentInvitations[index]
+                        // Since SentInvitation is a struct, we need to replace it
+                        self.sentInvitations.remove(at: index)
+                    }
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    handleError(error)
+                }
+            }
+        }
+    }
+}

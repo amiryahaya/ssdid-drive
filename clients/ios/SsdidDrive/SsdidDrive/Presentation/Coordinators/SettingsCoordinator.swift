@@ -121,6 +121,72 @@ final class SettingsCoordinator: BaseCoordinator {
 
         navigationController.present(hostingController, animated: true)
     }
+
+    func showInvitationsList() {
+        let viewModel = InvitationsListViewModel(apiClient: container.apiClient)
+
+        let invitationsListView = InvitationsListView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: invitationsListView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
+    func showCreateInvitation() {
+        let callerRole = getCurrentTenantRole()
+        let viewModel = CreateInvitationViewModel(
+            apiClient: container.apiClient,
+            callerRole: callerRole
+        )
+
+        let createInvitationView = CreateInvitationView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: createInvitationView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
+    func showMembers() {
+        guard let tenantId = container.tenantRepository.currentTenantId else { return }
+
+        let callerRole = getCurrentTenantRole()
+        let currentUserId = container.keychainManager.userId
+
+        let viewModel = MembersViewModel(
+            apiClient: container.apiClient,
+            tenantId: tenantId,
+            callerRole: callerRole,
+            currentUserId: currentUserId
+        )
+
+        let membersView = MembersView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: membersView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
+    // MARK: - Helpers
+
+    private func getCurrentTenantRole() -> UserRole {
+        if let roleString = container.keychainManager.currentRole,
+           let role = UserRole(rawValue: roleString) {
+            return role
+        }
+        return .member
+    }
 }
 
 // MARK: - SettingsViewModelCoordinatorDelegate
@@ -144,6 +210,18 @@ extension SettingsCoordinator: SettingsViewModelCoordinatorDelegate {
 
     func settingsDidRequestInvitations() {
         showInvitations()
+    }
+
+    func settingsDidRequestInvitationsList() {
+        showInvitationsList()
+    }
+
+    func settingsDidRequestCreateInvitation() {
+        showCreateInvitation()
+    }
+
+    func settingsDidRequestMembers() {
+        showMembers()
     }
 
     func settingsDidRequestCredentials() {

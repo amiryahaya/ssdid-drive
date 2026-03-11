@@ -87,6 +87,14 @@ enum Constants {
             static let switchTenant = "/tenant/switch"
             static let tenantConfig = "/tenant/config"
             static let leaveTenant = "/tenants/{id}/leave"
+            static let tenantMembers = "/tenants/{id}/members"
+            static let tenantMember = "/tenants/{id}/members/{userId}"
+
+            // Tenant Invitations (Admin/Owner)
+            static let createInvitation = "/invitations"
+            static let sentInvitations = "/invitations/sent"
+            static let receivedInvitations = "/invitations"
+            static let revokeInvitation = "/invitations/{id}"
         }
 
         // Headers

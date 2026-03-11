@@ -231,3 +231,125 @@ struct AcceptCodeInvitationData: Codable {
         case role
     }
 }
+
+// MARK: - Create Invitation (Admin/Owner)
+
+/// Request to create a new tenant invitation
+struct CreateInvitationRequest: Codable {
+    let email: String?
+    let role: String?
+    let message: String?
+}
+
+/// Response from POST /api/invitations
+struct CreateInvitationResponse: Codable {
+    let data: SentInvitation
+}
+
+/// An invitation sent by the current user (admin/owner)
+struct SentInvitation: Codable, Identifiable, Equatable, Hashable {
+    let id: String
+    let email: String?
+    let role: UserRole
+    let shortCode: String
+    let status: InvitationStatus
+    let message: String?
+    let tenantId: String
+    let tenantName: String?
+    let createdAt: Date
+    let expiresAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case role
+        case shortCode = "short_code"
+        case status
+        case message
+        case tenantId = "tenant_id"
+        case tenantName = "tenant_name"
+        case createdAt = "created_at"
+        case expiresAt = "expires_at"
+    }
+
+    var isExpired: Bool {
+        expiresAt < Date()
+    }
+
+    var displayEmail: String {
+        email ?? "Open invite"
+    }
+}
+
+/// Invitation status
+enum InvitationStatus: String, Codable, Equatable, Hashable {
+    case pending
+    case accepted
+    case declined
+    case revoked
+    case expired
+
+    var displayName: String {
+        switch self {
+        case .pending: return "Pending"
+        case .accepted: return "Accepted"
+        case .declined: return "Declined"
+        case .revoked: return "Revoked"
+        case .expired: return "Expired"
+        }
+    }
+}
+
+/// Response from GET /api/invitations (received)
+struct ReceivedInvitationsResponse: Codable {
+    let data: [TenantInvitation]
+}
+
+/// Response from GET /api/invitations/sent
+struct SentInvitationsResponse: Codable {
+    let data: [SentInvitation]
+}
+
+// MARK: - Tenant Member
+
+/// A member of a tenant (organization)
+struct TenantMember: Codable, Identifiable, Equatable, Hashable {
+    let id: String
+    let email: String
+    let displayName: String?
+    let role: UserRole
+    let joinedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case displayName = "display_name"
+        case role
+        case joinedAt = "joined_at"
+    }
+
+    var name: String {
+        displayName ?? email.components(separatedBy: "@").first?.capitalized ?? email
+    }
+
+    var initials: String {
+        if let displayName = displayName, !displayName.isEmpty {
+            let words = displayName.split(separator: " ")
+            if words.count >= 2 {
+                return String(words[0].prefix(1) + words[1].prefix(1)).uppercased()
+            }
+            return String(displayName.prefix(2)).uppercased()
+        }
+        return String(email.prefix(2)).uppercased()
+    }
+}
+
+/// Response from GET /api/tenants/{id}/members
+struct TenantMembersResponse: Codable {
+    let data: [TenantMember]
+}
+
+/// Request to update a member's role
+struct UpdateMemberRoleRequest: Codable {
+    let role: String
+}

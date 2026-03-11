@@ -9,6 +9,9 @@ protocol SettingsViewModelCoordinatorDelegate: AnyObject {
     func settingsDidRequestInitiateRecovery()
     func settingsDidRequestDevices()
     func settingsDidRequestInvitations()
+    func settingsDidRequestInvitationsList()
+    func settingsDidRequestCreateInvitation()
+    func settingsDidRequestMembers()
     func settingsDidRequestCredentials()
     func settingsDidRequestTenantSwitcher()
     func settingsDidRequestJoinTenant()
@@ -57,6 +60,9 @@ final class SettingsViewModel: BaseViewModel {
         case profile
         case devices
         case invitations
+        case invitationsList
+        case createInvitation
+        case members
         case credentials
         case tenant
         case joinTenant
@@ -204,6 +210,18 @@ final class SettingsViewModel: BaseViewModel {
         coordinatorDelegate?.settingsDidRequestInvitations()
     }
 
+    func showInvitationsList() {
+        coordinatorDelegate?.settingsDidRequestInvitationsList()
+    }
+
+    func showCreateInvitation() {
+        coordinatorDelegate?.settingsDidRequestCreateInvitation()
+    }
+
+    func showMembers() {
+        coordinatorDelegate?.settingsDidRequestMembers()
+    }
+
     func logout() {
         Task {
             do {
@@ -229,9 +247,15 @@ final class SettingsViewModel: BaseViewModel {
     func items(for section: SettingsSection) -> [SettingsItem] {
         switch section {
         case .account:
-            return [.profile, .devices, .invitations]
+            return [.profile, .devices, .invitationsList]
         case .organization:
-            return [.tenant, .joinTenant]
+            var items: [SettingsItem] = [.tenant, .joinTenant]
+            // Admin/Owner-only items
+            if isAdminOrOwner {
+                items.append(.createInvitation)
+                items.append(.members)
+            }
+            return items
         case .security:
             var items: [SettingsItem] = []
             if biometricType != .none {
@@ -254,6 +278,16 @@ final class SettingsViewModel: BaseViewModel {
 
     func showJoinTenant() {
         coordinatorDelegate?.settingsDidRequestJoinTenant()
+    }
+
+    /// Whether the current user is admin or owner in the current tenant
+    var isAdminOrOwner: Bool {
+        currentTenant?.role == .admin
+    }
+
+    /// Current user's role in the current tenant
+    var currentTenantRole: UserRole {
+        currentTenant?.role ?? .member
     }
 
     var biometricLabel: String {

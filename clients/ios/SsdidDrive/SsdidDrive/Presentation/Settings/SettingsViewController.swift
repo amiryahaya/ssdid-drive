@@ -83,7 +83,8 @@ final class SettingsViewController: BaseViewController {
         viewModel.$currentTenant
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.tableView.reloadSections(IndexSet(integer: 1), with: .none)
+                // Reload organization section (includes role-based items)
+                self?.tableView.reloadData()
             }
             .store(in: &cancellables)
     }
@@ -174,6 +175,41 @@ extension SettingsViewController: UITableViewDataSource {
             cell.contentConfiguration = content
             cell.accessoryType = .disclosureIndicator
             cell.accessibilityIdentifier = "settingsInvitationsCell"
+            return cell
+
+        case .invitationsList:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+            var content = cell.defaultContentConfiguration()
+            content.text = "Invitations"
+            content.secondaryText = "Received & sent"
+            content.image = UIImage(systemName: "envelope")
+            cell.contentConfiguration = content
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "settingsInvitationsListCell"
+            return cell
+
+        case .createInvitation:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+            var content = cell.defaultContentConfiguration()
+            content.text = "Create Invitation"
+            content.secondaryText = "Invite someone to join"
+            content.image = UIImage(systemName: "envelope.badge.person.crop")
+            content.imageProperties.tintColor = .systemBlue
+            cell.contentConfiguration = content
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "settingsCreateInvitationCell"
+            return cell
+
+        case .members:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+            var content = cell.defaultContentConfiguration()
+            content.text = "Members"
+            content.secondaryText = "View & manage members"
+            content.image = UIImage(systemName: "person.3")
+            content.imageProperties.tintColor = .systemBlue
+            cell.contentConfiguration = content
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "settingsMembersCell"
             return cell
 
         case .tenant:
@@ -324,6 +360,12 @@ extension SettingsViewController: UITableViewDelegate {
             viewModel.showDevices()
         case .invitations:
             viewModel.showInvitations()
+        case .invitationsList:
+            viewModel.showInvitationsList()
+        case .createInvitation:
+            viewModel.showCreateInvitation()
+        case .members:
+            viewModel.showMembers()
         case .credentials:
             viewModel.showCredentials()
         case .tenant:
