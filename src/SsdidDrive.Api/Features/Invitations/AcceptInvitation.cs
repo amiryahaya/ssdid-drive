@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -29,7 +31,7 @@ public static class AcceptInvitation
             invitation.Status = InvitationStatus.Expired;
             invitation.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
-            return AppError.BadRequest("Invitation has expired").ToProblemResult();
+            return AppError.Gone("Invitation has expired").ToProblemResult();
         }
 
         // Authorization: if InvitedUserId is set, only that user can accept.
@@ -39,7 +41,10 @@ public static class AcceptInvitation
         // For open invitations (InvitedUserId is null), require token proof
         if (invitation.InvitedUserId is null)
         {
-            if (string.IsNullOrWhiteSpace(req.Token) || req.Token != invitation.Token)
+            if (string.IsNullOrWhiteSpace(req.Token) ||
+                !CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(req.Token),
+                    Encoding.UTF8.GetBytes(invitation.Token)))
                 return AppError.Forbidden("Invalid or missing invitation token").ToProblemResult();
         }
 
@@ -50,10 +55,19 @@ public static class AcceptInvitation
         if (existingMembership)
             return AppError.Conflict("You are already a member of this tenant").ToProblemResult();
 
-        // Accept the invitation
-        invitation.Status = InvitationStatus.Accepted;
-        invitation.InvitedUserId = user.Id;
-        invitation.UpdatedAt = DateTimeOffset.UtcNow;
+        // Accept the invitation within a transaction to prevent TOCTOU races
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Atomically claim the invitation (WHERE Status = Pending prevents double-accept)
+        var updated = await db.Invitations
+            .Where(i => i.Id == id && i.Status == InvitationStatus.Pending)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(i => i.Status, InvitationStatus.Accepted)
+                .SetProperty(i => i.InvitedUserId, user.Id)
+                .SetProperty(i => i.UpdatedAt, DateTimeOffset.UtcNow), ct);
+
+        if (updated == 0)
+            return AppError.Conflict("Invitation has already been processed").ToProblemResult();
 
         // Create UserTenant
         var userTenant = new UserTenant
@@ -76,11 +90,12 @@ public static class AcceptInvitation
             ct: ct);
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return Results.Ok(new
         {
-            invitation.Id,
-            Status = invitation.Status.ToString().ToLowerInvariant(),
+            Id = id,
+            Status = "accepted",
             invitation.TenantId,
             Role = invitation.Role.ToString().ToLowerInvariant()
         });

@@ -21,7 +21,16 @@ public static class RevokeInvitation
             return AppError.NotFound("Invitation not found").ToProblemResult();
 
         if (invitation.InvitedById != user.Id)
-            return AppError.Forbidden("Only the invitation creator can revoke it").ToProblemResult();
+        {
+            // Allow tenant Owners to revoke any invitation in their tenant
+            var callerRole = await db.UserTenants
+                .Where(ut => ut.UserId == user.Id && ut.TenantId == invitation.TenantId)
+                .Select(ut => (TenantRole?)ut.Role)
+                .FirstOrDefaultAsync(ct);
+
+            if (callerRole != TenantRole.Owner)
+                return AppError.Forbidden("Only the invitation creator or a tenant owner can revoke it").ToProblemResult();
+        }
 
         if (invitation.Status != InvitationStatus.Pending)
             return AppError.BadRequest("Only pending invitations can be revoked").ToProblemResult();

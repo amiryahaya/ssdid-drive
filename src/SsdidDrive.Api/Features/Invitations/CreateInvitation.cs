@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -16,6 +17,14 @@ public static class CreateInvitation
     private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, EmailService? emailService, CancellationToken ct)
     {
         var user = accessor.User!;
+
+        // Validate email format if provided
+        if (!string.IsNullOrWhiteSpace(req.Email) && !MailAddress.TryCreate(req.Email, out _))
+            return AppError.BadRequest("Invalid email address format").ToProblemResult();
+
+        // Cap message length
+        if (req.Message is { Length: > 500 })
+            return AppError.BadRequest("Message must be 500 characters or fewer").ToProblemResult();
 
         if (user.TenantId is null)
             return AppError.BadRequest("You must belong to a tenant to create invitations").ToProblemResult();
@@ -91,12 +100,14 @@ public static class CreateInvitation
 
         await db.SaveChangesAsync(ct);
 
-        // Send invitation email if email is provided and email service is configured
+        // Send invitation email (fire-and-forget, won't block the response)
         if (emailService is not null && !string.IsNullOrWhiteSpace(req.Email))
         {
-            _ = emailService.SendInvitationAsync(
-                req.Email, tenant!.Name, role.Value.ToString().ToLowerInvariant(),
-                shortCode, req.Message);
+            var email = req.Email;
+            var tenantName = tenant!.Name;
+            var roleName = role.Value.ToString().ToLowerInvariant();
+            var msg = req.Message;
+            _ = Task.Run(() => emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg));
         }
 
         return Results.Created($"/api/invitations/{invitation.Id}", new
@@ -108,7 +119,6 @@ public static class CreateInvitation
             invitation.InvitedUserId,
             Role = invitation.Role.ToString().ToLowerInvariant(),
             Status = invitation.Status.ToString().ToLowerInvariant(),
-            invitation.Token,
             invitation.ShortCode,
             invitation.Message,
             invitation.ExpiresAt,

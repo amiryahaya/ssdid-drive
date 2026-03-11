@@ -1,3 +1,4 @@
+using System.Net;
 using Resend;
 
 namespace SsdidDrive.Api.Services;
@@ -19,18 +20,23 @@ public class EmailService
 
     public async Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message)
     {
-        var inviteUrl = $"{_serviceUrl}/invite/{shortCode}";
+        // HTML-encode all user-controlled values to prevent XSS/injection in email
+        var safeTenantName = WebUtility.HtmlEncode(tenantName);
+        var safeRole = WebUtility.HtmlEncode(role);
+        var safeShortCode = WebUtility.HtmlEncode(shortCode);
+        var safeMessage = string.IsNullOrWhiteSpace(message) ? null : WebUtility.HtmlEncode(message);
+        var inviteUrl = $"{_serviceUrl}/invite/{Uri.EscapeDataString(shortCode)}";
 
         var html = $"""
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
                 <h2 style="color: #111827; margin-bottom: 8px;">You've been invited to SSDID Drive</h2>
                 <p style="color: #6b7280; font-size: 15px;">
-                    You've been invited to join <strong style="color: #111827;">{tenantName}</strong> as <strong style="color: #111827;">{role}</strong>.
+                    You've been invited to join <strong style="color: #111827;">{safeTenantName}</strong> as <strong style="color: #111827;">{safeRole}</strong>.
                 </p>
-                {(string.IsNullOrWhiteSpace(message) ? "" : $"""<p style="color: #6b7280; font-size: 14px; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 12px;">"{message}"</p>""")}
+                {(safeMessage is null ? "" : $"""<p style="color: #6b7280; font-size: 14px; font-style: italic; border-left: 3px solid #e5e7eb; padding-left: 12px;">"{safeMessage}"</p>""")}
                 <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: center;">
                     <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px;">Your invite code</p>
-                    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #111827; margin: 0; font-family: monospace;">{shortCode}</p>
+                    <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #111827; margin: 0; font-family: monospace;">{safeShortCode}</p>
                 </div>
                 <div style="text-align: center; margin: 24px 0;">
                     <a href="{inviteUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 15px;">Open Invitation</a>
@@ -48,7 +54,7 @@ public class EmailService
         var emailMessage = new EmailMessage
         {
             From = _fromAddress,
-            Subject = $"You've been invited to {tenantName} on SSDID Drive"
+            Subject = $"You've been invited to {safeTenantName} on SSDID Drive"
         };
         emailMessage.To.Add(toEmail);
         emailMessage.HtmlBody = html;

@@ -8,6 +8,7 @@ public record AppError(string Type, string Title, int Status, string? Detail = n
     public static AppError NotFound(string detail) => new("not_found", "Not Found", 404, detail);
     public static AppError Unauthorized(string detail) => new("unauthorized", "Unauthorized", 401, detail);
     public static AppError Forbidden(string detail) => new("forbidden", "Forbidden", 403, detail);
+    public static AppError Gone(string detail) => new("gone", "Gone", 410, detail);
     public static AppError Conflict(string detail) => new("conflict", "Conflict", 409, detail);
     public static AppError ServiceUnavailable(string detail) => new("service_unavailable", "Service Unavailable", 503, detail);
 

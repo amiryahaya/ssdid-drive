@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -26,10 +28,13 @@ public static class DeclineInvitation
         if (invitation.InvitedUserId is not null && invitation.InvitedUserId != user.Id)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();
 
-        // For open invitations, require token proof
+        // For open invitations, require token proof (constant-time comparison)
         if (invitation.InvitedUserId is null)
         {
-            if (string.IsNullOrWhiteSpace(req.Token) || req.Token != invitation.Token)
+            if (string.IsNullOrWhiteSpace(req.Token) ||
+                !CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(req.Token),
+                    Encoding.UTF8.GetBytes(invitation.Token)))
                 return AppError.Forbidden("Invalid or missing invitation token").ToProblemResult();
         }
 
