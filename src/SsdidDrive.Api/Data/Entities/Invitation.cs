@@ -9,7 +9,8 @@ public class Invitation
     public Guid? InvitedUserId { get; set; }                  // Set if user already exists
     public TenantRole Role { get; set; } = TenantRole.Member;
     public InvitationStatus Status { get; set; } = InvitationStatus.Pending;
-    public string Token { get; set; } = default!;             // Deep link token
+    public string Token { get; set; } = default!;             // Deep link token (URL-safe base64)
+    public string ShortCode { get; set; } = default!;         // Human-readable code (e.g. ACME-7K9X)
     public string? Message { get; set; }                      // Optional invite message
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

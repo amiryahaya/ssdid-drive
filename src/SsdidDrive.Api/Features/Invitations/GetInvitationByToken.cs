@@ -14,11 +14,13 @@ public static class GetInvitationByToken
 
     private static async Task<IResult> Handle(string token, AppDbContext db, CancellationToken ct)
     {
+        // Support both full token and short code lookup
         var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => i.Token == token
+            .Include(i => i.Tenant)
+            .FirstOrDefaultAsync(i =>
+                (i.Token == token || i.ShortCode == token)
                 && i.Status == InvitationStatus.Pending, ct);
 
-        // Check expiry client-side for SQLite compatibility
         if (invitation is null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
             return AppError.NotFound("Invitation not found or expired").ToProblemResult();
 
@@ -26,11 +28,13 @@ public static class GetInvitationByToken
         {
             invitation.Id,
             invitation.TenantId,
+            tenant_name = invitation.Tenant.Name,
             invitation.InvitedById,
             invitation.Email,
             invitation.InvitedUserId,
             Role = invitation.Role.ToString().ToLowerInvariant(),
             Status = invitation.Status.ToString().ToLowerInvariant(),
+            invitation.ShortCode,
             invitation.Message,
             invitation.ExpiresAt,
             invitation.CreatedAt

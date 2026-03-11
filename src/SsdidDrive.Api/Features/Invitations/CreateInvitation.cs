@@ -38,9 +38,17 @@ public static class CreateInvitation
         if (role is null)
             return AppError.BadRequest("Role must be 'member' or 'admin'").ToProblemResult();
 
+        // Role constraint: Admin can only invite Members
+        if (userTenant.Role == TenantRole.Admin && role != TenantRole.Member)
+            return AppError.Forbidden("Admins can only invite members").ToProblemResult();
+
         var now = DateTimeOffset.UtcNow;
         var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+
+        // Generate short code: SLUG-XXXX (tenant slug prefix + 4 random alphanumeric chars)
+        var tenant = await db.Tenants.FindAsync([user.TenantId.Value], ct);
+        var shortCode = await GenerateShortCode(db, tenant!.Slug, ct);
 
         // Resolve email to user ID if the user already exists
         Guid? invitedUserId = null;
@@ -60,6 +68,7 @@ public static class CreateInvitation
             Role = role.Value,
             Status = InvitationStatus.Pending,
             Token = token,
+            ShortCode = shortCode,
             Message = req.Message,
             ExpiresAt = now.AddDays(7),
             CreatedAt = now,
@@ -92,9 +101,35 @@ public static class CreateInvitation
             Role = invitation.Role.ToString().ToLowerInvariant(),
             Status = invitation.Status.ToString().ToLowerInvariant(),
             invitation.Token,
+            invitation.ShortCode,
             invitation.Message,
             invitation.ExpiresAt,
             invitation.CreatedAt
         });
+    }
+
+    private static async Task<string> GenerateShortCode(AppDbContext db, string tenantSlug, CancellationToken ct)
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No 0/O/1/I to avoid confusion
+        var prefix = tenantSlug.Split('-')[0].ToUpperInvariant();
+        if (prefix.Length > 6) prefix = prefix[..6];
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var suffix = new string(Enumerable.Range(0, 4)
+                .Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)])
+                .ToArray());
+
+            var code = $"{prefix}-{suffix}";
+
+            if (!await db.Invitations.AnyAsync(i => i.ShortCode == code, ct))
+                return code;
+        }
+
+        // Fallback: longer suffix
+        var fallbackSuffix = new string(Enumerable.Range(0, 6)
+            .Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)])
+            .ToArray());
+        return $"{prefix}-{fallbackSuffix}";
     }
 }

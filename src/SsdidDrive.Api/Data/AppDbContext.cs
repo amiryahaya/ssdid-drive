@@ -192,6 +192,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(i => i.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(i => i.Email).HasMaxLength(160);
             e.Property(i => i.Token).HasMaxLength(256).IsRequired();
+            e.Property(i => i.ShortCode).HasMaxLength(16).IsRequired();
             e.Property(i => i.Message).HasMaxLength(1024);
             e.Property(i => i.Role).HasMaxLength(32)
                 .HasDefaultValue(TenantRole.Member)
@@ -207,6 +208,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(i => i.UpdatedAt).HasDefaultValueSql("now()");
 
             e.HasIndex(i => i.Token).IsUnique();
+            e.HasIndex(i => i.ShortCode).IsUnique();
             e.HasIndex(i => new { i.TenantId, i.Status });
             e.HasIndex(i => i.InvitedUserId);
 

@@ -70,6 +70,8 @@ public static class ListInvitations
         i.InvitedUserId,
         Role = i.Role.ToString().ToLowerInvariant(),
         Status = i.Status.ToString().ToLowerInvariant(),
+        i.Token,
+        i.ShortCode,
         i.Message,
         i.ExpiresAt,
         i.CreatedAt

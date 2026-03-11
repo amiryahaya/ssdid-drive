@@ -9,7 +9,12 @@ namespace SsdidDrive.Api.Features.Auth;
 
 public static class RegisterVerify
 {
-    public record Request(string Did, string KeyId, string SignedChallenge, Dictionary<string, string>? SharedClaims = null);
+    public record Request(
+        string Did,
+        string KeyId,
+        string SignedChallenge,
+        string? InviteToken = null,
+        Dictionary<string, string>? SharedClaims = null);
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/register/verify", Handle)
@@ -30,51 +35,99 @@ public static class RegisterVerify
             async ok =>
             {
                 var adminDid = config["Ssdid:AdminDid"];
-                var user = await ProvisionUser(db, req.Did, req.SharedClaims, adminDid);
+                var user = await ProvisionUser(db, req.Did, req.InviteToken, req.SharedClaims, adminDid);
+                if (user is null)
+                    return AppError.Forbidden("Registration requires a valid invite code").ToProblemResult();
                 return Results.Created($"/api/users/{user.Id}", ok);
             },
             err => Task.FromResult(err.ToProblemResult()));
     }
 
-    private static async Task<User> ProvisionUser(AppDbContext db, string did, Dictionary<string, string>? claims, string? adminDid)
+    private static async Task<User?> ProvisionUser(
+        AppDbContext db, string did, string? inviteToken,
+        Dictionary<string, string>? claims, string? adminDid)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Did == did);
         if (user is not null)
         {
-            // Update claims on re-registration (wallet may have updated profile)
+            // Existing user — update claims on re-registration (wallet may have updated profile)
             ApplyClaims(user, claims);
+
+            // If invite token provided, accept it for the existing user
+            if (!string.IsNullOrWhiteSpace(inviteToken))
+                await AcceptInviteForUser(db, user, inviteToken);
+
             await db.SaveChangesAsync();
             return user;
         }
 
+        // New user — require invite token (except for AdminDid bootstrap)
+        var isAdmin = !string.IsNullOrEmpty(adminDid) && did == adminDid;
+
+        Invitation? invitation = null;
+        if (!string.IsNullOrWhiteSpace(inviteToken))
+        {
+            invitation = await db.Invitations
+                .FirstOrDefaultAsync(i =>
+                    (i.Token == inviteToken || i.ShortCode == inviteToken)
+                    && i.Status == InvitationStatus.Pending
+                    && i.ExpiresAt > DateTimeOffset.UtcNow);
+        }
+
+        // Reject registration without invite (unless admin bootstrap)
+        if (invitation is null && !isAdmin)
+            return null;
+
         await using var tx = await db.Database.BeginTransactionAsync();
         try
         {
-            var tenant = new Tenant
-            {
-                Id = Guid.NewGuid(),
-                Name = "Personal",
-                Slug = $"personal-{Guid.NewGuid():N}"
-            };
-            db.Tenants.Add(tenant);
-
             user = new User
             {
                 Id = Guid.NewGuid(),
                 Did = did,
-                TenantId = tenant.Id,
-                SystemRole = !string.IsNullOrEmpty(adminDid) && did == adminDid
-                    ? SystemRole.SuperAdmin : null
+                TenantId = invitation?.TenantId,
+                SystemRole = isAdmin ? SystemRole.SuperAdmin : null
             };
             ApplyClaims(user, claims);
             db.Users.Add(user);
 
-            db.UserTenants.Add(new UserTenant
+            if (invitation is not null)
             {
-                UserId = user.Id,
-                TenantId = tenant.Id,
-                Role = TenantRole.Owner
-            });
+                // Join the invite's tenant with the assigned role
+                db.UserTenants.Add(new UserTenant
+                {
+                    UserId = user.Id,
+                    TenantId = invitation.TenantId,
+                    Role = invitation.Role,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+
+                // Mark invitation as accepted
+                invitation.Status = InvitationStatus.Accepted;
+                invitation.InvitedUserId = user.Id;
+                invitation.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else if (isAdmin)
+            {
+                // Admin bootstrap: create a personal tenant
+                var tenant = new Tenant
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Personal",
+                    Slug = $"personal-{Guid.NewGuid():N}"
+                };
+                db.Tenants.Add(tenant);
+
+                user.TenantId = tenant.Id;
+
+                db.UserTenants.Add(new UserTenant
+                {
+                    UserId = user.Id,
+                    TenantId = tenant.Id,
+                    Role = TenantRole.Owner,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+            }
 
             await db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -88,6 +141,38 @@ public static class RegisterVerify
             return existing ?? throw new InvalidOperationException(
                 $"User provisioning failed for DID {did}: concurrent insert expected but user not found");
         }
+    }
+
+    private static async Task AcceptInviteForUser(AppDbContext db, User user, string inviteToken)
+    {
+        var invitation = await db.Invitations
+            .FirstOrDefaultAsync(i =>
+                (i.Token == inviteToken || i.ShortCode == inviteToken)
+                && i.Status == InvitationStatus.Pending
+                && i.ExpiresAt > DateTimeOffset.UtcNow);
+
+        if (invitation is null) return;
+
+        // Check not already a member
+        var alreadyMember = await db.UserTenants
+            .AnyAsync(ut => ut.UserId == user.Id && ut.TenantId == invitation.TenantId);
+        if (alreadyMember) return;
+
+        db.UserTenants.Add(new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = invitation.TenantId,
+            Role = invitation.Role,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        invitation.Status = InvitationStatus.Accepted;
+        invitation.InvitedUserId = user.Id;
+        invitation.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Set as active tenant if user doesn't have one
+        if (user.TenantId is null)
+            user.TenantId = invitation.TenantId;
     }
 
     private static void ApplyClaims(User user, Dictionary<string, string>? claims)
