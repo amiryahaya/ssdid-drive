@@ -15,6 +15,8 @@ import { SharedWithMePage } from '@/pages/SharedWithMePage';
 import { MySharesPage } from '@/pages/MySharesPage';
 import { PiiChatPage } from '@/pages/PiiChatPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { InvitationsPage } from '@/pages/InvitationsPage';
+import { MembersPage } from '@/pages/MembersPage';
 import { JoinTenantPage } from '@/pages/JoinTenantPage';
 import { UnlockScreen } from '@/components/auth/UnlockScreen';
 import { Toaster } from '@/components/ui/toaster';
@@ -139,6 +141,8 @@ function App() {
                     <Route path="/shared-with-me" element={<SharedWithMePage />} />
                     <Route path="/my-shares" element={<MySharesPage />} />
                     <Route path="/pii-chat" element={<PiiChatPage />} />
+                    <Route path="/invitations" element={<InvitationsPage />} />
+                    <Route path="/members" element={<MembersPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Routes>
                 </ErrorBoundary>

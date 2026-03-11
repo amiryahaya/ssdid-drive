@@ -9,16 +9,30 @@ import {
   Star,
   Bot,
   UserPlus,
+  Mail,
+  Users,
 } from 'lucide-react';
 import { cn, formatBytes } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
+import { useTenantStore } from '@/stores/tenantStore';
+import { useInvitationStore } from '@/stores/invitationStore';
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
+  adminOnly?: boolean;
+}
+
+const navigation: NavItem[] = [
   { name: 'My Files', href: '/files', icon: Files },
   { name: 'Favorites', href: '/favorites', icon: Star },
   { name: 'Shared with Me', href: '/shared-with-me', icon: FolderInput },
   { name: 'My Shares', href: '/my-shares', icon: Share2 },
+  { name: 'Invitations', href: '/invitations', icon: Mail },
+  { name: 'Members', href: '/members', icon: Users, adminOnly: true },
   { name: 'AI Chat', href: '/pii-chat', icon: Bot, comingSoon: true },
   { name: 'Join Tenant', href: '/join', icon: UserPlus },
   { name: 'Settings', href: '/settings', icon: Settings },
@@ -27,10 +41,18 @@ const navigation = [
 export function Sidebar() {
   const { storageInfo, loadStorageInfo } = useSettingsStore();
   const favoritesCount = useFavoritesStore((state) => state.favorites.size);
+  const canManageMembers = useTenantStore((state) => state.canManageMembers);
+  const pendingReceivedCount = useInvitationStore(
+    (state) => state.pendingReceivedCount
+  );
+  const loadPendingCount = useInvitationStore(
+    (state) => state.loadPendingCount
+  );
 
   useEffect(() => {
     loadStorageInfo();
-  }, [loadStorageInfo]);
+    loadPendingCount();
+  }, [loadStorageInfo, loadPendingCount]);
 
   const usedBytes = storageInfo?.totalUsed ?? 0;
   const quotaBytes = storageInfo?.quota ?? 10 * 1024 * 1024 * 1024; // Default 10GB
@@ -46,7 +68,9 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
-        {navigation.map((item) => (
+        {navigation
+          .filter((item) => !item.adminOnly || canManageMembers)
+          .map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
@@ -67,6 +91,11 @@ export function Sidebar() {
             {item.name === 'Favorites' && favoritesCount > 0 && (
               <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-600 dark:text-yellow-400">
                 {favoritesCount}
+              </span>
+            )}
+            {item.name === 'Invitations' && pendingReceivedCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary/20 text-primary">
+                {pendingReceivedCount}
               </span>
             )}
             {item.comingSoon && (
