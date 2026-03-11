@@ -186,3 +186,48 @@ struct InvitedBy: Codable, Equatable {
         displayName ?? email ?? "Unknown"
     }
 }
+
+// MARK: - Short Code Invitation (for joining tenants by code)
+
+/// Invitation info retrieved by short code.
+/// Used for both authenticated and unauthenticated users.
+struct CodeInvitation: Codable, Equatable {
+    let id: String
+    let tenantName: String
+    let role: UserRole
+    let shortCode: String
+    let expiresAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case tenantName = "tenant_name"
+        case role
+        case shortCode = "short_code"
+        case expiresAt = "expires_at"
+    }
+
+    /// Whether the invitation has expired
+    var isExpired: Bool {
+        expiresAt < Date()
+    }
+}
+
+/// Response from GET /api/invitations/code/{code}
+struct CodeInvitationResponse: Codable {
+    let data: CodeInvitation
+}
+
+/// Response from POST /api/invitations/{id}/accept (for authenticated users)
+struct AcceptCodeInvitationResponse: Codable {
+    let data: AcceptCodeInvitationData
+}
+
+struct AcceptCodeInvitationData: Codable {
+    let tenantId: String
+    let role: String
+
+    enum CodingKeys: String, CodingKey {
+        case tenantId = "tenant_id"
+        case role
+    }
+}

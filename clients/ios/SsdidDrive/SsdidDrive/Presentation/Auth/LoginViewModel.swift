@@ -5,6 +5,7 @@ import UIKit
 /// Delegate for login view model coordinator events
 protocol LoginViewModelCoordinatorDelegate: AnyObject {
     func loginViewModelDidLogin()
+    func loginViewModelDidRequestJoinTenant()
 }
 
 /// View model for SSDID wallet-based login.
@@ -123,6 +124,11 @@ final class LoginViewModel: BaseViewModel {
         }
         task.resume()
         eventTask = task
+    }
+
+    /// Request to show the join tenant screen
+    func requestJoinTenant() {
+        coordinatorDelegate?.loginViewModelDidRequestJoinTenant()
     }
 
     /// Save session token and notify coordinator

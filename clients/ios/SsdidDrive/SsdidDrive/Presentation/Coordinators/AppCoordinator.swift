@@ -305,6 +305,13 @@ extension AppCoordinator: AuthCoordinatorDelegate {
         navigationController.setViewControllers([], animated: false)
         showAuth()
     }
+
+    func authDidRequestLoginWithInvite(code: String) {
+        // Store the invite code so it can be auto-accepted after auth completes.
+        // The user will be shown the login screen and after authentication,
+        // the invite code will be processed.
+        container.userDefaultsManager.pendingInviteCode = code
+    }
 }
 
 // MARK: - LockViewControllerDelegate

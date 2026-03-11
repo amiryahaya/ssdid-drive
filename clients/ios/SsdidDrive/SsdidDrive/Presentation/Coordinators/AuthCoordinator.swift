@@ -1,9 +1,11 @@
 import UIKit
+import SwiftUI
 
 /// Delegate for auth coordinator events
 protocol AuthCoordinatorDelegate: AnyObject {
     func authDidComplete()
     func authDidRequestLogout()
+    func authDidRequestLoginWithInvite(code: String)
 }
 
 /// Coordinator for SSDID wallet authentication flow.
@@ -43,6 +45,25 @@ final class AuthCoordinator: BaseCoordinator {
         // processed after authentication completes.
         showLogin()
     }
+
+    /// Show the "Join Tenant" screen as a modal from the login screen
+    func showJoinTenant() {
+        let viewModel = JoinTenantViewModel(apiClient: container.apiClient)
+        viewModel.delegate = self
+
+        let joinTenantView = JoinTenantView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: joinTenantView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
+    /// Pending invite code to process after authentication
+    private(set) var pendingInviteCode: String?
 }
 
 // MARK: - LoginViewModelCoordinatorDelegate
@@ -50,5 +71,26 @@ final class AuthCoordinator: BaseCoordinator {
 extension AuthCoordinator: LoginViewModelCoordinatorDelegate {
     func loginViewModelDidLogin() {
         delegate?.authDidComplete()
+    }
+
+    func loginViewModelDidRequestJoinTenant() {
+        showJoinTenant()
+    }
+}
+
+// MARK: - JoinTenantViewModelDelegate
+
+extension AuthCoordinator: JoinTenantViewModelDelegate {
+    func joinTenantDidComplete() {
+        navigationController.dismiss(animated: true)
+    }
+
+    func joinTenantDidRequestLogin(inviteCode: String) {
+        pendingInviteCode = inviteCode
+        navigationController.dismiss(animated: true) { [weak self] in
+            // The user needs to authenticate first, then the invite will be auto-accepted.
+            // Store the pending code for the app coordinator to process after auth.
+            self?.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
+        }
     }
 }

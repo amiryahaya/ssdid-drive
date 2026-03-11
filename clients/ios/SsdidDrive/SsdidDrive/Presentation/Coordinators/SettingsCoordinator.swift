@@ -103,6 +103,24 @@ final class SettingsCoordinator: BaseCoordinator {
         // Credential management (WebAuthn/OIDC) has been removed.
         // Authentication is now handled via SSDID wallet.
     }
+
+    func showJoinTenant() {
+        let viewModel = JoinTenantViewModel(
+            apiClient: container.apiClient,
+            tenantRepository: container.tenantRepository
+        )
+        viewModel.delegate = self
+
+        let joinTenantView = JoinTenantView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: joinTenantView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
 }
 
 // MARK: - SettingsViewModelCoordinatorDelegate
@@ -136,6 +154,10 @@ extension SettingsCoordinator: SettingsViewModelCoordinatorDelegate {
         showTenantSwitcher()
     }
 
+    func settingsDidRequestJoinTenant() {
+        showJoinTenant()
+    }
+
     func settingsDidRequestLogout() {
         delegate?.settingsCoordinatorDidRequestLogout()
     }
@@ -165,5 +187,20 @@ extension SettingsCoordinator: TrusteeSelectionViewModelCoordinatorDelegate {
 extension SettingsCoordinator: InitiateRecoveryViewModelCoordinatorDelegate {
     func initiateRecoveryDidComplete() {
         delegate?.settingsCoordinatorDidRequestLogout()
+    }
+}
+
+// MARK: - JoinTenantViewModelDelegate
+
+extension SettingsCoordinator: JoinTenantViewModelDelegate {
+    func joinTenantDidComplete() {
+        navigationController.dismiss(animated: true) { [weak self] in
+            self?.delegate?.settingsCoordinatorDidSwitchTenant()
+        }
+    }
+
+    func joinTenantDidRequestLogin(inviteCode: String) {
+        // Authenticated flow only in settings, so this is a no-op.
+        // The unauthenticated flow is handled by AuthCoordinator.
     }
 }

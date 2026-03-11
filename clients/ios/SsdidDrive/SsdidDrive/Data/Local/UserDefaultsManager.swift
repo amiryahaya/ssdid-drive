@@ -246,6 +246,27 @@ final class UserDefaultsManager: ObservableObject {
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.pendingDeepLink)
     }
 
+    // MARK: - Pending Invite Code
+
+    /// Pending invite code to auto-accept after authentication
+    var pendingInviteCode: String? {
+        get { defaults.string(forKey: "pending_invite_code") }
+        set {
+            if let newValue = newValue {
+                defaults.set(newValue, forKey: "pending_invite_code")
+            } else {
+                defaults.removeObject(forKey: "pending_invite_code")
+            }
+        }
+    }
+
+    /// Consume the pending invite code (read and clear atomically)
+    func consumePendingInviteCode() -> String? {
+        let code = pendingInviteCode
+        pendingInviteCode = nil
+        return code
+    }
+
     // MARK: - Reset
 
     func clearAll() {
@@ -261,7 +282,8 @@ final class UserDefaultsManager: ObservableObject {
             Constants.UserDefaultsKeys.compactViewEnabled,
             Constants.UserDefaultsKeys.showFileSizes,
             Constants.UserDefaultsKeys.favoriteFileIds,
-            Constants.UserDefaultsKeys.pendingDeepLink
+            Constants.UserDefaultsKeys.pendingDeepLink,
+            "pending_invite_code"
         ]
 
         keys.forEach { defaults.removeObject(forKey: $0) }

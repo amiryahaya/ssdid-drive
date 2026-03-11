@@ -11,6 +11,7 @@ protocol SettingsViewModelCoordinatorDelegate: AnyObject {
     func settingsDidRequestInvitations()
     func settingsDidRequestCredentials()
     func settingsDidRequestTenantSwitcher()
+    func settingsDidRequestJoinTenant()
     func settingsDidRequestLogout()
 }
 
@@ -58,6 +59,7 @@ final class SettingsViewModel: BaseViewModel {
         case invitations
         case credentials
         case tenant
+        case joinTenant
         case biometric
         case autoLock
         case autoLockTimeout
@@ -229,7 +231,7 @@ final class SettingsViewModel: BaseViewModel {
         case .account:
             return [.profile, .devices, .invitations]
         case .organization:
-            return [.tenant]
+            return [.tenant, .joinTenant]
         case .security:
             var items: [SettingsItem] = []
             if biometricType != .none {
@@ -248,6 +250,10 @@ final class SettingsViewModel: BaseViewModel {
 
     func showTenantSwitcher() {
         coordinatorDelegate?.settingsDidRequestTenantSwitcher()
+    }
+
+    func showJoinTenant() {
+        coordinatorDelegate?.settingsDidRequestJoinTenant()
     }
 
     var biometricLabel: String {

@@ -184,6 +184,17 @@ extension SettingsViewController: UITableViewDataSource {
             cell.accessibilityIdentifier = "settingsTenantCell"
             return cell
 
+        case .joinTenant:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+            var content = cell.defaultContentConfiguration()
+            content.text = "Join Organization"
+            content.secondaryText = "Enter an invite code"
+            content.image = UIImage(systemName: "person.badge.plus")
+            cell.contentConfiguration = content
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "settingsJoinTenantCell"
+            return cell
+
         case .credentials:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var content = cell.defaultContentConfiguration()
@@ -319,6 +330,8 @@ extension SettingsViewController: UITableViewDelegate {
             if viewModel.tenantCount > 1 {
                 viewModel.showTenantSwitcher()
             }
+        case .joinTenant:
+            viewModel.showJoinTenant()
         case .autoLockTimeout:
             showAutoLockTimeoutPicker()
         case .recoverySetup:

@@ -116,6 +116,19 @@ final class LoginViewController: BaseViewController {
         return button
     }()
 
+    private lazy var inviteCodeButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Have an invite code?", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        button.setTitleColor(.systemBlue, for: .normal)
+        button.accessibilityIdentifier = "inviteCodeButton"
+        button.accessibilityLabel = "Have an invite code?"
+        button.accessibilityHint = "Double tap to enter an organization invite code"
+        button.addTarget(self, action: #selector(inviteCodeTapped), for: .touchUpInside)
+        return button
+    }()
+
     // MARK: - Initialization
 
     init(viewModel: LoginViewModel) {
@@ -141,6 +154,7 @@ final class LoginViewController: BaseViewController {
         contentView.addSubview(errorLabel)
         contentView.addSubview(refreshButton)
         contentView.addSubview(openWalletButton)
+        contentView.addSubview(inviteCodeButton)
 
         NSLayoutConstraint.activate([
             // Scroll view
@@ -198,7 +212,11 @@ final class LoginViewController: BaseViewController {
             openWalletButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             openWalletButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             openWalletButton.heightAnchor.constraint(equalToConstant: 52),
-            openWalletButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+
+            // Invite code button
+            inviteCodeButton.topAnchor.constraint(equalTo: openWalletButton.bottomAnchor, constant: 24),
+            inviteCodeButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            inviteCodeButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
         ])
     }
 
@@ -275,6 +293,11 @@ final class LoginViewController: BaseViewController {
     @objc private func openWalletTapped() {
         triggerHapticFeedback()
         viewModel.openWallet()
+    }
+
+    @objc private func inviteCodeTapped() {
+        triggerSelectionFeedback()
+        viewModel.requestJoinTenant()
     }
 
     // MARK: - QR Code Generation
