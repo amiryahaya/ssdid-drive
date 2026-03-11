@@ -99,6 +99,7 @@ cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
     "RegistryUrl": "https://registry.ssdid.my",
     "IdentityPath": "/app/data/server-identity.json",
     "Algorithm": "KazSignVerificationKey2024",
+    "AdminDid": "",
     "ServiceUrl": "https://drive.ssdid.my",
     "PreviousIdentities": [],
     "Sessions": {
@@ -133,6 +134,7 @@ EOF
 **Important:**
 - Replace `CHANGE_ME_STRONG_PASSWORD` with a strong password (see below)
 - Replace `YOUR_SENTRY_DSN_HERE` with your Sentry project DSN (create a project at [sentry.io](https://sentry.io) → Settings → Projects → ASP.NET Core). Leave empty to disable Sentry.
+- Set `AdminDid` to your wallet's DID (e.g. `did:ssdid:abc123...`) to auto-promote as SuperAdmin on first registration. Clear it after setup or leave it — it only takes effect at registration time.
 
 ```bash
 openssl rand -base64 32

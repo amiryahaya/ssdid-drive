@@ -15,7 +15,7 @@ public static class RegisterVerify
         group.MapPost("/register/verify", Handle)
             .WithMetadata(new SsdidPublicAttribute());
 
-    private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db)
+    private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db, IConfiguration config)
     {
         if (string.IsNullOrWhiteSpace(req.Did) || !req.Did.StartsWith("did:ssdid:") || req.Did.Length > 256)
             return AppError.BadRequest("Invalid DID format").ToProblemResult();
@@ -29,13 +29,14 @@ public static class RegisterVerify
         return await result.Match(
             async ok =>
             {
-                var user = await ProvisionUser(db, req.Did, req.SharedClaims);
+                var adminDid = config["Ssdid:AdminDid"];
+                var user = await ProvisionUser(db, req.Did, req.SharedClaims, adminDid);
                 return Results.Created($"/api/users/{user.Id}", ok);
             },
             err => Task.FromResult(err.ToProblemResult()));
     }
 
-    private static async Task<User> ProvisionUser(AppDbContext db, string did, Dictionary<string, string>? claims)
+    private static async Task<User> ProvisionUser(AppDbContext db, string did, Dictionary<string, string>? claims, string? adminDid)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Did == did);
         if (user is not null)
@@ -61,7 +62,9 @@ public static class RegisterVerify
             {
                 Id = Guid.NewGuid(),
                 Did = did,
-                TenantId = tenant.Id
+                TenantId = tenant.Id,
+                SystemRole = !string.IsNullOrEmpty(adminDid) && did == adminDid
+                    ? SystemRole.SuperAdmin : null
             };
             ApplyClaims(user, claims);
             db.Users.Add(user);
