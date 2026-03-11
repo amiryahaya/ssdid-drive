@@ -8,6 +8,7 @@ import {
   Shield,
   Star,
   Bot,
+  UserPlus,
 } from 'lucide-react';
 import { cn, formatBytes } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Shared with Me', href: '/shared-with-me', icon: FolderInput },
   { name: 'My Shares', href: '/my-shares', icon: Share2 },
   { name: 'AI Chat', href: '/pii-chat', icon: Bot, comingSoon: true },
+  { name: 'Join Tenant', href: '/join', icon: UserPlus },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

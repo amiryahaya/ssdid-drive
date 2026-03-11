@@ -71,6 +71,15 @@ export function LoginPage() {
           </p>
         </div>
 
+        {/* Invite code link */}
+        <div className="mt-2 text-center text-sm">
+          <p className="text-muted-foreground">
+            <Link to="/join" className="text-primary hover:underline font-medium">
+              Have an invite code?
+            </Link>
+          </p>
+        </div>
+
         {/* Footer */}
         <div className="mt-4 text-center text-sm text-muted-foreground">
           <p>Protected with post-quantum cryptography</p>

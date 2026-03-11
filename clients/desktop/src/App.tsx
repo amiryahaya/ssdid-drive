@@ -15,6 +15,7 @@ import { SharedWithMePage } from '@/pages/SharedWithMePage';
 import { MySharesPage } from '@/pages/MySharesPage';
 import { PiiChatPage } from '@/pages/PiiChatPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { JoinTenantPage } from '@/pages/JoinTenantPage';
 import { UnlockScreen } from '@/components/auth/UnlockScreen';
 import { Toaster } from '@/components/ui/toaster';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
@@ -110,6 +111,10 @@ function App() {
               <RegisterPage />
             </PublicRoute>
           }
+        />
+        <Route
+          path="/join"
+          element={<JoinTenantPage />}
         />
         <Route
           path="/onboarding"
