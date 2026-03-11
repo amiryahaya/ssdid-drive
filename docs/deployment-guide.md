@@ -367,6 +367,13 @@ drive.ssdid.my {
         try_files {path} /index.html
     }
 
+    # Invite page (deep link landing)
+    handle /invite/* {
+        root * /var/www/landing
+        rewrite * /invite.html
+        file_server
+    }
+
     # Landing page (catch-all)
     handle {
         root * /var/www/landing
@@ -546,6 +553,20 @@ sudo tail -f /var/log/caddy/drive.log
 - [ ] SSH key-only auth (disable password auth in `/etc/ssh/sshd_config`)
 - [ ] Disk usage monitoring configured
 
+## 11. Initial Onboarding
+
+After deployment, bootstrap the first admin and tenant:
+
+1. **Set `AdminDid`** in `appsettings.Production.json` to your wallet's DID
+2. **Restart API**: `podman compose restart api`
+3. **Register with your wallet** — scan QR on admin portal, your DID auto-promotes to SuperAdmin
+4. **Create a tenant** via admin portal (e.g. "Acme Corp")
+5. **Create an invitation** for the first tenant Owner — note the short code (e.g. `ACME-7K9X`)
+6. **Share the invite** — the Owner opens `https://drive.ssdid.my/invite/ACME-7K9X`, installs the app, enters the code, and scans with their wallet
+7. **Owner invites others** from within the app
+
+Registration is invite-only. Without a valid invite token, new users cannot register.
+
 ## Architecture Overview
 
 ```
@@ -556,6 +577,7 @@ Internet
 │  Caddy :443 (auto-TLS)                          │
 │                                                  │
 │  drive.ssdid.my/          → /var/www/landing/    │
+│  drive.ssdid.my/invite/*  → /var/www/landing/    │
 │  drive.ssdid.my/admin/*   → /var/www/admin/      │
 │  drive.ssdid.my/api/*     → localhost:5000       │
 │  drive.ssdid.my/health    → localhost:5000       │
