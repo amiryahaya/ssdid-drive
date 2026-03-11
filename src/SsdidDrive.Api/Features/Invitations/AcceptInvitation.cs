@@ -8,10 +8,12 @@ namespace SsdidDrive.Api.Features.Invitations;
 
 public static class AcceptInvitation
 {
+    public record Request(string? Token = null);
+
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/{id:guid}/accept", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -31,10 +33,15 @@ public static class AcceptInvitation
         }
 
         // Authorization: if InvitedUserId is set, only that user can accept.
-        // If InvitedUserId is null (user wasn't registered at invite time),
-        // any authenticated user can accept — they proved token knowledge to get the invitation ID.
         if (invitation.InvitedUserId is not null && invitation.InvitedUserId != user.Id)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();
+
+        // For open invitations (InvitedUserId is null), require token proof
+        if (invitation.InvitedUserId is null)
+        {
+            if (string.IsNullOrWhiteSpace(req.Token) || req.Token != invitation.Token)
+                return AppError.Forbidden("Invalid or missing invitation token").ToProblemResult();
+        }
 
         // Check if user is already in the tenant
         var existingMembership = await db.UserTenants

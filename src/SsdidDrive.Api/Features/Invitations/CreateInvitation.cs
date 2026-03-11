@@ -126,10 +126,18 @@ public static class CreateInvitation
                 return code;
         }
 
-        // Fallback: longer suffix
-        var fallbackSuffix = new string(Enumerable.Range(0, 6)
-            .Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)])
-            .ToArray());
-        return $"{prefix}-{fallbackSuffix}";
+        // Fallback: longer suffix with uniqueness check
+        for (var fallbackAttempt = 0; fallbackAttempt < 5; fallbackAttempt++)
+        {
+            var fallbackSuffix = new string(Enumerable.Range(0, 6)
+                .Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)])
+                .ToArray());
+
+            var fallbackCode = $"{prefix}-{fallbackSuffix}";
+            if (!await db.Invitations.AnyAsync(i => i.ShortCode == fallbackCode, ct))
+                return fallbackCode;
+        }
+
+        throw new InvalidOperationException("Short code space exhausted for this tenant; please retry");
     }
 }

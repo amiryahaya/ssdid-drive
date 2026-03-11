@@ -55,9 +55,27 @@ public static class RegisterVerify
 
             // If invite token provided, accept it for the existing user
             if (!string.IsNullOrWhiteSpace(inviteToken))
-                await AcceptInviteForUser(db, user, inviteToken);
+            {
+                await using var tx = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    await AcceptInviteForUser(db, user, inviteToken);
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    db.ChangeTracker.Clear();
+                    // Re-fetch user after rollback
+                    user = await db.Users.FirstOrDefaultAsync(u => u.Did == did);
+                }
+            }
+            else
+            {
+                await db.SaveChangesAsync();
+            }
 
-            await db.SaveChangesAsync();
             return user;
         }
 
@@ -67,9 +85,10 @@ public static class RegisterVerify
         Invitation? invitation = null;
         if (!string.IsNullOrWhiteSpace(inviteToken))
         {
+            // Only accept full token — short codes have insufficient entropy for registration
             invitation = await db.Invitations
                 .FirstOrDefaultAsync(i =>
-                    (i.Token == inviteToken || i.ShortCode == inviteToken)
+                    i.Token == inviteToken
                     && i.Status == InvitationStatus.Pending
                     && i.ExpiresAt > DateTimeOffset.UtcNow);
         }
@@ -78,7 +97,7 @@ public static class RegisterVerify
         if (invitation is null && !isAdmin)
             return null;
 
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var newUserTx = await db.Database.BeginTransactionAsync();
         try
         {
             user = new User
@@ -130,12 +149,12 @@ public static class RegisterVerify
             }
 
             await db.SaveChangesAsync();
-            await tx.CommitAsync();
+            await newUserTx.CommitAsync();
             return user;
         }
         catch (DbUpdateException)
         {
-            await tx.RollbackAsync();
+            await newUserTx.RollbackAsync();
             db.ChangeTracker.Clear();
             var existing = await db.Users.FirstOrDefaultAsync(u => u.Did == did);
             return existing ?? throw new InvalidOperationException(
@@ -145,9 +164,10 @@ public static class RegisterVerify
 
     private static async Task AcceptInviteForUser(AppDbContext db, User user, string inviteToken)
     {
+        // Only accept full token — short codes have insufficient entropy
         var invitation = await db.Invitations
             .FirstOrDefaultAsync(i =>
-                (i.Token == inviteToken || i.ShortCode == inviteToken)
+                i.Token == inviteToken
                 && i.Status == InvitationStatus.Pending
                 && i.ExpiresAt > DateTimeOffset.UtcNow);
 

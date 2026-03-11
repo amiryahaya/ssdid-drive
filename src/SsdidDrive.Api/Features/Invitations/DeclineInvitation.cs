@@ -7,10 +7,12 @@ namespace SsdidDrive.Api.Features.Invitations;
 
 public static class DeclineInvitation
 {
+    public record Request(string? Token = null);
+
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/{id:guid}/decline", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -21,9 +23,15 @@ public static class DeclineInvitation
             return AppError.NotFound("Invitation not found").ToProblemResult();
 
         // Authorization: if InvitedUserId is set, only that user can decline.
-        // If null (user wasn't registered at invite time), any authenticated user with the ID can decline.
         if (invitation.InvitedUserId is not null && invitation.InvitedUserId != user.Id)
             return AppError.Forbidden("You are not the invited user").ToProblemResult();
+
+        // For open invitations, require token proof
+        if (invitation.InvitedUserId is null)
+        {
+            if (string.IsNullOrWhiteSpace(req.Token) || req.Token != invitation.Token)
+                return AppError.Forbidden("Invalid or missing invitation token").ToProblemResult();
+        }
 
         invitation.Status = InvitationStatus.Declined;
         invitation.UpdatedAt = DateTimeOffset.UtcNow;

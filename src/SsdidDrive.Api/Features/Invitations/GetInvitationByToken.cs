@@ -19,9 +19,10 @@ public static class GetInvitationByToken
             .Include(i => i.Tenant)
             .FirstOrDefaultAsync(i =>
                 (i.Token == token || i.ShortCode == token)
-                && i.Status == InvitationStatus.Pending, ct);
+                && i.Status == InvitationStatus.Pending
+                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
 
-        if (invitation is null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (invitation is null)
             return AppError.NotFound("Invitation not found or expired").ToProblemResult();
 
         return Results.Ok(new

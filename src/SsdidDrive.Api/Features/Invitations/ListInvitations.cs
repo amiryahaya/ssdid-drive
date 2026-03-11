@@ -29,12 +29,12 @@ public static class ListInvitations
 
         var total = await query.CountAsync(ct);
 
-        var invitations = (await query.ToListAsync(ct))
+        var items = await query
             .OrderByDescending(i => i.CreatedAt)
             .Skip(pagination.Skip)
             .Take(pagination.Take)
-            .Select(ToDto)
-            .ToList();
+            .ToListAsync(ct);
+        var invitations = items.Select(ToDto).ToList();
 
         return Results.Ok(new PagedResponse<object>(invitations, total, pagination.NormalizedPage, pagination.Take));
     }
@@ -51,12 +51,12 @@ public static class ListInvitations
 
         var total = await query.CountAsync(ct);
 
-        var invitations = (await query.ToListAsync(ct))
+        var items = await query
             .OrderByDescending(i => i.CreatedAt)
             .Skip(pagination.Skip)
             .Take(pagination.Take)
-            .Select(ToDto)
-            .ToList();
+            .ToListAsync(ct);
+        var invitations = items.Select(ToDto).ToList();
 
         return Results.Ok(new PagedResponse<object>(invitations, total, pagination.NormalizedPage, pagination.Take));
     }
@@ -70,7 +70,6 @@ public static class ListInvitations
         i.InvitedUserId,
         Role = i.Role.ToString().ToLowerInvariant(),
         Status = i.Status.ToString().ToLowerInvariant(),
-        i.Token,
         i.ShortCode,
         i.Message,
         i.ExpiresAt,
