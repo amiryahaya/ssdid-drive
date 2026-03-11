@@ -78,12 +78,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} className="text-blue-600">
-                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" strokeLinejoin="round" />
-                <path d="M12 12l9-5M12 12v10M12 12L3 7" strokeLinejoin="round" />
-              </svg>
-            </div>
+            <img src="/icon-192.png" alt="SSDID Drive" className="w-12 h-12 rounded-xl mb-4" />
             <h1 className="text-xl font-bold text-gray-900">SSDID Drive</h1>
             <p className="text-sm text-gray-500 mt-1">Admin Portal</p>
           </div>

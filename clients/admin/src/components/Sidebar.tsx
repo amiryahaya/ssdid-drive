@@ -76,10 +76,7 @@ export default function Sidebar({ collapsed, onToggle, onClose }: SidebarProps) 
     >
       {/* Logo / brand */}
       <div className="flex items-center h-14 px-4 border-b border-gray-200 shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} className="text-blue-600 shrink-0">
-          <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" strokeLinejoin="round" />
-          <path d="M12 12l9-5M12 12v10M12 12L3 7" strokeLinejoin="round" />
-        </svg>
+        <img src="/icon-192.png" alt="SSDID Drive" className="w-6 h-6 rounded shrink-0" />
         {!collapsed && (
           <span className="ml-3 text-sm font-bold text-gray-900 whitespace-nowrap">
             SSDID Drive
