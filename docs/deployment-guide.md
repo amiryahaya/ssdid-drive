@@ -122,6 +122,10 @@ cat > ~/ssdid-drive/config/appsettings.Production.json << 'EOF'
     "Dsn": "https://YOUR_SENTRY_DSN_HERE",
     "TracesSampleRate": 0.2
   },
+  "Email": {
+    "ApiKey": "",
+    "From": "noreply@ssdid.my"
+  },
   "Cors": {
     "Origins": [
       "https://drive.ssdid.my"
@@ -135,6 +139,7 @@ EOF
 - Replace `CHANGE_ME_STRONG_PASSWORD` with a strong password (see below)
 - Replace `YOUR_SENTRY_DSN_HERE` with your Sentry project DSN (create a project at [sentry.io](https://sentry.io) → Settings → Projects → ASP.NET Core). Leave empty to disable Sentry.
 - Set `AdminDid` to your wallet's DID (e.g. `did:ssdid:abc123...`) to auto-promote as SuperAdmin on first registration. Clear it after setup or leave it — it only takes effect at registration time.
+- Set `Email:ApiKey` to your [Resend](https://resend.com) API key to enable invitation emails. Leave empty to disable email — invitations will still be created, just not emailed. Set `Email:From` to a verified sender address in Resend.
 
 ```bash
 openssl rand -base64 32

@@ -25,6 +25,7 @@ using SsdidDrive.Api.Crypto.Providers;
 using SsdidDrive.Api.Health;
 using Microsoft.Extensions.FileProviders;
 using Serilog;
+using Resend;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -154,6 +155,17 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 builder.Services.AddScoped<SsdidAuthService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<AuditService>();
+
+// ── Email (Resend) ──
+var resendApiKey = builder.Configuration["Email:ApiKey"];
+if (!string.IsNullOrEmpty(resendApiKey))
+{
+    builder.Services.AddOptions();
+    builder.Services.AddHttpClient<ResendClient>();
+    builder.Services.Configure<ResendClientOptions>(o => o.ApiToken = resendApiKey);
+    builder.Services.AddTransient<IResend, ResendClient>();
+    builder.Services.AddScoped<EmailService>();
+}
 builder.Services.AddSingleton<WebAuthnChallengeStore>();
 builder.Services.AddHostedService<ServerRegistrationService>();
 
