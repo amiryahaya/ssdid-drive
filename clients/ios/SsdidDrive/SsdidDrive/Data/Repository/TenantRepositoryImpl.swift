@@ -96,7 +96,9 @@ final class TenantRepositoryImpl: TenantRepository {
         if let userId = keychainManager.userId {
             SentryConfig.shared.setUser(userId: userId, tenantId: response.data.currentTenantId)
         }
-        SentryConfig.shared.setTag("tenant_id", value: response.data.currentTenantId)
+        // SECURITY: Hash the tenant ID before setting as tag to prevent PII exposure
+        // (the unhashed tenant ID is already in the user context as tenant_hash)
+        SentryConfig.shared.setTag("tenant_hash", value: SentryConfig.shared.anonymizeIdentifier(response.data.currentTenantId))
 
         return context
     }

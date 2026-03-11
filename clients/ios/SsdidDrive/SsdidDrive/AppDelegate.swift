@@ -38,9 +38,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private func configureOneSignal() {
         #if canImport(OneSignalFramework)
-        // Enable verbose logging for debugging (disable in production)
+        // SECURITY: Use WARN level even in debug to prevent sensitive push data in logs
         #if DEBUG
-        OneSignal.Debug.setLogLevel(.LL_VERBOSE)
+        OneSignal.Debug.setLogLevel(.LL_WARN)
         #endif
 
         // Initialize OneSignal with app ID

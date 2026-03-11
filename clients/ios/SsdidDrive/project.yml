@@ -32,6 +32,9 @@ targets:
   SsdidDrive:
     type: application
     supportedDestinations: [iOS, macOS]
+    configFiles:
+      Debug: SsdidDrive/Config/Debug.xcconfig
+      Release: SsdidDrive/Config/Release.xcconfig
     sources:
       - path: SsdidDrive
         excludes:

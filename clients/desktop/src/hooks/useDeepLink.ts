@@ -81,10 +81,14 @@ export function useDeepLink() {
 
   const handleDeepLink = useCallback(
     async (url: string) => {
-      console.log('Handling deep link:', url);
+      if (import.meta.env.DEV) {
+        console.log('Handling deep link action');
+      }
 
       const parsed = parseDeepLink(url);
-      console.log('Parsed deep link:', parsed);
+      if (import.meta.env.DEV) {
+        console.log('Parsed deep link action:', parsed.action);
+      }
 
       // Check if user needs to authenticate first
       if (!isAuthenticated && parsed.action !== 'invite') {
@@ -169,7 +173,9 @@ export function useDeepLink() {
       try {
         // Listen for deep-link events
         unlistenFn = await listen<DeepLinkPayload>('deep-link://new-url', (event) => {
-          console.log('Deep link event received:', event.payload);
+          if (import.meta.env.DEV) {
+            console.log('Deep link event received');
+          }
           const urls = event.payload.urls;
           if (urls && urls.length > 0) {
             // Handle the first URL (typically only one)

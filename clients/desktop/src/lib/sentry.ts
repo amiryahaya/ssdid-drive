@@ -14,22 +14,103 @@ const ENVIRONMENT = import.meta.env.MODE || 'development';
 
 export type SeverityLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
 
+/**
+ * Regex patterns for sensitive field names.
+ * Matches both snake_case and camelCase variants.
+ */
+const SENSITIVE_FIELD_PATTERNS: RegExp[] = [
+  /password/i,
+  /token/i,
+  /key/i,
+  /secret/i,
+  /credential/i,
+  /folder_key/i,
+  /folderKey/i,
+  /file_key/i,
+  /fileKey/i,
+  /subscriber_secret/i,
+  /subscriberSecret/i,
+  /kem/i,
+  /kemCiphertext/i,
+  /wrapped_folder_key/i,
+  /wrappedFolderKey/i,
+  /bearer/i,
+  /authorization/i,
+  /did/i,
+  /challenge/i,
+  /nonce/i,
+  /seed/i,
+  /mnemonic/i,
+  /private/i,
+  /encrypted/i,
+];
+
+/**
+ * Check if a field name matches any sensitive pattern
+ */
+function isSensitiveField(fieldName: string): boolean {
+  return SENSITIVE_FIELD_PATTERNS.some((pattern) => pattern.test(fieldName));
+}
+
+/**
+ * Recursively scrub sensitive fields from an object
+ */
+function scrubObject(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(scrubObject);
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if (isSensitiveField(key)) {
+      result[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null) {
+      result[key] = scrubObject(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Strip query parameters from a URL string
+ */
+function stripQueryParams(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = '';
+    return parsed.toString();
+  } catch {
+    // If URL parsing fails, strip anything after '?'
+    const idx = url.indexOf('?');
+    return idx >= 0 ? url.substring(0, idx) : url;
+  }
+}
+
 // Sentry instance - lazily loaded
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Sentry: any = null;
 let initialized = false;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let loadPromise: Promise<any> | null = null;
 
 /**
- * Load Sentry dynamically
+ * Load Sentry dynamically.
+ * Uses a shared promise to prevent concurrent imports.
  */
 async function loadSentry() {
   if (Sentry !== null) return Sentry;
+  if (loadPromise) return loadPromise;
 
   try {
-    Sentry = await import('@sentry/react');
+    loadPromise = import('@sentry/react');
+    Sentry = await loadPromise;
     return Sentry;
   } catch {
-    console.log('Sentry package not available, error tracking will be disabled');
     Sentry = false; // Mark as attempted but failed
     return null;
   }
@@ -45,12 +126,10 @@ export async function initSentry() {
   const sentry = await loadSentry();
 
   if (!sentry || sentry === false) {
-    console.log('Sentry not available, error tracking disabled');
     return;
   }
 
   if (!SENTRY_DSN) {
-    console.log('Sentry DSN not configured, error tracking disabled');
     return;
   }
 
@@ -59,34 +138,79 @@ export async function initSentry() {
     environment: ENVIRONMENT,
     release: `ssdid-drive-desktop@${APP_VERSION}`,
 
-    // Performance monitoring
-    tracesSampleRate: ENVIRONMENT === 'production' ? 0.1 : 1.0,
-
-    // Session replay (disabled for privacy)
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 0,
+    // Performance monitoring - reduced sample rate for non-production
+    tracesSampleRate: ENVIRONMENT === 'production' ? 0.1 : 0.1,
 
     // Filtering - using any type since Sentry types aren't available at compile time
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     beforeSend(event: any) {
       // Don't send events in development unless explicitly enabled
       if (ENVIRONMENT === 'development' && !import.meta.env.VITE_SENTRY_DEBUG) {
-        console.log('Sentry event (dev mode, not sent):', event);
         return null;
       }
 
-      // Filter out sensitive data
+      // Scrub event.request.data
       if (event.request?.data) {
-        const sensitiveFields = ['password', 'token', 'key', 'secret', 'credential'];
-        const data = event.request.data as Record<string, unknown>;
-        for (const field of sensitiveFields) {
-          if (field in data) {
-            data[field] = '[REDACTED]';
+        event.request.data = scrubObject(event.request.data);
+      }
+
+      // Scrub event.extra
+      if (event.extra) {
+        event.extra = scrubObject(event.extra);
+      }
+
+      // Scrub custom contexts (preserve standard ones like browser, os, device)
+      if (event.contexts) {
+        const standardContexts = new Set([
+          'browser', 'os', 'device', 'runtime', 'app', 'trace', 'otel',
+        ]);
+        for (const key of Object.keys(event.contexts)) {
+          if (!standardContexts.has(key)) {
+            event.contexts[key] = scrubObject(event.contexts[key]);
           }
         }
       }
 
+      // Strip PII from user — only keep opaque id
+      if (event.user) {
+        event.user = { id: event.user.id };
+      }
+
       return event;
+    },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    beforeBreadcrumb(breadcrumb: any) {
+      // Drop console breadcrumbs entirely — they may contain crypto data
+      if (breadcrumb.category === 'console') {
+        return null;
+      }
+
+      // Strip query params from navigation/fetch/xhr URLs
+      if (breadcrumb.data?.url && typeof breadcrumb.data.url === 'string') {
+        breadcrumb.data.url = stripQueryParams(breadcrumb.data.url);
+      }
+      if (breadcrumb.data?.from && typeof breadcrumb.data.from === 'string') {
+        breadcrumb.data.from = stripQueryParams(breadcrumb.data.from);
+      }
+      if (breadcrumb.data?.to && typeof breadcrumb.data.to === 'string') {
+        breadcrumb.data.to = stripQueryParams(breadcrumb.data.to);
+      }
+
+      // Scrub fetch/XHR request/response body data
+      if (breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr') {
+        if (breadcrumb.data?.body) {
+          breadcrumb.data.body = '[REDACTED]';
+        }
+        if (breadcrumb.data?.request_body) {
+          breadcrumb.data.request_body = '[REDACTED]';
+        }
+        if (breadcrumb.data?.response_body) {
+          breadcrumb.data.response_body = '[REDACTED]';
+        }
+      }
+
+      return breadcrumb;
     },
 
     // Ignore certain errors
@@ -99,17 +223,11 @@ export async function initSentry() {
       /^moz-extension:\/\//,
     ],
 
-    // Additional integrations
+    // Additional integrations — no replay integration for privacy
     integrations: [
       sentry.browserTracingIntegration(),
-      sentry.replayIntegration({
-        maskAllText: true,
-        blockAllMedia: true,
-      }),
     ],
   });
-
-  console.log(`Sentry initialized for ${ENVIRONMENT} environment`);
 }
 
 /**
@@ -117,7 +235,9 @@ export async function initSentry() {
  */
 export function captureError(error: Error, context?: Record<string, unknown>) {
   if (!Sentry || Sentry === false) {
-    console.error('Error:', error, context);
+    if (import.meta.env.DEV) {
+      console.error('Error:', error, context);
+    }
     return;
   }
   Sentry.captureException(error, {
@@ -130,14 +250,17 @@ export function captureError(error: Error, context?: Record<string, unknown>) {
  */
 export function captureMessage(message: string, level: SeverityLevel = 'info') {
   if (!Sentry || Sentry === false) {
-    console.log(`[${level}] ${message}`);
+    if (import.meta.env.DEV) {
+      console.log(`[${level}] ${message}`);
+    }
     return;
   }
   Sentry.captureMessage(message, level);
 }
 
 /**
- * Set user information for error tracking
+ * Set user information for error tracking.
+ * Only sends opaque user ID — no PII (email, name).
  */
 export function setUser(user: { id: string; email?: string; name?: string } | null) {
   if (!Sentry || Sentry === false) return;
@@ -145,8 +268,6 @@ export function setUser(user: { id: string; email?: string; name?: string } | nu
   if (user) {
     Sentry.setUser({
       id: user.id,
-      email: user.email,
-      username: user.name,
     });
   } else {
     Sentry.setUser(null);
@@ -163,7 +284,6 @@ export function addBreadcrumb(
   data?: Record<string, unknown>
 ) {
   if (!Sentry || Sentry === false) {
-    console.log(`[Breadcrumb:${category}] ${message}`, data);
     return;
   }
   Sentry.addBreadcrumb({
@@ -197,4 +317,3 @@ export function getSentryErrorBoundary() {
   if (!Sentry || Sentry === false) return null;
   return Sentry.ErrorBoundary;
 }
-

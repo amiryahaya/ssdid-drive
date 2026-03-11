@@ -32,30 +32,30 @@ object Logger {
      * Log a debug message.
      */
     fun d(tag: String, message: String, throwable: Throwable? = null) {
+        val sanitized = sanitize(message)
         if (BuildConfig.DEBUG) {
-            val sanitized = sanitize(message)
             if (throwable != null) {
                 Log.d("$TAG_PREFIX:$tag", sanitized, throwable)
             } else {
                 Log.d("$TAG_PREFIX:$tag", sanitized)
             }
         }
-        addBreadcrumb(LogLevel.DEBUG, tag, message)
+        addBreadcrumb(LogLevel.DEBUG, tag, sanitized)
     }
 
     /**
      * Log an info message.
      */
     fun i(tag: String, message: String, throwable: Throwable? = null) {
+        val sanitized = sanitize(message)
         if (BuildConfig.DEBUG) {
-            val sanitized = sanitize(message)
             if (throwable != null) {
                 Log.i("$TAG_PREFIX:$tag", sanitized, throwable)
             } else {
                 Log.i("$TAG_PREFIX:$tag", sanitized)
             }
         }
-        addBreadcrumb(LogLevel.INFO, tag, message)
+        addBreadcrumb(LogLevel.INFO, tag, sanitized)
     }
 
     /**
@@ -70,7 +70,7 @@ object Logger {
                 Log.w("$TAG_PREFIX:$tag", sanitized)
             }
         }
-        addBreadcrumb(LogLevel.WARNING, tag, message, throwable)
+        addBreadcrumb(LogLevel.WARNING, tag, sanitized, throwable)
     }
 
     /**
@@ -79,13 +79,15 @@ object Logger {
      */
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         val sanitized = sanitize(message)
-        // Always log errors for crash reporting integration
-        if (throwable != null) {
-            Log.e("$TAG_PREFIX:$tag", sanitized, throwable)
-        } else {
-            Log.e("$TAG_PREFIX:$tag", sanitized)
+        // Only log to logcat in debug builds
+        if (BuildConfig.DEBUG) {
+            if (throwable != null) {
+                Log.e("$TAG_PREFIX:$tag", sanitized, throwable)
+            } else {
+                Log.e("$TAG_PREFIX:$tag", sanitized)
+            }
         }
-        addBreadcrumb(LogLevel.ERROR, tag, message, throwable)
+        addBreadcrumb(LogLevel.ERROR, tag, sanitized, throwable)
 
         // In production, send to crash reporting service
         if (!BuildConfig.DEBUG) {

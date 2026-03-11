@@ -98,7 +98,9 @@ export async function clearExternalUserId(): Promise<void> {
 export async function setUserTags(tags: Record<string, string>): Promise<void> {
   try {
     await OneSignal.User.addTags(tags);
-    console.log('[OneSignal] Tags set:', tags);
+    if (import.meta.env.DEV) {
+      console.log('[OneSignal] Tags set:', tags);
+    }
   } catch (error) {
     console.error('[OneSignal] Failed to set tags:', error);
   }
@@ -110,7 +112,9 @@ export async function setUserTags(tags: Record<string, string>): Promise<void> {
 export async function setUserEmail(email: string): Promise<void> {
   try {
     await OneSignal.User.addEmail(email);
-    console.log('[OneSignal] Email set:', email);
+    if (import.meta.env.DEV) {
+      console.log('[OneSignal] Email set');
+    }
   } catch (error) {
     console.error('[OneSignal] Failed to set email:', error);
   }

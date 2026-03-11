@@ -1,7 +1,6 @@
 package my.ssdid.drive.data.sync
 
 import android.content.Context
-import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -10,6 +9,7 @@ import my.ssdid.drive.data.local.entity.PendingOperationEntity
 import my.ssdid.drive.domain.repository.FileRepository
 import my.ssdid.drive.domain.repository.FolderRepository
 import my.ssdid.drive.domain.repository.ShareRepository
+import my.ssdid.drive.util.Logger
 import my.ssdid.drive.util.Result
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -32,7 +32,7 @@ class SyncWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        Log.d(TAG, "SyncWorker started")
+        Logger.d(TAG, "SyncWorker started")
         syncManager.reportSyncStarted()
 
         try {
@@ -54,7 +54,7 @@ class SyncWorker @AssistedInject constructor(
                 }
             }
 
-            Log.d(TAG, "SyncWorker completed: processed=$processedCount, failed=$failedCount")
+            Logger.d(TAG, "SyncWorker completed: processed=$processedCount, failed=$failedCount")
 
             if (failedCount > 0) {
                 syncManager.reportSyncFailed("$failedCount operations failed")
@@ -64,14 +64,14 @@ class SyncWorker @AssistedInject constructor(
                 Result.success()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "SyncWorker failed", e)
+            Logger.e(TAG, "SyncWorker failed", e)
             syncManager.reportSyncFailed(e.message)
             Result.retry()
         }
     }
 
     private suspend fun processOperation(operation: PendingOperationEntity): Boolean {
-        Log.d(TAG, "Processing operation: ${operation.id} - ${operation.operationType}")
+        Logger.d(TAG, "Processing operation: ${operation.id} - ${operation.operationType}")
         offlineQueue.markInProgress(operation.id)
 
         return try {
@@ -101,15 +101,15 @@ class SyncWorker @AssistedInject constructor(
 
             if (result) {
                 offlineQueue.markCompleted(operation.id)
-                Log.d(TAG, "Operation completed: ${operation.id}")
+                Logger.d(TAG, "Operation completed: ${operation.id}")
             } else {
                 offlineQueue.markFailed(operation.id, "Operation failed")
-                Log.w(TAG, "Operation failed: ${operation.id}")
+                Logger.w(TAG, "Operation failed: ${operation.id}")
             }
 
             result
         } catch (e: Exception) {
-            Log.e(TAG, "Operation error: ${operation.id}", e)
+            Logger.e(TAG, "Operation error: ${operation.id}", e)
             offlineQueue.markFailed(operation.id, e.message)
             false
         }
@@ -223,13 +223,13 @@ class SyncWorker @AssistedInject constructor(
     private suspend fun processCreateRecoveryShare(operation: PendingOperationEntity): Boolean {
         // Recovery operations are complex and involve crypto
         // For now, return false to indicate manual processing needed
-        Log.w(TAG, "Recovery share creation requires manual processing")
+        Logger.w(TAG, "Recovery share creation requires manual processing")
         return false
     }
 
     private suspend fun processApproveRecovery(operation: PendingOperationEntity): Boolean {
         // Recovery operations are complex and involve crypto
-        Log.w(TAG, "Recovery approval requires manual processing")
+        Logger.w(TAG, "Recovery approval requires manual processing")
         return false
     }
 

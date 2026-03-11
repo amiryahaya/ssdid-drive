@@ -9,7 +9,7 @@ import App from './App';
 import './index.css';
 
 // Initialize Sentry error tracking as early as possible
-initSentry();
+initSentry().catch(() => {});
 
 const queryClient = new QueryClient({
   defaultOptions: {

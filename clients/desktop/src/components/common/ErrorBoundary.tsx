@@ -29,7 +29,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    if (import.meta.env.DEV) {
+      console.error('ErrorBoundary caught an error:', error, errorInfo);
+    }
 
     // Report to Sentry
     addBreadcrumb('error-boundary', 'Component error caught', 'error' as SeverityLevel, {
@@ -102,7 +104,9 @@ export class PageErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error('PageErrorBoundary caught an error:', error, errorInfo);
+    if (import.meta.env.DEV) {
+      console.error('PageErrorBoundary caught an error:', error, errorInfo);
+    }
 
     // Report to Sentry
     addBreadcrumb('error-boundary', 'Page-level error caught', 'fatal' as SeverityLevel, {

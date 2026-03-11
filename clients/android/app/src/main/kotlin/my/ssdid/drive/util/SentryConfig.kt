@@ -107,7 +107,7 @@ object SentryConfig {
             options.isEnableAppLifecycleBreadcrumbs = true
             options.isEnableSystemEventBreadcrumbs = true
             options.isEnableAppComponentBreadcrumbs = true
-            options.isEnableUserInteractionBreadcrumbs = true
+            options.isEnableUserInteractionBreadcrumbs = false  // Disabled: captures file names from tapped UI elements
 
             // Network breadcrumbs (without sensitive headers)
             options.isEnableNetworkEventBreadcrumbs = true
@@ -144,9 +144,20 @@ object SentryConfig {
             }
         }
 
-        // Scrub exception messages
+        // Scrub exception messages and stack frame locals
         event.exceptions?.forEach { exception ->
             scrubException(exception)
+            // Scrub any vars (locals) attached to stack frames
+            exception.stacktrace?.frames?.forEach { frame ->
+                frame.vars?.let { vars ->
+                    val scrubbed = vars.mapValues { (key, value) ->
+                        if (shouldRedactKey(key)) REDACTED
+                        else if (value is String) scrubValue(value)
+                        else value
+                    }
+                    frame.vars = scrubbed.toMutableMap()
+                }
+            }
         }
 
         // Scrub tags
@@ -180,18 +191,45 @@ object SentryConfig {
         }
     }
 
+    // Categories whose data map may carry deep-link Intent extras or other PII
+    private val LIFECYCLE_CATEGORIES = setOf(
+        "app.lifecycle",
+        "device.event",
+        "ui.lifecycle",
+        "activity.lifecycle"
+    )
+
+    // Regex for path segments that look like IDs (32+ hex or base64url chars)
+    private val PATH_ID_PATTERN = Regex("/[A-Za-z0-9\\-_]{32,}")
+
     /**
      * Scrub sensitive data from breadcrumb.
      */
     private fun scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb? {
-        // Remove breadcrumbs with sensitive categories
-        if (breadcrumb.category in listOf("http", "xhr") &&
-            breadcrumb.data?.keys?.any { shouldRedactKey(it) } == true) {
-            // Scrub sensitive data values by setting them individually
-            breadcrumb.data?.forEach { (key, value) ->
+        // Clear data from activity/lifecycle breadcrumbs that may carry deep-link extras
+        if (breadcrumb.category in LIFECYCLE_CATEGORIES) {
+            breadcrumb.data?.keys?.toList()?.forEach { key ->
+                breadcrumb.removeData(key)
+            }
+        }
+
+        // Scrub ALL data values unconditionally for http/xhr breadcrumbs,
+        // and scrub sensitive keys for all other breadcrumbs
+        breadcrumb.data?.forEach { (key, value) ->
+            if (breadcrumb.category in listOf("http", "xhr")) {
+                // For network breadcrumbs, scrub all values
+                val strValue = value?.toString() ?: ""
                 if (shouldRedactKey(key)) {
                     breadcrumb.setData(key, REDACTED)
+                } else if (key == "url" || key == "request_url") {
+                    breadcrumb.setData(key, scrubUrlPath(strValue))
+                } else {
+                    breadcrumb.setData(key, scrubValue(strValue))
                 }
+            } else if (shouldRedactKey(key)) {
+                breadcrumb.setData(key, REDACTED)
+            } else if (value is String) {
+                breadcrumb.setData(key, scrubValue(value))
             }
         }
 
@@ -201,6 +239,15 @@ object SentryConfig {
         }
 
         return breadcrumb
+    }
+
+    /**
+     * Scrub URL path segments that look like identifiers (32+ hex/base64url chars).
+     */
+    private fun scrubUrlPath(url: String): String {
+        var result = scrubValue(url)
+        result = PATH_ID_PATTERN.replace(result, "/[ID_REDACTED]")
+        return result
     }
 
     /**
@@ -219,11 +266,14 @@ object SentryConfig {
         // Redact Bearer tokens
         result = result.replace(Regex("Bearer\\s+[A-Za-z0-9\\-_\\.]+"), "Bearer $REDACTED")
 
-        // Redact base64-encoded data that looks like keys/tokens (long strings)
-        result = result.replace(Regex("[A-Za-z0-9+/=]{64,}"), REDACTED)
+        // Redact base64-encoded data that looks like keys/tokens (40+ chars)
+        result = result.replace(Regex("[A-Za-z0-9+/=]{40,}"), REDACTED)
 
-        // Redact hex-encoded data that looks like keys
-        result = result.replace(Regex("[a-fA-F0-9]{64,}"), REDACTED)
+        // Redact base64url-encoded data (40+ chars)
+        result = result.replace(Regex("[A-Za-z0-9\\-_]{40,}"), REDACTED)
+
+        // Redact hex-encoded data that looks like keys (40+ chars)
+        result = result.replace(Regex("[a-fA-F0-9]{40,}"), REDACTED)
 
         // Redact anything that looks like a password field value
         result = result.replace(Regex("(password|pwd|pass)[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s]+", RegexOption.IGNORE_CASE), "password=$REDACTED")
@@ -238,7 +288,7 @@ object SentryConfig {
         return try {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             val hash = digest.digest(userId.toByteArray())
-            hash.take(8).joinToString("") { "%02x".format(it) }
+            hash.joinToString("") { "%02x".format(it) }
         } catch (e: Exception) {
             "anonymous"
         }

@@ -87,10 +87,12 @@ final class SentryConfig {
             options.enableNetworkTracking = false
             options.enableNetworkBreadcrumbs = false
 
-            // UI interaction tracking (safe - no sensitive data)
+            // UI interaction tracking
             options.enableSwizzling = true
             options.enableUIViewControllerTracing = true
-            options.enableUserInteractionTracing = true
+            // SECURITY: Disable user interaction tracing to prevent capturing
+            // tap targets that may contain sensitive text (file names, share tokens)
+            options.enableUserInteractionTracing = false
 
             // Crash handling
             options.enableCrashHandler = true
@@ -99,8 +101,8 @@ final class SentryConfig {
             // File paths may reveal encrypted file storage locations
             options.enableFileIOTracing = false
 
-            // Core Data tracking (safe - schema only, no data)
-            options.enableCoreDataTracing = true
+            // SECURITY: Disable Core Data tracing to prevent schema/query leakage
+            options.enableCoreDataTracing = false
 
             // App version
             options.releaseName = "\(Constants.App.bundleId)@\(Constants.App.version)+\(Constants.App.build)"
@@ -115,7 +117,8 @@ final class SentryConfig {
 
                 // Scrub sensitive data from breadcrumb
                 if var data = breadcrumb.data {
-                    data = self?.scrubDictionary(data) ?? data
+                    // SECURITY: If self is deallocated, return empty dict rather than unscrubbed data
+                    data = self?.scrubDictionary(data) ?? [:]
                     // Scrub URLs in breadcrumb data
                     if let url = data["url"] as? String {
                         data["url"] = self?.scrubURL(url) ?? "[REDACTED]"
@@ -131,13 +134,18 @@ final class SentryConfig {
 
             // SECURITY: Comprehensive data scrubbing before sending events
             options.beforeSend = { [weak self] event in
-                guard let self = self else { return event }
+                // SECURITY: If self is deallocated, drop the event rather than sending unscrubbed data
+                guard let self = self else { return nil }
 
                 // Scrub breadcrumbs
                 event.breadcrumbs = event.breadcrumbs?.compactMap { breadcrumb in
                     if var data = breadcrumb.data {
                         data = self.scrubDictionary(data)
                         breadcrumb.data = data
+                    }
+                    // SECURITY: Scrub breadcrumb messages for sensitive patterns
+                    if let message = breadcrumb.message, self.containsSensitivePattern(message) {
+                        breadcrumb.message = "[REDACTED]"
                     }
                     return breadcrumb
                 }
@@ -329,13 +337,15 @@ final class SentryConfig {
     }
 
     /// Capture a message
+    /// SECURITY: Message is scrubbed for sensitive patterns before sending
     /// - Parameters:
     ///   - message: Message to capture
     ///   - level: Severity level
     func captureMessage(_ message: String, level: BreadcrumbLevel = .info) {
         #if canImport(Sentry)
         guard isInitialized else { return }
-        SentrySDK.capture(message: message) { scope in
+        let scrubbedMessage = scrubString(message)
+        SentrySDK.capture(message: scrubbedMessage) { scope in
             scope.setLevel(level.sentryLevel)
         }
         #endif
@@ -389,7 +399,33 @@ final class SentryConfig {
         if value.contains("@") && value.contains(".") {
             return true
         }
+        // Check for DID strings (decentralized identifiers)
+        if lowercased.hasPrefix("did:") {
+            return true
+        }
+        // Check for long base64 strings (>40 chars) that could be key material
+        if value.count > 40 {
+            let base64Set = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "+/="))
+            if value.unicodeScalars.allSatisfy({ base64Set.contains($0) }) {
+                return true
+            }
+        }
+        // Check for long hex strings (>32 hex chars) that could be key material
+        if value.count > 32 {
+            let hexSet = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+            if value.unicodeScalars.allSatisfy({ hexSet.contains($0) }) {
+                return true
+            }
+        }
         return false
+    }
+
+    /// Scrub a raw string for sensitive patterns
+    private func scrubString(_ value: String) -> String {
+        if containsSensitivePattern(value) {
+            return "[REDACTED]"
+        }
+        return value
     }
 
     /// Scrub sensitive data from a dictionary
@@ -406,11 +442,27 @@ final class SentryConfig {
                 }
             } else if let nestedDict = value as? [String: Any] {
                 result[key] = scrubDictionary(nestedDict)
+            } else if let array = value as? [Any] {
+                result[key] = scrubArray(array)
             } else {
                 result[key] = value
             }
         }
         return result
+    }
+
+    /// Scrub sensitive data from an array
+    private func scrubArray(_ array: [Any]) -> [Any] {
+        return array.map { element in
+            if let stringValue = element as? String {
+                return containsSensitivePattern(stringValue) ? "[REDACTED]" : stringValue
+            } else if let nestedDict = element as? [String: Any] {
+                return scrubDictionary(nestedDict)
+            } else if let nestedArray = element as? [Any] {
+                return scrubArray(nestedArray)
+            }
+            return element
+        }
     }
 
     /// Scrub sensitive information from URLs
@@ -454,13 +506,14 @@ final class SentryConfig {
     }
 
     /// Create an anonymized identifier using SHA256 hash
-    private func anonymizeIdentifier(_ identifier: String) -> String {
+    /// SECURITY: Uses 128-bit (32 hex char) prefix for collision resistance
+    internal func anonymizeIdentifier(_ identifier: String) -> String {
         guard let data = identifier.data(using: .utf8) else {
             return "[INVALID]"
         }
         let hash = SHA256.hash(data: data)
-        // Return first 16 characters of hex hash
-        return hash.compactMap { String(format: "%02x", $0) }.joined().prefix(16).description
+        // Return first 32 characters of hex hash (128 bits minimum)
+        return hash.compactMap { String(format: "%02x", $0) }.joined().prefix(32).description
     }
 
     /// Debug-only logging

@@ -2,7 +2,6 @@ package my.ssdid.drive.util
 
 import my.ssdid.drive.BuildConfig
 import my.ssdid.drive.data.local.PreferencesManager
-import io.sentry.Sentry
 import io.sentry.SentryLevel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -121,10 +120,10 @@ class AnalyticsManager @Inject constructor(
     private fun sendEvent(name: String, tags: Map<String, String> = emptyMap()) {
         if (!isEnabled()) return
 
-        Sentry.withScope { scope ->
+        io.sentry.Sentry.withScope { scope ->
             scope.setTag("event_type", name)
             tags.forEach { (key, value) -> scope.setTag(key, value) }
-            Sentry.captureMessage("analytics:$name", SentryLevel.INFO)
+            SentryConfig.captureMessage("analytics:$name", SentryLevel.INFO)
         }
     }
 
