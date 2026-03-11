@@ -239,4 +239,67 @@ describe('notificationStore', () => {
       expect(useNotificationStore.getState().error).toBeNull();
     });
   });
+
+  describe('polling', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      useNotificationStore.setState({ _pollTimer: null });
+    });
+
+    afterEach(() => {
+      useNotificationStore.getState().stopPolling();
+      vi.useRealTimers();
+    });
+
+    it('should load notifications immediately when polling starts', () => {
+      mockInvoke.mockResolvedValue([]);
+
+      useNotificationStore.getState().startPolling();
+
+      expect(mockInvoke).toHaveBeenCalledWith('get_notifications');
+    });
+
+    it('should poll at 30s intervals', async () => {
+      mockInvoke.mockResolvedValue([]);
+
+      useNotificationStore.getState().startPolling();
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mockInvoke).toHaveBeenCalledTimes(3);
+    });
+
+    it('should not start multiple polling timers', () => {
+      mockInvoke.mockResolvedValue([]);
+
+      useNotificationStore.getState().startPolling();
+      useNotificationStore.getState().startPolling();
+
+      // Only 1 immediate call (second startPolling is a no-op)
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
+
+    it('should stop polling and clear timer', async () => {
+      mockInvoke.mockResolvedValue([]);
+
+      useNotificationStore.getState().startPolling();
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+
+      useNotificationStore.getState().stopPolling();
+      expect(useNotificationStore.getState()._pollTimer).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      // No additional calls after stopping
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle stopPolling when not polling', () => {
+      // Should not throw
+      useNotificationStore.getState().stopPolling();
+      expect(useNotificationStore.getState()._pollTimer).toBeNull();
+    });
+  });
 });

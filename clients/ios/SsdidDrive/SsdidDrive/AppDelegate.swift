@@ -1,4 +1,5 @@
 import UIKit
+import os.log
 #if canImport(OneSignalFramework)
 import OneSignalFramework
 #endif
@@ -6,12 +7,17 @@ import OneSignalFramework
 import Sentry
 #endif
 
+private let logger = Logger(subsystem: "my.ssdid.drive", category: "AppDelegate")
+
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // MARK: - Properties
 
     var window: UIWindow?
+
+    /// Stored launch options to pass to OneSignal on initialization
+    private var storedLaunchOptions: [UIApplication.LaunchOptionsKey: Any]?
 
     // MARK: - Application Lifecycle
 
@@ -25,8 +31,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Security check - refuse to run on jailbroken devices
         performSecurityCheck()
 
+        // Store launch options for OneSignal (D1)
+        storedLaunchOptions = launchOptions
+
         // Configure push notifications with OneSignal
-        configureOneSignal()
+        configureOneSignal(launchOptions: launchOptions)
 
         // Configure appearance
         configureAppearance()
@@ -36,15 +45,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // MARK: - OneSignal Configuration
 
-    private func configureOneSignal() {
+    private func configureOneSignal(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         #if canImport(OneSignalFramework)
         // SECURITY: Use WARN level even in debug to prevent sensitive push data in logs
         #if DEBUG
         OneSignal.Debug.setLogLevel(.LL_WARN)
         #endif
 
-        // Initialize OneSignal with app ID
-        OneSignal.initialize(Constants.OneSignal.appId, withLaunchOptions: nil)
+        // Initialize OneSignal with app ID and actual launch options (D1)
+        OneSignal.initialize(Constants.OneSignal.appId, withLaunchOptions: launchOptions)
 
         // Set notification lifecycle listener
         OneSignal.Notifications.addForegroundLifecycleListener(self)
@@ -52,13 +61,53 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Set notification click listener
         OneSignal.Notifications.addClickListener(self)
 
-        // Request push notification permission
-        // This will show the iOS permission dialog
-        OneSignal.Notifications.requestPermission({ accepted in
-            print("OneSignal: User \(accepted ? "accepted" : "declined") push notifications")
-        }, fallbackToSettings: true)
+        // D3: Permission request is NOT called here.
+        // Call requestPushPermissionIfNeeded() after login/onboarding completes.
         #else
+        #if DEBUG
         print("OneSignal: Framework not available, push notifications disabled")
+        #endif
+        #endif
+    }
+
+    // MARK: - Push Permission (D3)
+
+    /// Request push notification permission. Call this after onboarding/login completes.
+    /// Only prompts if permission has not already been granted.
+    func requestPushPermissionIfNeeded() {
+        #if canImport(OneSignalFramework)
+        // Don't prompt again if already granted
+        guard !OneSignal.Notifications.permission else { return }
+
+        OneSignal.Notifications.requestPermission({ accepted in
+            #if DEBUG
+            print("OneSignal: User \(accepted ? "accepted" : "declined") push notifications")
+            #endif
+        }, fallbackToSettings: true)
+        #endif
+    }
+
+    // MARK: - OneSignal Identity (D7)
+
+    /// Associate the OneSignal device with the authenticated user.
+    /// Call this after successful authentication.
+    func loginOneSignal(userId: String) {
+        #if canImport(OneSignalFramework)
+        OneSignal.login(externalId: userId)
+        #if DEBUG
+        print("OneSignal: Logged in with userId: \(userId)")
+        #endif
+        #endif
+    }
+
+    /// Disassociate the OneSignal device from the current user.
+    /// Call this on logout.
+    func logoutOneSignal() {
+        #if canImport(OneSignalFramework)
+        OneSignal.logout()
+        #if DEBUG
+        print("OneSignal: Logged out")
+        #endif
         #endif
     }
 
@@ -175,6 +224,13 @@ extension AppDelegate: OSNotificationLifecycleListener {
         // Save notification to local database
         if let notification = parseNotification(from: event.notification) {
             Task { @MainActor in
+                // D8: Check if user is authenticated before saving
+                let userId = DependencyContainer.shared.authRepository.currentUserId
+                guard userId != nil else {
+                    logger.warning("Notification received but no authenticated user — dropping: \(notification.title, privacy: .public)")
+                    return
+                }
+
                 do {
                     try await DependencyContainer.shared.notificationRepository.saveNotification(notification)
                     #if DEBUG
@@ -188,9 +244,8 @@ extension AppDelegate: OSNotificationLifecycleListener {
             }
         }
 
-        // Allow notification to display (show the system notification banner)
-        event.preventDefault()
-        event.notification.display()
+        // D9: Removed dead preventDefault() + display() pattern.
+        // Default behavior already shows the notification banner in foreground.
     }
 }
 
@@ -205,7 +260,7 @@ extension AppDelegate: OSNotificationClickListener {
             return
         }
 
-        // Save and mark as read
+        // D10: Save and mark as read, then post navigation notification after DB writes complete
         Task { @MainActor in
             do {
                 // Save first (in case it wasn't saved from foreground)
@@ -220,13 +275,13 @@ extension AppDelegate: OSNotificationClickListener {
                 print("AppDelegate: Failed to handle notification click - \(error)")
                 #endif
             }
-        }
 
-        // Post notification for coordinator to handle navigation (reuse parsed notification)
-        NotificationCenter.default.post(
-            name: .didTapPushNotification,
-            object: notification
-        )
+            // D10: Post navigation notification AFTER DB writes complete
+            NotificationCenter.default.post(
+                name: .didTapPushNotification,
+                object: notification
+            )
+        }
     }
 }
 #endif

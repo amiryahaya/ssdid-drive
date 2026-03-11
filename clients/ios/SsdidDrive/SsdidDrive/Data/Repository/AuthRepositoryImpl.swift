@@ -235,7 +235,9 @@ final class AuthRepositoryImpl: AuthRepository {
                 mlKemPublicKey: bundle.mlKemPublicKey
             )
         } catch {
+            #if DEBUG
             print("[KemSync] Failed to sync KEM keys to shared keychain: \(error)")
+            #endif
         }
     }
 }

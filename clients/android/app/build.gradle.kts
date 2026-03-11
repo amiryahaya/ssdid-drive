@@ -92,8 +92,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_DEV\"")
 
             // OneSignal App ID (use your dev/test app)
-            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
-            manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
+            buildConfigField("String", "ONESIGNAL_APP_ID", "\"${localProp("onesignal.app.id.dev", localProp("onesignal.app.id"))}\"")
         }
 
         create("staging") {
@@ -116,8 +115,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_STAGING_BACKUP\"")
 
             // OneSignal App ID (staging)
-            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
-            manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
+            buildConfigField("String", "ONESIGNAL_APP_ID", "\"${localProp("onesignal.app.id.staging", localProp("onesignal.app.id"))}\"")
         }
 
         create("prod") {
@@ -139,8 +137,7 @@ android {
             buildConfigField("String", "CERT_PIN_BACKUP", "\"PLACEHOLDER_PROD_BACKUP\"")
 
             // OneSignal App ID (production)
-            manifestPlaceholders["onesignal_app_id"] = localProp("onesignal.app.id")
-            manifestPlaceholders["onesignal_google_project_number"] = "REMOTE"
+            buildConfigField("String", "ONESIGNAL_APP_ID", "\"${localProp("onesignal.app.id.prod", localProp("onesignal.app.id"))}\"")
         }
     }
 

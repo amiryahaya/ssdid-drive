@@ -125,6 +125,11 @@ final class DependencyContainer: ObservableObject {
             await tenantRepository.clearTenantData()
         }
 
+        // D7: Disassociate OneSignal device from the current user on logout
+        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+            appDelegate.logoutOneSignal()
+        }
+
         // Clear Sentry user context
         SentryConfig.shared.clearUser()
 

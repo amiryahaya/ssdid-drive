@@ -172,12 +172,19 @@ final class NotificationRepositoryImpl: NotificationRepository {
         let context = coreDataStack.writeContext
         try await context.perform {
             // Fetch all potentially existing notifications in a single query for efficiency
-            let ids = notifications.map { $0.id }
+            // D11: Filter out empty IDs to prevent dictionary crash
+            let ids = notifications.map { $0.id }.filter { !$0.isEmpty }
             let fetchRequest: NSFetchRequest<NotificationEntity> = NotificationEntity.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "id IN %@", ids)
 
             let existingEntities = try context.fetch(fetchRequest)
-            let existingById = Dictionary(uniqueKeysWithValues: existingEntities.map { ($0.id, $0) })
+            // D11: Filter out entities with empty IDs before creating dictionary
+            let existingById = Dictionary(
+                uniqueKeysWithValues: existingEntities.compactMap { entity -> (String, NotificationEntity)? in
+                    guard !entity.id.isEmpty else { return nil }
+                    return (entity.id, entity)
+                }
+            )
 
             for notification in notifications {
                 if let existingEntity = existingById[notification.id] {

@@ -1,0 +1,7 @@
+// Release build configuration
+// Copy this file to Release.xcconfig and fill in real values.
+// Release.xcconfig is gitignored — never commit real secrets.
+// In CI, these values MUST be overridden by environment variables.
+
+SENTRY_DSN = your-sentry-dsn-here
+ONESIGNAL_APP_ID = your-onesignal-app-id-here

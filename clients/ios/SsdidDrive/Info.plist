@@ -79,6 +79,8 @@
 	<string>public.app-category.productivity</string>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
+	<key>ONESIGNAL_APP_ID</key>
+	<string>$(ONESIGNAL_APP_ID)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

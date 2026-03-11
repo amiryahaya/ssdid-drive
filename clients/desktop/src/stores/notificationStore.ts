@@ -17,11 +17,14 @@ export interface Notification {
   metadata?: Record<string, unknown>;
 }
 
+const POLL_INTERVAL_MS = 30_000; // 30 seconds
+
 interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
   error: string | null;
+  _pollTimer: ReturnType<typeof setInterval> | null;
 
   // Actions
   loadNotifications: () => Promise<void>;
@@ -29,13 +32,16 @@ interface NotificationState {
   markAllAsRead: () => Promise<void>;
   removeNotification: (id: string) => void;
   clearError: () => void;
+  startPolling: () => void;
+  stopPolling: () => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set) => ({
+export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   isLoading: false,
   error: null,
+  _pollTimer: null,
 
   loadNotifications: async () => {
     set({ isLoading: true, error: null });
@@ -87,4 +93,24 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  startPolling: () => {
+    const { _pollTimer } = get();
+    if (_pollTimer) return; // already polling
+
+    // Load immediately, then poll
+    get().loadNotifications();
+    const timer = setInterval(() => {
+      get().loadNotifications();
+    }, POLL_INTERVAL_MS);
+    set({ _pollTimer: timer });
+  },
+
+  stopPolling: () => {
+    const { _pollTimer } = get();
+    if (_pollTimer) {
+      clearInterval(_pollTimer);
+      set({ _pollTimer: null });
+    }
+  },
 }));

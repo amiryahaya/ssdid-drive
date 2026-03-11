@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useOnboardingStore } from '@/stores/onboardingStore';
-import { useOneSignal } from '@/hooks/useOneSignal';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { useDeepLink } from '@/hooks/useDeepLink';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { LoginPage } from '@/pages/LoginPage';
@@ -94,19 +94,28 @@ function JoinTenantRoute() {
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const applyTheme = useSettingsStore((state) => state.applyTheme);
-
-  // Initialize OneSignal push notifications
-  useOneSignal();
+  const startPolling = useNotificationStore((state) => state.startPolling);
+  const stopPolling = useNotificationStore((state) => state.stopPolling);
 
   // Initialize deep link handling
   useDeepLink();
 
   useEffect(() => {
     checkAuth();
-    // Apply theme on app load (persisted settings are rehydrated automatically)
     applyTheme();
   }, [checkAuth, applyTheme]);
+
+  // Poll for notifications when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+    return () => stopPolling();
+  }, [isAuthenticated, startPolling, stopPolling]);
 
   return (
     <>

@@ -181,15 +181,22 @@ class DeviceRepositoryImpl @Inject constructor(
 
     // ==================== Push Notifications ====================
 
+    // D9: Guard flag to prevent re-registration on every Settings load
+    @Volatile
+    private var pushRegistered = false
+
     override fun registerPushNotifications(userId: String) {
+        if (pushRegistered) return
         val enrollmentId = secureStorage.getDeviceEnrollmentIdSync()
         if (enrollmentId != null) {
             pushNotificationManager.login(userId, enrollmentId)
+            pushRegistered = true
         }
     }
 
     override fun unregisterPushNotifications() {
         val enrollmentId = secureStorage.getDeviceEnrollmentIdSync()
         pushNotificationManager.logout(enrollmentId)
+        pushRegistered = false
     }
 }

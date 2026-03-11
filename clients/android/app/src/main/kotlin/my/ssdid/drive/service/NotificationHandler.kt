@@ -10,10 +10,14 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import my.ssdid.drive.MainActivity
 import my.ssdid.drive.R
+import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.local.entity.NotificationActionType
 import my.ssdid.drive.data.local.entity.NotificationEntity
 import my.ssdid.drive.data.local.entity.NotificationType
+import my.ssdid.drive.util.Logger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,12 +26,27 @@ import javax.inject.Singleton
  */
 @Singleton
 class NotificationHandler @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val secureStorage: SecureStorage
 ) {
     private val notificationManager = NotificationManagerCompat.from(context)
 
+    // D7: Thread-safe notification ID mapping to avoid hashCode() collisions.
+    // Counter starts above any hardcoded notification IDs (e.g., SYNC_NOTIFICATION_ID = 1001).
+    private val notificationIdCounter = AtomicInteger(NOTIFICATION_ID_START)
+    private val notificationIdMap = ConcurrentHashMap<String, Int>()
+
     init {
         createNotificationChannels()
+    }
+
+    /**
+     * D7: Get a stable, collision-free integer notification ID for a UUID string.
+     */
+    private fun getNotificationId(uuid: String): Int {
+        return notificationIdMap.getOrPut(uuid) {
+            notificationIdCounter.getAndIncrement()
+        }
     }
 
     /**
@@ -85,7 +104,7 @@ class NotificationHandler @Inject constructor(
      */
     fun showNotification(notification: NotificationEntity) {
         val channelId = getChannelId(notification.type)
-        val notificationId = notification.id.hashCode()
+        val notificationId = getNotificationId(notification.id)
 
         // Create intent for notification tap
         val intent = createIntent(notification)
@@ -114,7 +133,8 @@ class NotificationHandler @Inject constructor(
         try {
             notificationManager.notify(notificationId, builder.build())
         } catch (e: SecurityException) {
-            // Notification permission not granted
+            // D11: Log the SecurityException so it's visible in debug builds
+            Logger.w(TAG, "Notification permission not granted, cannot show notification", e)
         }
     }
 
@@ -122,7 +142,8 @@ class NotificationHandler @Inject constructor(
      * Cancel a notification.
      */
     fun cancelNotification(notificationId: String) {
-        notificationManager.cancel(notificationId.hashCode())
+        val id = notificationIdMap[notificationId] ?: notificationId.hashCode()
+        notificationManager.cancel(id)
     }
 
     /**
@@ -149,7 +170,8 @@ class NotificationHandler @Inject constructor(
         try {
             notificationManager.notify(notificationId, builder.build())
         } catch (e: SecurityException) {
-            // Permission not granted
+            // D11: Log the SecurityException so it's visible in debug builds
+            Logger.w(TAG, "Notification permission not granted, cannot show sync progress", e)
         }
     }
 
@@ -167,8 +189,10 @@ class NotificationHandler @Inject constructor(
         cancelSyncProgressNotification()
 
         if (failedCount > 0) {
+            // D12: Use actual userId from SecureStorage instead of empty string
+            val userId = secureStorage.getUserIdSync() ?: ""
             val notification = NotificationEntity(
-                userId = "",
+                userId = userId,
                 type = NotificationType.SYNC_FAILED,
                 title = "Sync Complete",
                 message = "$successCount synced, $failedCount failed"
@@ -278,12 +302,14 @@ class NotificationHandler @Inject constructor(
         builder: NotificationCompat.Builder,
         notification: NotificationEntity
     ) {
+        val notificationId = getNotificationId(notification.id)
+
         when (notification.actionType) {
             NotificationActionType.OPEN_SHARE -> {
                 val viewIntent = createActionIntent(notification, "view")
                 val viewPendingIntent = PendingIntent.getActivity(
                     context,
-                    notification.id.hashCode() + 1,
+                    notificationId + 1,
                     viewIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -294,7 +320,7 @@ class NotificationHandler @Inject constructor(
                 val reviewIntent = createActionIntent(notification, "review")
                 val reviewPendingIntent = PendingIntent.getActivity(
                     context,
-                    notification.id.hashCode() + 1,
+                    notificationId + 1,
                     reviewIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -305,7 +331,7 @@ class NotificationHandler @Inject constructor(
                 val retryIntent = createActionIntent(notification, "retry")
                 val retryPendingIntent = PendingIntent.getActivity(
                     context,
-                    notification.id.hashCode() + 1,
+                    notificationId + 1,
                     retryIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -328,6 +354,8 @@ class NotificationHandler @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "NotificationHandler"
+
         // Notification channels
         const val CHANNEL_SHARES = "shares"
         const val CHANNEL_RECOVERY = "recovery"
@@ -337,6 +365,9 @@ class NotificationHandler @Inject constructor(
 
         // Notification IDs
         const val SYNC_NOTIFICATION_ID = 1001
+
+        // D7: Start dynamic notification IDs above all hardcoded IDs
+        private const val NOTIFICATION_ID_START = 2000
 
         // Intent extras
         const val EXTRA_NOTIFICATION_ID = "notification_id"

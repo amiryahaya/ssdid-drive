@@ -1,0 +1,6 @@
+// Debug build configuration
+// Copy this file to Debug.xcconfig and fill in real values.
+// Debug.xcconfig is gitignored — never commit real secrets.
+
+SENTRY_DSN = your-sentry-dsn-here
+ONESIGNAL_APP_ID = your-onesignal-app-id-here

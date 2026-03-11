@@ -3,6 +3,7 @@ package my.ssdid.drive.presentation.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import my.ssdid.drive.domain.repository.AuthRepository
+import my.ssdid.drive.util.PushNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,8 @@ data class LoginUiState(
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val pushNotificationManager: PushNotificationManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -67,6 +69,9 @@ class LoginViewModel @Inject constructor(
             try {
                 authRepository.saveSession(sessionToken)
                 _uiState.update { it.copy(isWaitingForWallet = false, isAuthenticated = true) }
+
+                // D2: Request push notification permission after successful login
+                pushNotificationManager.requestPermission()
             } catch (e: Exception) {
                 _uiState.update { it.copy(isWaitingForWallet = false, error = e.message) }
             }

@@ -287,6 +287,17 @@ extension AppCoordinator: AuthCoordinatorDelegate {
         clearChildCoordinators()
         navigationController.setViewControllers([], animated: false)
 
+        // D7: Associate OneSignal device with the authenticated user
+        if let userId = container.authRepository.currentUserId,
+           let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+            appDelegate.loginOneSignal(userId: userId)
+        }
+
+        // D3: Request push permission after login (only prompts if not already granted)
+        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+            appDelegate.requestPushPermissionIfNeeded()
+        }
+
         // Use CATransaction to ensure navigation is complete before processing deep link
         // This is more deterministic than an arbitrary delay
         CATransaction.begin()
