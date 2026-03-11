@@ -78,7 +78,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <div className="text-center mb-6">
-            <img src="/icon-192.png" alt="SSDID Drive" className="w-12 h-12 rounded-xl mb-4" />
+            <img src="/icon-192.png" alt="SSDID Drive" className="w-12 h-12 rounded-xl mb-4 mx-auto" />
             <h1 className="text-xl font-bold text-gray-900">SSDID Drive</h1>
             <p className="text-sm text-gray-500 mt-1">Admin Portal</p>
           </div>
