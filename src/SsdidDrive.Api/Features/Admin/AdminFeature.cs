@@ -29,5 +29,6 @@ public static class AdminFeature
         UpdateTenant.Map(group);
         GetTenantMembers.Map(group);
         ListAuditLog.Map(group);
+        CreateAdminInvitation.Map(group);
     }
 }
