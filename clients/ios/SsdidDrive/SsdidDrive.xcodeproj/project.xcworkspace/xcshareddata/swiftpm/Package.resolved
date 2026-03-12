@@ -1,0 +1,25 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "OneSignalFramework",
+        "repositoryURL": "https://github.com/OneSignal/OneSignal-iOS-SDK",
+        "state": {
+          "branch": null,
+          "revision": "d21c96dfc34dfffc94875adb965de25f62c99eb0",
+          "version": "5.5.0"
+        }
+      },
+      {
+        "package": "Sentry",
+        "repositoryURL": "https://github.com/getsentry/sentry-cocoa",
+        "state": {
+          "branch": null,
+          "revision": "16cd512711375fa73f25ae5e373f596bdf4251ae",
+          "version": "8.58.0"
+        }
+      }
+    ]
+  },
+  "version": 1
+}
