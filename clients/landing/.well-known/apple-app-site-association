@@ -1,0 +1,27 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "HY5S7B8P9R.my.ssdid.drive"
+        ],
+        "components": [
+          {
+            "/": "/auth/callback",
+            "?": { "session_token": "?*" },
+            "comment": "SSDID Wallet authentication callback"
+          },
+          {
+            "/": "/invite/*",
+            "comment": "Tenant invitation deep links"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "HY5S7B8P9R.my.ssdid.drive"
+    ]
+  }
+}
