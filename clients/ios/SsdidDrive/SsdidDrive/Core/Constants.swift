@@ -6,13 +6,9 @@ enum Constants {
     // MARK: - API Configuration
 
     enum API {
-        #if DEBUG
-        static let baseURL = "https://api-dev.ssdid-drive.app"
-        #else
-        static let baseURL = "https://api.ssdid-drive.app"
-        #endif
+        static let baseURL = "https://drive.ssdid.my"
 
-        static let apiVersion = "v1"
+        static let apiVersion = "api"
         static let timeout: TimeInterval = 30
 
         static var fullBaseURL: String {

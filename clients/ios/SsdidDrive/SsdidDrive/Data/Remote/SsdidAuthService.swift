@@ -32,12 +32,8 @@ final class SsdidAuthService {
     // MARK: - Initialization
 
     private init() {
-        #if DEBUG
         baseURL = ProcessInfo.processInfo.environment["API_URL"]
-            ?? "https://api-dev.ssdid-drive.app"
-        #else
-        baseURL = "https://api.ssdid-drive.app"
-        #endif
+            ?? "https://drive.ssdid.my"
     }
 
     // MARK: - Endpoints
