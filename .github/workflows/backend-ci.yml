@@ -59,7 +59,7 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Test
-        run: dotnet run --project tests/SsdidDrive.Api.Tests/ --no-build
+        run: dotnet test tests/SsdidDrive.Api.Tests/ --no-build
         env:
           ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=ssdid_drive_test;Username=ssdid;Password=ssdid"
           ConnectionStrings__Redis: "localhost:6379"
