@@ -206,6 +206,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     v => Enum.Parse<InvitationStatus>(v, true));
             e.Property(i => i.CreatedAt).HasDefaultValueSql("now()");
             e.Property(i => i.UpdatedAt).HasDefaultValueSql("now()");
+            e.Property(i => i.AcceptedByDid).HasMaxLength(256);
+            e.Property(i => i.AcceptedAt);
 
             e.HasIndex(i => i.Token).IsUnique();
             e.HasIndex(i => i.ShortCode).IsUnique();
