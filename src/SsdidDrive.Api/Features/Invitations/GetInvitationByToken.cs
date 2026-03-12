@@ -25,12 +25,12 @@ public static class GetInvitationByToken
         // Only accept full token on the public endpoint (not short codes)
         var invitation = await db.Invitations
             .Include(i => i.Tenant)
+            .Include(i => i.InvitedBy)
             .FirstOrDefaultAsync(i =>
                 i.Token == token
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+                && i.Status == InvitationStatus.Pending, ct);
 
-        if (invitation is null)
+        if (invitation is null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
             return AppError.NotFound("Invitation not found or expired").ToProblemResult();
 
         return Results.Ok(new
@@ -39,6 +39,7 @@ public static class GetInvitationByToken
             invitation.TenantId,
             TenantName = invitation.Tenant.Name,
             invitation.InvitedById,
+            InviterName = invitation.InvitedBy?.DisplayName,
             invitation.Email,
             invitation.InvitedUserId,
             Role = invitation.Role.ToString().ToLowerInvariant(),
@@ -57,10 +58,9 @@ public static class GetInvitationByToken
             .Include(i => i.Tenant)
             .FirstOrDefaultAsync(i =>
                 i.ShortCode == code
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+                && i.Status == InvitationStatus.Pending, ct);
 
-        if (invitation is null)
+        if (invitation is null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)
             return AppError.NotFound("Invitation not found or expired").ToProblemResult();
 
         return Results.Ok(new

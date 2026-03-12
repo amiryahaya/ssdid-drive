@@ -3,7 +3,18 @@ using Resend;
 
 namespace SsdidDrive.Api.Services;
 
-public class EmailService
+public interface IEmailService
+{
+    Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message);
+}
+
+public sealed class NullEmailService : IEmailService
+{
+    public Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message)
+        => Task.CompletedTask;
+}
+
+public class EmailService : IEmailService
 {
     private readonly IResend _resend;
     private readonly string _fromAddress;

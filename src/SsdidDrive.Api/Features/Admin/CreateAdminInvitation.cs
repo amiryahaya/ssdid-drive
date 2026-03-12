@@ -19,7 +19,7 @@ public static class CreateAdminInvitation
     private static async Task<IResult> Handle(
         Guid tenantId, Request req, AppDbContext db,
         CurrentUserAccessor accessor, NotificationService notifications,
-        EmailService? emailService, AuditService audit, ILoggerFactory loggerFactory,
+        IEmailService emailService, AuditService audit, ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Email))
@@ -127,19 +127,16 @@ public static class CreateAdminInvitation
             "Invitation", invitation.Id,
             $"Invited {normalizedEmail} as {role.Value.ToString().ToLowerInvariant()} to tenant {tenant.Name}", ct);
 
-        if (emailService is not null)
+        var emailToSend = normalizedEmail;
+        var tenantNameForEmail = tenant.Name;
+        var roleNameForEmail = role.Value.ToString().ToLowerInvariant();
+        var msgForEmail = req.Message;
+        var logger = loggerFactory.CreateLogger(typeof(CreateAdminInvitation).FullName!);
+        _ = Task.Run(async () =>
         {
-            var email = normalizedEmail;
-            var tenantName = tenant.Name;
-            var roleName = role.Value.ToString().ToLowerInvariant();
-            var msg = req.Message;
-            var logger = loggerFactory.CreateLogger(typeof(CreateAdminInvitation).FullName!);
-            _ = Task.Run(async () =>
-            {
-                try { await emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg); }
-                catch (Exception ex) { logger.LogError(ex, "Failed to send invitation email to {Email}", email); }
-            });
-        }
+            try { await emailService.SendInvitationAsync(emailToSend, tenantNameForEmail, roleNameForEmail, shortCode, msgForEmail); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send invitation email to {Email}", emailToSend); }
+        });
 
         return Results.Created($"/api/admin/tenants/{tenantId}/invitations/{invitation.Id}", new
         {
