@@ -114,7 +114,14 @@ public static class CreateAdminInvitation
                 ct: ct);
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("ix_invitations_pending_email_tenant") == true)
+        {
+            return AppError.Conflict("A pending invitation already exists for this email").ToProblemResult();
+        }
 
         await audit.LogAsync(user.Id, "invitation.created",
             "Invitation", invitation.Id,
