@@ -31,6 +31,27 @@ export interface TenantMember {
   role: string
 }
 
+export interface AdminInvitation {
+  id: string
+  tenant_id: string
+  invited_by_id: string
+  email: string | null
+  invited_user_id: string | null
+  role: string
+  status: string
+  short_code: string
+  message: string | null
+  expires_at: string
+  created_at: string
+}
+
+interface AdminInvitationsResponse {
+  items: AdminInvitation[]
+  total: number
+  page: number
+  page_size: number
+}
+
 interface UsersResponse {
   items: User[]
   total: number
@@ -85,6 +106,13 @@ interface AdminState {
   tenantMembers: TenantMember[]
   tenantMembersLoading: boolean
   fetchTenantMembers: (tenantId: string) => Promise<void>
+
+  tenantInvitations: AdminInvitation[]
+  tenantInvitationsTotal: number
+  tenantInvitationsLoading: boolean
+  fetchTenantInvitations: (tenantId: string, page?: number, pageSize?: number) => Promise<void>
+  createAdminInvitation: (tenantId: string, email: string, role: string, message?: string) => Promise<AdminInvitation>
+  revokeAdminInvitation: (tenantId: string, invitationId: string) => Promise<void>
 
   auditLog: AuditLogEntry[]
   auditLogTotal: number
@@ -179,6 +207,39 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     } finally {
       set({ tenantMembersLoading: false })
     }
+  },
+
+  tenantInvitations: [],
+  tenantInvitationsTotal: 0,
+  tenantInvitationsLoading: false,
+
+  fetchTenantInvitations: async (tenantId: string, page = 1, pageSize = 20) => {
+    set({ tenantInvitationsLoading: true })
+    try {
+      const res = await api.get<AdminInvitationsResponse>(
+        `/api/admin/tenants/${tenantId}/invitations?page=${page}&page_size=${pageSize}`)
+      set({ tenantInvitations: res.items, tenantInvitationsTotal: res.total })
+    } catch (err) {
+      set({ tenantInvitations: [], tenantInvitationsTotal: 0 })
+      throw err
+    } finally {
+      set({ tenantInvitationsLoading: false })
+    }
+  },
+
+  createAdminInvitation: async (tenantId: string, email: string, role: string, message?: string) => {
+    const body: Record<string, string> = { email, role }
+    if (message) body.message = message
+    return api.post<AdminInvitation>(`/api/admin/tenants/${tenantId}/invitations`, body)
+  },
+
+  revokeAdminInvitation: async (tenantId: string, invitationId: string) => {
+    await api.delete(`/api/admin/tenants/${tenantId}/invitations/${invitationId}`)
+    set({
+      tenantInvitations: get().tenantInvitations.map((inv) =>
+        inv.id === invitationId ? { ...inv, status: 'revoked' } : inv
+      ),
+    })
   },
 
   auditLog: [],
