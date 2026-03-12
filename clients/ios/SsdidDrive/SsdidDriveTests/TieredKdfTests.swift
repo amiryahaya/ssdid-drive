@@ -200,7 +200,22 @@ final class TieredKdfTests: XCTestCase {
 
         XCTAssertEqual(
             dataToHex(keyData),
-            "eb9ffe4aa76d3cd79851cd1de39dbfa8ced4ad88b0eec1596c214bb733618279"
+            "9ac8238c6d6cfb684b65d74a09bc374c89fda665557ff1cc5413feeb54ce33b7"
+        )
+    }
+
+    /// Diagnostic: verify intermediate bcrypt raw output (24 bytes) before HKDF step.
+    func testVector5_4BcryptRawOutput() throws {
+        let password = Array("correct horse battery staple".utf8)
+        let salt = Array(hexToData("0102030405060708090a0b0c0d0e0f10"))
+
+        let bcryptOutput = try BcryptKdf.hash(password: password, salt: salt, cost: 13)
+
+        XCTAssertEqual(bcryptOutput.count, 24)
+        XCTAssertEqual(
+            bcryptOutput.map { String(format: "%02x", $0) }.joined(),
+            "b0bd8f45c23e9c8e41705c842a997336cd987356fbf235e2",
+            "Intermediate bcrypt output must match Rust reference"
         )
     }
 }

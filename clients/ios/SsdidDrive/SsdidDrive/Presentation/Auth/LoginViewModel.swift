@@ -9,7 +9,7 @@ protocol LoginViewModelCoordinatorDelegate: AnyObject {
 }
 
 /// View model for SSDID wallet-based login.
-/// Generates a QR code payload containing a challenge for the SSDID Wallet to scan,
+/// Calls the backend to initiate a challenge, displays a QR code for the SSDID Wallet,
 /// then listens via SSE for the wallet's authentication response.
 @MainActor
 final class LoginViewModel: BaseViewModel {
@@ -23,8 +23,19 @@ final class LoginViewModel: BaseViewModel {
     @Published var walletDeepLink: URL?
     @Published var isExpired = false
 
-    private var eventTask: URLSessionDataTask?
+    private var sseStreamTask: Task<Void, Never>?
     private var challengeId: String?
+
+    // MARK: - Token Validation
+
+    /// Minimum session token length (UUIDs are 32 hex chars without hyphens)
+    private static let minTokenLength = 16
+
+    /// Maximum session token length
+    private static let maxTokenLength = 512
+
+    /// Allowed characters in session tokens (alphanumeric + common token chars)
+    private static let tokenCharacterSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.:"))
 
     // MARK: - Initialization
 
@@ -34,12 +45,13 @@ final class LoginViewModel: BaseViewModel {
     }
 
     deinit {
-        eventTask?.cancel()
+        sseStreamTask?.cancel()
     }
 
     // MARK: - Actions
 
-    /// Create a new SSDID authentication challenge and display QR code
+    /// Create a new SSDID authentication challenge by calling the backend.
+    /// Builds a `ssdid://login?...` URL used for both QR display and same-device deep link.
     func createChallenge() {
         isLoading = true
         isExpired = false
@@ -47,36 +59,50 @@ final class LoginViewModel: BaseViewModel {
 
         Task {
             do {
-                let serverInfo = try await SsdidAuthService.shared.getServerInfo()
-                let newChallengeId = UUID().uuidString
-                self.challengeId = newChallengeId
+                let response = try await SsdidAuthService.shared.initiateLogin()
+                self.challengeId = response.challengeId
 
-                let payload: [String: String] = [
-                    "server_url": SsdidAuthService.shared.baseURL,
-                    "server_did": serverInfo.serverDid,
-                    "action": "authenticate",
-                    "challenge_id": newChallengeId
-                ]
-
-                let jsonData = try JSONSerialization.data(withJSONObject: payload)
-                self.qrPayload = String(data: jsonData, encoding: .utf8)
-
-                // Build wallet deep link for same-device flow (iPhone)
+                // Build ssdid://login?... URL that the wallet understands
                 var components = URLComponents()
                 components.scheme = "ssdid"
-                components.host = "authenticate"
-                components.queryItems = [
-                    URLQueryItem(name: "server_url", value: SsdidAuthService.shared.baseURL),
-                    URLQueryItem(name: "server_did", value: serverInfo.serverDid),
-                    URLQueryItem(name: "challenge_id", value: newChallengeId),
-                    URLQueryItem(name: "callback", value: "ssdid-drive://auth/callback")
+                components.host = "login"
+
+                // Extract fields from the backend's qr_payload
+                let qr = response.qrPayload
+                var queryItems = [
+                    URLQueryItem(name: "server_url", value: qr["service_url"] as? String ?? SsdidAuthService.shared.baseURL),
+                    URLQueryItem(name: "service_name", value: qr["service_name"] as? String ?? "ssdid-drive"),
+                    URLQueryItem(name: "challenge_id", value: response.challengeId),
+                    URLQueryItem(name: "callback_url", value: "ssdid-drive://auth/callback"),
                 ]
-                self.walletDeepLink = components.url
+
+                // Include requested_claims if present
+                if let claims = qr["requested_claims"],
+                   let claimsData = try? JSONSerialization.data(withJSONObject: claims),
+                   let claimsString = String(data: claimsData, encoding: .utf8) {
+                    queryItems.append(URLQueryItem(name: "requested_claims", value: claimsString))
+                }
+
+                components.queryItems = queryItems
+
+                guard let loginUrl = components.url else {
+                    self.handleError(URLError(.badURL))
+                    return
+                }
+
+                // QR code contains the URL string (wallet scans → parses as ssdid:// URL)
+                self.qrPayload = loginUrl.absoluteString
+
+                // Same URL for same-device deep link
+                self.walletDeepLink = loginUrl
 
                 self.isLoading = false
 
                 // Listen for SSE completion from server
-                listenForCompletion(challengeId: newChallengeId)
+                listenForCompletion(
+                    challengeId: response.challengeId,
+                    subscriberSecret: response.subscriberSecret
+                )
             } catch {
                 self.handleError(error)
             }
@@ -86,44 +112,123 @@ final class LoginViewModel: BaseViewModel {
     /// Open the SSDID Wallet app via deep link (same-device flow)
     func openWallet() {
         guard let url = walletDeepLink else { return }
+        guard UIApplication.shared.canOpenURL(url) else {
+            errorMessage = "SSDID Wallet app is not installed"
+            return
+        }
         UIApplication.shared.open(url)
     }
 
     /// Handle authentication callback from the wallet app
     /// Called when the app receives ssdid-drive://auth/callback?session_token=...
+    /// (D4 fix: validates token format before saving)
     func handleAuthCallback(sessionToken: String) {
+        guard Self.isValidSessionToken(sessionToken) else {
+            errorMessage = "Invalid session token received"
+            return
+        }
         saveSession(token: sessionToken)
     }
 
     // MARK: - Private
 
     /// Listen for SSE events indicating authentication completion (cross-device QR flow)
-    private func listenForCompletion(challengeId: String) {
-        eventTask?.cancel()
+    /// (D2 fix: uses URLSession.bytes streaming instead of buffered dataTask)
+    private func listenForCompletion(challengeId: String, subscriberSecret: String) {
+        sseStreamTask?.cancel()
 
-        let urlString = "\(SsdidAuthService.shared.baseURL)/api/auth/ssdid/events?challenge_id=\(challengeId)"
-        guard let url = URL(string: urlString) else { return }
+        // Build SSE URL with subscriber_secret for authorization
+        var components = URLComponents(
+            string: "\(SsdidAuthService.shared.baseURL)/api/auth/ssdid/events"
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "challenge_id", value: challengeId),
+            URLQueryItem(name: "subscriber_secret", value: subscriberSecret)
+        ]
+        guard let url = components?.url else { return }
 
-        let session = URLSession(configuration: .default)
-        let task = session.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data,
-                  let text = String(data: data, encoding: .utf8) else { return }
+        sseStreamTask = Task { [weak self] in
+            do {
+                var request = URLRequest(url: url)
+                request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                request.timeoutInterval = 310 // slightly longer than server's 5min SSE timeout
 
-            Task { @MainActor [weak self] in
-                if text.contains("event: authenticated") {
-                    // Extract session token from SSE data
-                    if let range = text.range(of: "\"session_token\":\""),
-                       let endRange = text[range.upperBound...].range(of: "\"") {
-                        let token = String(text[range.upperBound..<endRange.lowerBound])
-                        self?.saveSession(token: token)
+                let (bytes, response) = try await SsdidAuthService.shared.urlSession.bytes(for: request)
+
+                // Check HTTP status
+                if let httpResponse = response as? HTTPURLResponse,
+                   !(200...299).contains(httpResponse.statusCode) {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to connect to authentication service"
                     }
-                } else if text.contains("event: timeout") {
+                    return
+                }
+
+                // Parse SSE frames from the byte stream
+                var currentEvent = ""
+                var currentData = ""
+
+                for try await line in bytes.lines {
+                    guard !Task.isCancelled else { return }
+
+                    if line.hasPrefix("event: ") {
+                        currentEvent = String(line.dropFirst(7))
+                    } else if line.hasPrefix("data: ") {
+                        currentData = String(line.dropFirst(6))
+                    } else if line.isEmpty {
+                        // Empty line = end of SSE frame
+                        if !currentEvent.isEmpty {
+                            await self?.handleSSEEvent(
+                                event: currentEvent,
+                                data: currentData
+                            )
+                        }
+                        currentEvent = ""
+                        currentData = ""
+                    }
+                    // Lines starting with ":" are SSE comments (keep-alive), ignore them
+                }
+            } catch is CancellationError {
+                // Normal cancellation, do nothing
+            } catch {
+                await MainActor.run {
                     self?.isExpired = true
                 }
             }
         }
-        task.resume()
-        eventTask = task
+    }
+
+    /// Process a parsed SSE event
+    private func handleSSEEvent(event: String, data: String) {
+        switch event {
+        case "authenticated":
+            // Parse session_token from JSON data
+            guard let jsonData = data.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                  let token = json["session_token"] as? String,
+                  Self.isValidSessionToken(token) else {
+                errorMessage = "Invalid authentication response"
+                return
+            }
+            saveSession(token: token)
+
+        case "timeout":
+            isExpired = true
+
+        default:
+            break
+        }
+    }
+
+    /// Validate session token format before storing
+    /// (D4: prevents storing malformed/injected tokens in Keychain)
+    static func isValidSessionToken(_ token: String) -> Bool {
+        guard !token.isEmpty,
+              token.count >= minTokenLength,
+              token.count <= maxTokenLength else {
+            return false
+        }
+        return token.unicodeScalars.allSatisfy { tokenCharacterSet.contains($0) }
     }
 
     /// Request to show the join tenant screen

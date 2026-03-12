@@ -31,6 +31,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Security check - refuse to run on jailbroken devices
         performSecurityCheck()
 
+        // D10: Validate SSL pinning is configured for production builds
+        #if !DEBUG
+        if !Constants.API.isSSLPinningConfigured {
+            logger.critical("SSL certificate pinning is not configured — placeholder hashes detected. Replace with real certificate hashes before release.")
+            assertionFailure("SSL pinning not configured for production")
+        }
+        #endif
+
         // Store launch options for OneSignal (D1)
         storedLaunchOptions = launchOptions
 
@@ -93,7 +101,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Call this after successful authentication.
     func loginOneSignal(userId: String) {
         #if canImport(OneSignalFramework)
-        OneSignal.login(externalId: userId)
+        OneSignal.login(externalId: userId, token: nil)
         #if DEBUG
         print("OneSignal: Logged in with userId: \(userId)")
         #endif

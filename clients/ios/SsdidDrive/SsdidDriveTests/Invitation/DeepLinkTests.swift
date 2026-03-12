@@ -2,6 +2,7 @@ import XCTest
 @testable import SsdidDrive
 
 /// Unit tests for deep link parsing, particularly invitation deep links
+@MainActor
 final class DeepLinkTests: XCTestCase {
 
     // MARK: - Custom Scheme Tests (ssdid-drive://)
@@ -370,6 +371,130 @@ final class DeepLinkTests: XCTestCase {
         } else {
             return pathComponents.dropFirst().first
         }
+    }
+
+    // MARK: - Auth Callback Deep Link Tests (ssdid-drive://auth/callback)
+
+    func testAuthCallback_validToken_parsesCorrectly() {
+        // Given
+        let url = URL(string: "ssdid-drive://auth/callback?session_token=abc123-valid-token-xyz")!
+
+        // When
+        let action = DeepLinkParser.parse(url)
+
+        // Then
+        if case .authCallback(let token) = action {
+            XCTAssertEqual(token, "abc123-valid-token-xyz")
+        } else {
+            XCTFail("Expected .authCallback, got \(String(describing: action))")
+        }
+    }
+
+    func testAuthCallback_missingToken_returnsNil() {
+        // Given
+        let url = URL(string: "ssdid-drive://auth/callback")!
+
+        // When
+        let action = DeepLinkParser.parse(url)
+
+        // Then
+        XCTAssertNil(action, "Should return nil when session_token is missing")
+    }
+
+    func testAuthCallback_emptyToken_returnsNil() {
+        // Given
+        let url = URL(string: "ssdid-drive://auth/callback?session_token=")!
+
+        // When
+        let action = DeepLinkParser.parse(url)
+
+        // Then
+        XCTAssertNil(action, "Should return nil when session_token is empty")
+    }
+
+    func testAuthCallback_wrongPath_returnsNil() {
+        // Given — extra path segment after "callback"
+        let url = URL(string: "ssdid-drive://auth/callback/extra?session_token=valid-token")!
+
+        // When
+        let action = DeepLinkParser.parse(url)
+
+        // Then
+        XCTAssertNil(action, "Should reject auth callback with extra path segments")
+    }
+
+    func testAuthCallback_wrongHost_returnsNil() {
+        // Given — not "auth" host
+        let url = URL(string: "ssdid-drive://login/callback?session_token=valid-token")!
+
+        // When
+        let action = DeepLinkParser.parse(url)
+
+        // Then
+        XCTAssertNil(action, "Should reject non-auth host")
+    }
+
+    // MARK: - Session Token Validation Tests
+
+    func testSessionToken_valid_uuid() {
+        XCTAssertTrue(LoginViewModel.isValidSessionToken("550e8400-e29b-41d4-a716-446655440000"))
+    }
+
+    func testSessionToken_valid_alphanumericWithDots() {
+        XCTAssertTrue(LoginViewModel.isValidSessionToken("eyJhbGciOiJSUzI1NiJ9.payload.signature"))
+    }
+
+    func testSessionToken_tooShort_rejected() {
+        XCTAssertFalse(LoginViewModel.isValidSessionToken("abc"))
+    }
+
+    func testSessionToken_empty_rejected() {
+        XCTAssertFalse(LoginViewModel.isValidSessionToken(""))
+    }
+
+    func testSessionToken_tooLong_rejected() {
+        let longToken = String(repeating: "a", count: 513)
+        XCTAssertFalse(LoginViewModel.isValidSessionToken(longToken))
+    }
+
+    func testSessionToken_specialChars_rejected() {
+        XCTAssertFalse(LoginViewModel.isValidSessionToken("token<script>alert(1)</script>"))
+    }
+
+    func testSessionToken_spaces_rejected() {
+        XCTAssertFalse(LoginViewModel.isValidSessionToken("token with spaces here"))
+    }
+
+    func testSessionToken_maxLength_accepted() {
+        let token = String(repeating: "a", count: 512)
+        XCTAssertTrue(LoginViewModel.isValidSessionToken(token))
+    }
+
+    func testSessionToken_minLength_accepted() {
+        let token = String(repeating: "a", count: 16)
+        XCTAssertTrue(LoginViewModel.isValidSessionToken(token))
+    }
+
+    // MARK: - QR Payload Format Tests
+
+    func testQrPayload_ssdidScheme() {
+        // Verify the expected format: ssdid://login?server_url=...&callback_url=ssdid-drive://auth/callback
+        let payload = "ssdid://login?server_url=https://drive.ssdid.my&service_name=ssdid-drive&challenge_id=abc123&callback_url=ssdid-drive://auth/callback"
+        guard let url = URL(string: payload) else {
+            XCTFail("QR payload should be a valid URL")
+            return
+        }
+
+        XCTAssertEqual(url.scheme, "ssdid")
+        XCTAssertEqual(url.host, "login")
+
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let queryItems = components?.queryItems ?? []
+
+        XCTAssertEqual(queryItems.first(where: { $0.name == "server_url" })?.value, "https://drive.ssdid.my")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "service_name" })?.value, "ssdid-drive")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "challenge_id" })?.value, "abc123")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "callback_url" })?.value, "ssdid-drive://auth/callback")
     }
 }
 

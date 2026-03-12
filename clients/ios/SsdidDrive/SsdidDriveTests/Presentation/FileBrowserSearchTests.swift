@@ -3,6 +3,7 @@ import Combine
 @testable import SsdidDrive
 
 /// Unit tests for FileBrowserViewModel search functionality
+@MainActor
 final class FileBrowserSearchTests: XCTestCase {
 
     // MARK: - Properties
@@ -24,8 +25,8 @@ final class FileBrowserSearchTests: XCTestCase {
     ]
 
     private lazy var testFolders: [Folder] = [
-        Folder(id: "folder-1", name: "Documents", parentId: nil, ownerId: "user-1", createdAt: now, updatedAt: now),
-        Folder(id: "folder-2", name: "Reports Archive", parentId: nil, ownerId: "user-1", createdAt: now, updatedAt: now),
+        Folder(id: "folder-1", name: "Documents", parentId: nil, ownerId: "user-1", encryptedFolderKey: nil, kemAlgorithm: nil, createdAt: now, updatedAt: now),
+        Folder(id: "folder-2", name: "Reports Archive", parentId: nil, ownerId: "user-1", encryptedFolderKey: nil, kemAlgorithm: nil, createdAt: now, updatedAt: now),
     ]
 
     // MARK: - Setup
@@ -37,7 +38,7 @@ final class FileBrowserSearchTests: XCTestCase {
 
         // Default: list files returns test data, search returns empty (global search cache)
         mockFileRepository.listFilesResult = .success(
-            FolderContents(folder: nil, files: testFiles, subfolders: testFolders, breadcrumbs: nil)
+            ListFilesResult(contents: FolderContents(folder: nil, files: testFiles, subfolders: testFolders, breadcrumbs: nil), isFromCache: false)
         )
         mockFileRepository.searchResult = .success(
             FolderContents(folder: nil, files: testFiles, subfolders: [], breadcrumbs: nil)
@@ -320,7 +321,7 @@ final class FileBrowserSearchTests: XCTestCase {
     func testIsEmpty_noFilesNotLoading() {
         // Given
         mockFileRepository.listFilesResult = .success(
-            FolderContents(folder: nil, files: [], subfolders: [], breadcrumbs: nil)
+            ListFilesResult(contents: FolderContents(folder: nil, files: [], subfolders: [], breadcrumbs: nil), isFromCache: false)
         )
         viewModel = FileBrowserViewModel(fileRepository: mockFileRepository)
 

@@ -68,7 +68,8 @@ final class DeepLinkParser {
         switch host {
         case "auth":
             // Handle SSDID wallet auth callback: ssdid-drive://auth/callback?session_token=...
-            if pathComponents.first == "callback" || pathComponents.contains("callback") {
+            // D7: Strict path matching — only accept exactly "callback" as the single path component
+            if pathComponents.count == 1, pathComponents.first == "callback" {
                 if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                    let token = components.queryItems?.first(where: { $0.name == "session_token" })?.value,
                    !token.isEmpty {

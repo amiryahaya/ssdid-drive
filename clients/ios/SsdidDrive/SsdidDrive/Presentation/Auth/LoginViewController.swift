@@ -29,7 +29,7 @@ final class LoginViewController: BaseViewController {
     private lazy var logoImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(named: "AppIcon")
+        imageView.image = UIImage(named: "Logo")
         imageView.contentMode = .scaleAspectFit
         imageView.layer.cornerRadius = 16
         imageView.clipsToBounds = true

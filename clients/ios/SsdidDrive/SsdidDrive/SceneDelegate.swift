@@ -91,20 +91,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             handleDeepLink(urlContext.url)
         }
 
-        // Handle Spotlight search result from launch (app was killed)
-        if let userActivity = connectionOptions.userActivities.first,
-           userActivity.activityType == CSSearchableItemActionType,
-           let uniqueIdentifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-           uniqueIdentifier.hasPrefix("file_") {
-            let fileId = String(uniqueIdentifier.dropFirst(5))
-            appCoordinator?.handleDeepLinkAction(.openFile(fileId: fileId))
-        }
+        // D6: Iterate all user activities, not just the first one
+        for userActivity in connectionOptions.userActivities {
+            // Handle Spotlight search result from launch (app was killed)
+            if userActivity.activityType == CSSearchableItemActionType,
+               let uniqueIdentifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+               uniqueIdentifier.hasPrefix("file_") {
+                let fileId = String(uniqueIdentifier.dropFirst(5))
+                appCoordinator?.handleDeepLinkAction(.openFile(fileId: fileId))
+            }
 
-        // Handle Universal Links from launch
-        if let userActivity = connectionOptions.userActivities.first,
-           userActivity.activityType == NSUserActivityTypeBrowsingWeb,
-           let url = userActivity.webpageURL {
-            handleDeepLink(url)
+            // Handle Universal Links from launch
+            if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+               let url = userActivity.webpageURL {
+                handleDeepLink(url)
+            }
         }
     }
 
@@ -208,13 +209,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         appCoordinator?.handleDeepLink(url)
     }
 
-    /// Deliver auth callback token to the active LoginViewModel via the AuthCoordinator
+    /// Deliver auth callback token to the active LoginViewModel via the AuthCoordinator.
+    /// D5: Only accepts callbacks when the login screen is actively waiting for one.
     private func handleAuthCallback(sessionToken: String) {
         guard let coordinator = appCoordinator else { return }
         // Find the AuthCoordinator in the child hierarchy
-        if let authCoordinator = coordinator.childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
-            authCoordinator.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+        guard let authCoordinator = coordinator.childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator,
+              let loginViewModel = authCoordinator.loginViewModel else {
+            // No active login flow — ignore the callback to prevent URL scheme hijacking
+            return
         }
+        loginViewModel.handleAuthCallback(sessionToken: sessionToken)
     }
 
     // MARK: - Push Notifications

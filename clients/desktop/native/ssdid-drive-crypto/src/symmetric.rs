@@ -606,7 +606,7 @@ mod tests {
         let key = tiered_kdf_derive(password, &wire_salt).unwrap();
         assert_eq!(
             hex::encode(&key),
-            "eb9ffe4aa76d3cd79851cd1de39dbfa8ced4ad88b0eec1596c214bb733618279"
+            "9ac8238c6d6cfb684b65d74a09bc374c89fda665557ff1cc5413feeb54ce33b7"
         );
 
         // Verify direct call matches

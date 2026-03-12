@@ -3,6 +3,7 @@ import Combine
 @testable import SsdidDrive
 
 /// Unit tests for InviteAcceptViewModel
+@MainActor
 final class InviteAcceptViewModelTests: XCTestCase {
 
     // MARK: - Properties
