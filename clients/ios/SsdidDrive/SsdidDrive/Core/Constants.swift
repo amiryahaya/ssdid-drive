@@ -19,7 +19,7 @@ enum Constants {
         #if DEBUG
         static let piiServiceURL = "http://localhost:4001/api/v1"
         #else
-        static let piiServiceURL = "https://pii.ssdid-drive.app/api/v1"
+        static let piiServiceURL = "https://pii.ssdid.my/api/v1"
         #endif
 
         // Endpoints

@@ -383,9 +383,9 @@ extension SettingsViewController: UITableViewDelegate {
         case .initiateRecovery:
             viewModel.showInitiateRecovery()
         case .privacy:
-            openURL("https://ssdid-drive.app/privacy")
+            openURL("https://ssdid.my/privacy")
         case .terms:
-            openURL("https://ssdid-drive.app/terms")
+            openURL("https://ssdid.my/terms")
         case .logout:
             confirmLogout()
         default:

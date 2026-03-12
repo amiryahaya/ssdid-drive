@@ -16,8 +16,8 @@ final class DeepLinkParser {
 
     /// Allowed hosts for Universal Links (HTTPS deep links)
     private static let allowedUniversalLinkHosts: Set<String> = [
-        "app.ssdid-drive.app",
-        "ssdid-drive.app"
+        "drive.ssdid.my",
+        "ssdid.my"
     ]
 
     // MARK: - Validation Constants
@@ -54,7 +54,7 @@ final class DeepLinkParser {
             host = url.host
             pathComponents = url.pathComponents.filter { $0 != "/" }
         } else if url.scheme == "https" {
-            // Universal Link: https://app.ssdid-drive.app/share/123
+            // Universal Link: https://drive.ssdid.my/share/123
             // SECURITY: Validate the host is in our allowed list
             guard let urlHost = url.host, allowedUniversalLinkHosts.contains(urlHost) else {
                 return nil
