@@ -39,7 +39,10 @@ fn main() {
 
     build.compile("kaz_sign");
 
-    // Link OpenSSL
+    // Link OpenSSL statically to avoid runtime dylib dependency
+    #[cfg(target_os = "macos")]
+    println!("cargo:rustc-link-lib=static=crypto");
+    #[cfg(not(target_os = "macos"))]
     println!("cargo:rustc-link-lib=crypto");
 
     // Generate bindings
