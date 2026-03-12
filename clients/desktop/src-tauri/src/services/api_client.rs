@@ -9,7 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 /// Default API base URL (production)
-const DEFAULT_API_BASE_URL: &str = "https://api.ssdid.my/api/v1";
+const DEFAULT_API_BASE_URL: &str = "https://drive.ssdid.my/api";
 
 /// Environment variable name for API URL override
 const API_URL_ENV_VAR: &str = "SSDID_DRIVE_API_URL";

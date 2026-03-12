@@ -100,6 +100,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // Auth commands (SSDID session model)
+            commands::auth::create_challenge,
             commands::auth::save_session,
             commands::auth::check_auth_status,
             commands::auth::get_current_user,

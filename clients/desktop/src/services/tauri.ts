@@ -26,43 +26,24 @@ export interface ChallengeResult {
   qrPayload: string;
 }
 
-async function getApiBaseUrl(): Promise<string> {
-  try {
-    const info = await invoke<{ api_base_url: string }>('get_api_base_url');
-    return info.api_base_url;
-  } catch {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:5147';
-  }
-}
-
 /**
- * Create a challenge by calling the backend login/initiate endpoint.
+ * Create a challenge by calling the backend via Tauri command (bypasses CORS).
  */
 export async function createChallenge(
   _action: 'authenticate' | 'register'
 ): Promise<ChallengeResult> {
-  const baseUrl = await getApiBaseUrl();
-  const resp = await fetch(`${baseUrl}/api/auth/ssdid/login/initiate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  if (!resp.ok) {
-    throw new Error(`Login initiate failed: ${resp.status} ${resp.statusText}`);
-  }
-
-  const data = await resp.json();
-
-  if (!data?.challenge_id || !data?.subscriber_secret || !data?.qr_payload?.server_did) {
-    throw new Error('Unexpected response from login/initiate');
-  }
+  const data = await invoke<{
+    challenge_id: string;
+    subscriber_secret: string;
+    qr_payload: string;
+    server_did: string;
+  }>('create_challenge');
 
   return {
-    serverDid: data.qr_payload.server_did,
+    serverDid: data.server_did,
     challengeId: data.challenge_id,
     subscriberSecret: data.subscriber_secret,
-    qrPayload: JSON.stringify(data.qr_payload),
+    qrPayload: data.qr_payload,
   };
 }
 

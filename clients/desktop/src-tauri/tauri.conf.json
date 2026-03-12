@@ -11,7 +11,7 @@
   },
   "app": {
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.ssdid.my wss://api.ssdid.my",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://drive.ssdid.my wss://drive.ssdid.my",
       "dangerousDisableAssetCspModification": false,
       "assetProtocol": {
         "enable": true,
