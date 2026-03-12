@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 
 namespace SsdidDrive.Api.Features.Admin;
 
@@ -11,19 +12,25 @@ public static class ListAdminInvitations
 
     private static async Task<IResult> Handle(
         Guid tenantId, [AsParameters] PaginationParams pagination,
-        AppDbContext db, CancellationToken ct)
+        AppDbContext db, string? status, CancellationToken ct)
     {
         var tenantExists = await db.Tenants.AnyAsync(t => t.Id == tenantId, ct);
         if (!tenantExists)
             return AppError.NotFound("Tenant not found").ToProblemResult();
 
-        var query = db.Invitations
-            .Where(i => i.TenantId == tenantId)
-            .OrderByDescending(i => i.CreatedAt);
+        var query = db.Invitations.Where(i => i.TenantId == tenantId);
 
-        var total = await query.CountAsync(ct);
+        if (!string.IsNullOrWhiteSpace(status) &&
+            Enum.TryParse<InvitationStatus>(status, ignoreCase: true, out var parsedStatus))
+        {
+            query = query.Where(i => i.Status == parsedStatus);
+        }
 
-        var items = await query
+        var ordered = query.OrderByDescending(i => i.CreatedAt);
+
+        var total = await ordered.CountAsync(ct);
+
+        var items = await ordered
             .Skip(pagination.Skip)
             .Take(pagination.Take)
             .Select(i => new

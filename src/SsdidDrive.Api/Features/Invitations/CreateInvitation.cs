@@ -111,17 +111,17 @@ public static class CreateInvitation
 
         return Results.Created($"/api/invitations/{invitation.Id}", new
         {
-            invitation.Id,
-            invitation.TenantId,
-            invitation.InvitedById,
-            invitation.Email,
-            invitation.InvitedUserId,
-            Role = invitation.Role.ToString().ToLowerInvariant(),
-            Status = invitation.Status.ToString().ToLowerInvariant(),
-            invitation.ShortCode,
-            invitation.Message,
-            invitation.ExpiresAt,
-            invitation.CreatedAt
+            id = invitation.Id,
+            tenant_id = invitation.TenantId,
+            invited_by_id = invitation.InvitedById,
+            email = invitation.Email,
+            invited_user_id = invitation.InvitedUserId,
+            role = invitation.Role.ToString().ToLowerInvariant(),
+            status = invitation.Status.ToString().ToLowerInvariant(),
+            short_code = invitation.ShortCode,
+            message = invitation.Message,
+            expires_at = invitation.ExpiresAt,
+            created_at = invitation.CreatedAt
         });
     }
 

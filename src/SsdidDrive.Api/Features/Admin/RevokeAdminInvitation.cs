@@ -15,6 +15,10 @@ public static class RevokeAdminInvitation
         Guid tenantId, Guid id, AppDbContext db,
         CurrentUserAccessor accessor, AuditService audit, CancellationToken ct)
     {
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
+        if (tenant is null)
+            return AppError.NotFound("Tenant not found").ToProblemResult();
+
         var invitation = await db.Invitations
             .FirstOrDefaultAsync(i => i.Id == id && i.TenantId == tenantId, ct);
 
@@ -30,7 +34,7 @@ public static class RevokeAdminInvitation
 
         await audit.LogAsync(accessor.User!.Id, "invitation.revoked",
             "Invitation", invitation.Id,
-            $"Revoked invitation for {invitation.Email} to tenant {tenantId}", ct);
+            $"Revoked invitation for {invitation.Email} to tenant {tenant.Name}", ct);
 
         return Results.NoContent();
     }

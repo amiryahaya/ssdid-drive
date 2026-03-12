@@ -7,19 +7,19 @@ namespace SsdidDrive.Api.Features.Admin;
 public static class GetTenantMembers
 {
     public static void Map(RouteGroupBuilder group) =>
-        group.MapGet("/tenants/{id:guid}/members", Handle);
+        group.MapGet("/tenants/{tenantId:guid}/members", Handle);
 
     private static async Task<IResult> Handle(
-        Guid id,
+        Guid tenantId,
         AppDbContext db,
         CancellationToken ct)
     {
-        var tenantExists = await db.Tenants.AnyAsync(t => t.Id == id, ct);
+        var tenantExists = await db.Tenants.AnyAsync(t => t.Id == tenantId, ct);
         if (!tenantExists)
             return AppError.NotFound("Tenant not found").ToProblemResult();
 
         var members = await db.UserTenants
-            .Where(ut => ut.TenantId == id)
+            .Where(ut => ut.TenantId == tenantId)
             .Include(ut => ut.User)
             .OrderBy(ut => ut.User.DisplayName)
             .Select(ut => new

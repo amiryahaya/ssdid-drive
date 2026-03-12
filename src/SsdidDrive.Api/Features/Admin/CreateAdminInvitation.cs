@@ -1,5 +1,6 @@
 using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
@@ -10,7 +11,7 @@ namespace SsdidDrive.Api.Features.Admin;
 
 public static class CreateAdminInvitation
 {
-    public record Request(string? Email, string? Role, string? Message);
+    private record Request(string? Email, string? Role, string? Message);
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/tenants/{tenantId:guid}/invitations", Handle);
@@ -18,13 +19,16 @@ public static class CreateAdminInvitation
     private static async Task<IResult> Handle(
         Guid tenantId, Request req, AppDbContext db,
         CurrentUserAccessor accessor, NotificationService notifications,
-        EmailService? emailService, AuditService audit, CancellationToken ct)
+        EmailService? emailService, AuditService audit, ILoggerFactory loggerFactory,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Email))
             return AppError.BadRequest("Email is required").ToProblemResult();
 
         if (!MailAddress.TryCreate(req.Email, out _))
             return AppError.BadRequest("Invalid email address format").ToProblemResult();
+
+        var normalizedEmail = req.Email.Trim().ToLowerInvariant();
 
         if (req.Message is { Length: > 500 })
             return AppError.BadRequest("Message must be 500 characters or fewer").ToProblemResult();
@@ -44,7 +48,7 @@ public static class CreateAdminInvitation
             return AppError.NotFound("Tenant not found").ToProblemResult();
 
         var existingMember = await db.Users
-            .Where(u => u.Email == req.Email)
+            .Where(u => u.Email == normalizedEmail)
             .Join(db.UserTenants.Where(ut => ut.TenantId == tenantId),
                 u => u.Id, ut => ut.UserId, (u, ut) => u)
             .AnyAsync(ct);
@@ -54,7 +58,7 @@ public static class CreateAdminInvitation
 
         var duplicatePending = await db.Invitations
             .AnyAsync(i => i.TenantId == tenantId
-                && i.Email == req.Email
+                && i.Email == normalizedEmail
                 && i.Status == InvitationStatus.Pending, ct);
 
         if (duplicatePending)
@@ -62,10 +66,19 @@ public static class CreateAdminInvitation
 
         var now = DateTimeOffset.UtcNow;
         var token = InvitationHelper.GenerateToken();
-        var shortCode = await InvitationHelper.GenerateShortCode(db, tenant.Slug, ct);
+
+        string shortCode;
+        try
+        {
+            shortCode = await InvitationHelper.GenerateShortCode(db, tenant.Slug, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return AppError.BadRequest("Unable to generate invitation code, please try again").ToProblemResult();
+        }
 
         Guid? invitedUserId = null;
-        var invitedUser = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email, ct);
+        var invitedUser = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
         invitedUserId = invitedUser?.Id;
 
         var user = accessor.User!;
@@ -76,7 +89,7 @@ public static class CreateAdminInvitation
             TenantId = tenantId,
             InvitedById = user.Id,
             InvitedUserId = invitedUserId,
-            Email = req.Email,
+            Email = normalizedEmail,
             Role = role.Value,
             Status = InvitationStatus.Pending,
             Token = token,
@@ -105,15 +118,20 @@ public static class CreateAdminInvitation
 
         await audit.LogAsync(user.Id, "invitation.created",
             "Invitation", invitation.Id,
-            $"Invited {req.Email} as {role.Value.ToString().ToLowerInvariant()} to tenant {tenant.Name}", ct);
+            $"Invited {normalizedEmail} as {role.Value.ToString().ToLowerInvariant()} to tenant {tenant.Name}", ct);
 
         if (emailService is not null)
         {
-            var email = req.Email;
+            var email = normalizedEmail;
             var tenantName = tenant.Name;
             var roleName = role.Value.ToString().ToLowerInvariant();
             var msg = req.Message;
-            _ = Task.Run(() => emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg));
+            var logger = loggerFactory.CreateLogger(typeof(CreateAdminInvitation).FullName!);
+            _ = Task.Run(async () =>
+            {
+                try { await emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg); }
+                catch (Exception ex) { logger.LogError(ex, "Failed to send invitation email to {Email}", email); }
+            });
         }
 
         return Results.Created($"/api/admin/tenants/{tenantId}/invitations/{invitation.Id}", new
