@@ -14,14 +14,30 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.9"
 
+packages:
+  Argon2Swift:
+    path: SsdidDrive/Packages/Argon2Swift
+
 targets:
   SsdidDrive:
     type: application
     platform: iOS
     sources:
-      - path: SsdidDrive
+      - path: SsdidDrive/SsdidDrive
         excludes:
           - "**/.DS_Store"
+          - "**/Info.plist"
+      - path: SsdidDrive/Shared
+        excludes:
+          - "**/.DS_Store"
+      - path: SsdidDrive/Assets.xcassets
+      - path: SsdidDrive/LaunchScreen.storyboard
+    dependencies:
+      - framework: SsdidDrive/Frameworks/KazKemNative.xcframework
+        embed: true
+      - framework: SsdidDrive/Frameworks/KazSignNative.xcframework
+        embed: false
+      - package: Argon2Swift
     settings:
       base:
         INFOPLIST_FILE: SsdidDrive/Info.plist
@@ -31,6 +47,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
         ENABLE_BITCODE: NO
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/SsdidDrive/Native/MlDsaNative/include $(SRCROOT)/SsdidDrive/Native/MlKemNative/include"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/SsdidDrive/Native/MlDsaNative/include $(SRCROOT)/SsdidDrive/Native/MlKemNative/include"
     entitlements:
       path: SsdidDrive/SsdidDrive.entitlements
       properties:

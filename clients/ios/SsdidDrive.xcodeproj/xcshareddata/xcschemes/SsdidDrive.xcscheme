@@ -15,7 +15,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A5443DAEEBEF4072B82D52C9"
+               BlueprintIdentifier = "2D9384A7B894E72083755F9A"
                BuildableName = "SsdidDrive.app"
                BlueprintName = "SsdidDrive"
                ReferencedContainer = "container:SsdidDrive.xcodeproj">
@@ -32,7 +32,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5443DAEEBEF4072B82D52C9"
+            BlueprintIdentifier = "2D9384A7B894E72083755F9A"
             BuildableName = "SsdidDrive.app"
             BlueprintName = "SsdidDrive"
             ReferencedContainer = "container:SsdidDrive.xcodeproj">
@@ -57,7 +57,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5443DAEEBEF4072B82D52C9"
+            BlueprintIdentifier = "2D9384A7B894E72083755F9A"
             BuildableName = "SsdidDrive.app"
             BlueprintName = "SsdidDrive"
             ReferencedContainer = "container:SsdidDrive.xcodeproj">
@@ -76,7 +76,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5443DAEEBEF4072B82D52C9"
+            BlueprintIdentifier = "2D9384A7B894E72083755F9A"
             BuildableName = "SsdidDrive.app"
             BlueprintName = "SsdidDrive"
             ReferencedContainer = "container:SsdidDrive.xcodeproj">

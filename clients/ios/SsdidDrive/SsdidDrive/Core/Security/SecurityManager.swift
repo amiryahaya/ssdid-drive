@@ -196,17 +196,18 @@ final class SecurityManager {
 
     /// Check if the app sandbox is intact
     private func isSandboxIntact() -> Bool {
-        // Try to fork - should fail on non-jailbroken devices
-        // Note: fork() is not available on Mac Catalyst, so skip this check there
+        // Check for writable paths outside sandbox as jailbreak indicator
         #if !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
-        let result = fork()
-        if result >= 0 {
-            // Fork succeeded, device is jailbroken
-            if result == 0 {
-                // Child process, exit immediately
-                exit(0)
+        let jailbreakPaths = [
+            "/private/var/lib/apt",
+            "/Applications/Cydia.app",
+            "/usr/sbin/sshd",
+            "/usr/bin/ssh",
+        ]
+        for path in jailbreakPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return false
             }
-            return false
         }
         #endif
         return true

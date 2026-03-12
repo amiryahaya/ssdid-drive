@@ -13,77 +13,38 @@ struct MembersView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                if viewModel.isLoading && viewModel.members.isEmpty {
-                    ProgressView("Loading members...")
-                } else if viewModel.isEmpty {
-                    emptyStateView
-                } else {
-                    memberListView
-                }
-            }
+            mainContent
+        }
+    }
+
+    private var mainContent: some View {
+        contentView
             .navigationTitle("Members")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
                 }
             }
-            .onAppear {
-                viewModel.loadMembers()
-            }
-            .onChange(of: viewModel.errorMessage) { newValue in
-                showingError = newValue != nil
-            }
-            .alert("Error", isPresented: $showingError) {
-                Button("OK") {
-                    viewModel.clearError()
-                }
-            } message: {
-                Text(viewModel.errorMessage ?? "")
-            }
-            .onChange(of: memberToChangeRole) { newValue in
-                showingChangeRole = newValue != nil
-            }
-            .confirmationDialog(
-                "Change Role",
-                isPresented: $showingChangeRole,
-                presenting: memberToChangeRole
-            ) { member in
-                ForEach(viewModel.assignableRoles, id: \.self) { role in
-                    if role != member.role {
-                        Button(role.displayName) {
-                            viewModel.changeRole(member: member, to: role)
-                            memberToChangeRole = nil
-                        }
-                    }
-                }
-                Button("Cancel", role: .cancel) {
-                    memberToChangeRole = nil
-                }
-            } message: { member in
-                Text("Select a new role for \(member.name)")
-            }
-            .onChange(of: memberToRemove) { newValue in
-                showingRemoveConfirmation = newValue != nil
-            }
-            .alert(
-                "Remove Member",
-                isPresented: $showingRemoveConfirmation,
-                presenting: memberToRemove
-            ) { member in
-                Button("Remove", role: .destructive) {
-                    viewModel.removeMember(member)
-                    memberToRemove = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    memberToRemove = nil
-                }
-            } message: { member in
-                Text("Are you sure you want to remove \(member.name) from this organization? This action cannot be undone.")
-            }
+            .onAppear { viewModel.loadMembers() }
+            .modifier(MembersAlerts(
+                viewModel: viewModel,
+                showingError: $showingError,
+                showingChangeRole: $showingChangeRole,
+                showingRemoveConfirmation: $showingRemoveConfirmation,
+                memberToChangeRole: $memberToChangeRole,
+                memberToRemove: $memberToRemove
+            ))
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if viewModel.isLoading && viewModel.members.isEmpty {
+            ProgressView("Loading members...")
+        } else if viewModel.isEmpty {
+            emptyStateView
+        } else {
+            memberListView
         }
     }
 
@@ -111,32 +72,85 @@ struct MembersView: View {
     private var memberListView: some View {
         List {
             ForEach(viewModel.members) { member in
-                MemberRow(
-                    member: member,
-                    isCurrentUser: viewModel.isCurrentUser(member: member),
-                    canManage: viewModel.canModify(member: member)
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if viewModel.canModify(member: member) {
-                        memberToChangeRole = member
-                    }
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if viewModel.canModify(member: member) {
-                        Button(role: .destructive) {
-                            memberToRemove = member
-                        } label: {
-                            Label("Remove", systemImage: "person.badge.minus")
-                        }
-                    }
-                }
+                memberRow(for: member)
             }
         }
         .listStyle(.insetGrouped)
         .refreshable {
             viewModel.refresh()
         }
+    }
+
+    private func memberRow(for member: TenantMember) -> some View {
+        MemberRow(
+            member: member,
+            isCurrentUser: viewModel.isCurrentUser(member: member),
+            canManage: viewModel.canModify(member: member)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if viewModel.canModify(member: member) {
+                memberToChangeRole = member
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if viewModel.canModify(member: member) {
+                Button(role: .destructive) {
+                    memberToRemove = member
+                } label: {
+                    Label("Remove", systemImage: "person.badge.minus")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Alerts Modifier
+
+private struct MembersAlerts: ViewModifier {
+    @ObservedObject var viewModel: MembersViewModel
+    @Binding var showingError: Bool
+    @Binding var showingChangeRole: Bool
+    @Binding var showingRemoveConfirmation: Bool
+    @Binding var memberToChangeRole: TenantMember?
+    @Binding var memberToRemove: TenantMember?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: viewModel.errorMessage) { val in showingError = val != nil }
+            .onChange(of: memberToChangeRole) { val in showingChangeRole = val != nil }
+            .onChange(of: memberToRemove) { val in showingRemoveConfirmation = val != nil }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") { viewModel.clearError() }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+            .confirmationDialog("Change Role", isPresented: $showingChangeRole, presenting: memberToChangeRole) { member in
+                roleButtons(for: member)
+            } message: { member in
+                Text("Select a new role for \(member.name)")
+            }
+            .alert("Remove Member", isPresented: $showingRemoveConfirmation, presenting: memberToRemove) { member in
+                Button("Remove", role: .destructive) {
+                    viewModel.removeMember(member)
+                    memberToRemove = nil
+                }
+                Button("Cancel", role: .cancel) { memberToRemove = nil }
+            } message: { member in
+                Text("Remove \(member.name) from this organization?")
+            }
+    }
+
+    @ViewBuilder
+    private func roleButtons(for member: TenantMember) -> some View {
+        let roles = viewModel.assignableRoles.filter { $0 != member.role }
+        ForEach(roles, id: \.self) { role in
+            Button(role.displayName) {
+                viewModel.changeRole(member: member, to: role)
+                memberToChangeRole = nil
+            }
+        }
+        Button("Cancel", role: .cancel) { memberToChangeRole = nil }
     }
 }
 
@@ -150,56 +164,10 @@ struct MemberRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar with initials
-            ZStack {
-                Circle()
-                    .fill(isCurrentUser ? Color.blue : Color.gray.opacity(0.2))
-                    .frame(width: 44, height: 44)
-
-                Text(member.initials)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(isCurrentUser ? .white : .primary)
-            }
-
-            // Member info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(member.name)
-                        .font(.body)
-                        .foregroundColor(.primary)
-
-                    if isCurrentUser {
-                        Text("You")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundColor(.blue)
-                            .cornerRadius(4)
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    Text(member.email)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
+            avatarView
+            infoView
             Spacer()
-
-            // Role badge
-            VStack(alignment: .trailing, spacing: 4) {
-                RoleBadge(role: member.role)
-
-                Text("Joined \(member.joinedAt.shortString)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            // Disclosure for editable members
+            roleView
             if canManage {
                 Image(systemName: "chevron.right")
                     .font(.caption2)
@@ -210,13 +178,51 @@ struct MemberRow: View {
         .listRowBackground(isCurrentUser ? Color.blue.opacity(0.05) : Color.clear)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(member.name), \(member.role.displayName)")
-        .accessibilityHint(isCurrentUser ? "You" : (canManage ? "Tap to change role" : ""))
+    }
+
+    private var avatarView: some View {
+        ZStack {
+            Circle()
+                .fill(isCurrentUser ? Color.blue : Color.gray.opacity(0.2))
+                .frame(width: 44, height: 44)
+            Text(member.initials)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(isCurrentUser ? .white : .primary)
+        }
+    }
+
+    private var infoView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(member.name)
+                    .font(.body)
+                if isCurrentUser {
+                    Text("You")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.2))
+                        .foregroundColor(.blue)
+                        .cornerRadius(4)
+                }
+            }
+            Text(member.email)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var roleView: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            RoleBadge(role: member.role)
+            Text("Joined \(member.joinedAt.shortString)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
     }
 }
-
-// MARK: - Date Extension for shortString
-
-// Date.shortString is already defined in UIExtensions.swift
 
 // MARK: - Preview
 
