@@ -159,7 +159,7 @@ class BiometricAuthE2eTest {
                 E2eTestUtils.registerUser(authRepository, email, password, tenantSlug)
 
                 // Try to enable biometric
-                val result = E2eTestUtils.enableBiometric(authRepository, password)
+                val result = E2eTestUtils.enableBiometric(authRepository)
                 when (result) {
                     is Result.Success -> println("Biometric enabled successfully")
                     is Result.Error -> println("Biometric enrollment failed: ${result.exception.message}")

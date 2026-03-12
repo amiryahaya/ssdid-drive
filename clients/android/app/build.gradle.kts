@@ -79,9 +79,9 @@ android {
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "SSDID Drive Dev")
 
-            // Local development server (emulator)
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4000/api/\"")
-            buildConfigField("String", "API_WS_URL", "\"ws://10.0.2.2:4000/socket/websocket\"")
+            // Development server
+            buildConfigField("String", "API_BASE_URL", "\"https://drive.ssdid.my/api/\"")
+            buildConfigField("String", "API_WS_URL", "\"wss://drive.ssdid.my/socket/websocket\"")
             buildConfigField("Boolean", "ENABLE_LOGGING", "true")
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "false")
             buildConfigField("String", "CERT_PIN_PRIMARY", "\"\"")
@@ -195,6 +195,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     // 64-bit only for PQC libraries
@@ -252,6 +255,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Serialization
@@ -333,6 +337,7 @@ dependencies {
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.50")
+    androidTestImplementation("io.mockk:mockk-android:1.13.9")
     kspAndroidTest("com.google.dagger:hilt-compiler:2.50")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

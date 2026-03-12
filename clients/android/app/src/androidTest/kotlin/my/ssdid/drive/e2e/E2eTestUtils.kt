@@ -10,7 +10,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
-import androidx.compose.ui.test.onNode
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import my.ssdid.drive.MainActivity
 import my.ssdid.drive.data.remote.dto.PublicKeysDto
@@ -30,37 +29,43 @@ object E2eTestUtils {
         )
     }
 
+    /**
+     * Register a user via the API.
+     *
+     * Note: Auth is now wallet-based (SSDID). This method is a stub for E2E tests
+     * that were written for the old email/password auth system.
+     * These tests should be migrated to use wallet-based auth via deep links.
+     */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun registerUser(
         authRepository: AuthRepository,
         email: String,
         password: CharArray,
         tenantSlug: String
     ): User {
-        val result = authRepository.register(email, password, tenantSlug)
-        return when (result) {
-            is Result.Success -> result.data
-            is Result.Error -> throw AssertionError("Registration failed: ${result.exception.message}")
-        }
+        throw UnsupportedOperationException(
+            "Email/password registration is no longer supported. " +
+            "Auth is now wallet-based (SSDID). Migrate this E2E test to use wallet deep links."
+        )
     }
 
+    /**
+     * Login and unlock keys.
+     *
+     * Note: Auth is now wallet-based (SSDID). This method is a stub for E2E tests
+     * that were written for the old email/password auth system.
+     */
+    @Suppress("UNUSED_PARAMETER")
     suspend fun loginAndUnlock(
         authRepository: AuthRepository,
         email: String,
         password: CharArray,
         tenantSlug: String
     ): User {
-        val loginResult = authRepository.login(email, password, tenantSlug)
-        val user = when (loginResult) {
-            is Result.Success -> loginResult.data
-            is Result.Error -> throw AssertionError("Login failed: ${loginResult.exception.message}")
-        }
-
-        val unlockResult = authRepository.unlockKeys(password)
-        if (unlockResult is Result.Error) {
-            throw AssertionError("Unlock keys failed: ${unlockResult.exception.message}")
-        }
-
-        return user
+        throw UnsupportedOperationException(
+            "Email/password login is no longer supported. " +
+            "Auth is now wallet-based (SSDID). Migrate this E2E test to use wallet deep links."
+        )
     }
 
     fun zeroize(chars: CharArray) {
@@ -86,10 +91,9 @@ object E2eTestUtils {
      * Enable biometric unlock for the current user
      */
     suspend fun enableBiometric(
-        authRepository: AuthRepository,
-        password: CharArray
+        authRepository: AuthRepository
     ): Result<Unit> {
-        return authRepository.enableBiometricUnlock(password)
+        return authRepository.enableBiometricUnlock()
     }
 
     /**
@@ -129,14 +133,12 @@ object E2eTestUtils {
     suspend fun switchTenant(
         tenantRepository: TenantRepository,
         tenantId: String
-    ): Result<Unit> {
-        return tenantRepository.switchTenant(tenantId)
-    }
+    ) = tenantRepository.switchTenant(tenantId)
 
     /**
      * Get list of available tenants for current user
      */
-    suspend fun listTenants(tenantRepository: TenantRepository) = tenantRepository.getTenants()
+    suspend fun listTenants(tenantRepository: TenantRepository) = tenantRepository.getUserTenants()
 
     // ==================== Compose Test Helpers ====================
 
@@ -185,12 +187,8 @@ object E2eTestUtils {
     ) {
         // Wait until loading indicator disappears
         waitUntil(timeoutMillis = timeoutMillis) {
-            try {
-                onNode(hasContentDescription("Loading")).assertDoesNotExist()
-                true
-            } catch (_: AssertionError) {
-                false
-            }
+            onAllNodes(hasContentDescription("Loading"))
+                .fetchSemanticsNodes().isEmpty()
         }
     }
 

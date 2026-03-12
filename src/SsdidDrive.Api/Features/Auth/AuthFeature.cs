@@ -15,6 +15,17 @@ public static class AuthFeature
         Logout.Map(group);
         LoginInitiate.Map(group);
 
+        // Standard SSDID protocol routes at /api/* so that SSDID Wallet
+        // (which uses the standard paths) can reach them without knowing
+        // about Drive's internal /api/auth/ssdid/* prefix.
+        var standardGroup = routes.MapGroup("/api")
+            .WithTags("Authentication (SSDID Protocol)")
+            .RequireRateLimiting("auth");
+
+        Register.Map(standardGroup);
+        RegisterVerify.Map(standardGroup);
+        Authenticate.Map(standardGroup);
+
         // SSE endpoint for real-time challenge completion (mapped outside the group
         // because it needs its own path prefix, not nested under the group)
         routes.MapAuthEvents();

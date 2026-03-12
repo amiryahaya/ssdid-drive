@@ -218,6 +218,9 @@ interface ApiService {
     @GET("auth/ssdid/server-info")
     suspend fun getServerInfo(): ServerInfoResponse
 
+    @POST("auth/ssdid/login/initiate")
+    suspend fun loginInitiate(): LoginInitiateResponse
+
     @POST("auth/logout")
     suspend fun logout(): Response<Unit>
 
@@ -463,10 +466,36 @@ interface ApiService {
  * Returned by GET /auth/ssdid/server-info.
  */
 data class ServerInfoResponse(
-    @SerializedName("server_url") val serverUrl: String,
     @SerializedName("server_did") val serverDid: String,
     @SerializedName("server_key_id") val serverKeyId: String,
-    @SerializedName("challenge_id") val challengeId: String,
     @SerializedName("service_name") val serviceName: String,
     @SerializedName("registry_url") val registryUrl: String
+)
+
+/**
+ * Response from POST /auth/ssdid/login/initiate.
+ * Contains challenge info and QR payload for wallet authentication.
+ */
+data class LoginInitiateResponse(
+    @SerializedName("challenge_id") val challengeId: String,
+    @SerializedName("subscriber_secret") val subscriberSecret: String,
+    @SerializedName("qr_payload") val qrPayload: QrPayload
+)
+
+data class QrPayload(
+    @SerializedName("action") val action: String,
+    @SerializedName("service_url") val serviceUrl: String,
+    @SerializedName("service_name") val serviceName: String,
+    @SerializedName("challenge_id") val challengeId: String,
+    @SerializedName("challenge") val challenge: String,
+    @SerializedName("server_did") val serverDid: String,
+    @SerializedName("server_key_id") val serverKeyId: String,
+    @SerializedName("server_signature") val serverSignature: String,
+    @SerializedName("registry_url") val registryUrl: String,
+    @SerializedName("requested_claims") val requestedClaims: RequestedClaims? = null
+)
+
+data class RequestedClaims(
+    @SerializedName("required") val required: List<String>? = null,
+    @SerializedName("optional") val optional: List<String>? = null
 )

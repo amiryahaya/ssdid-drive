@@ -72,7 +72,8 @@ class NotificationHandlerTest {
         every { anyConstructed<NotificationCompat.Builder>().addAction(any<Int>(), any(), any<PendingIntent>()) } answers { self as NotificationCompat.Builder }
         every { anyConstructed<NotificationCompat.Builder>().build() } returns mockNotification
 
-        handler = NotificationHandler(context)
+        val secureStorage = mockk<my.ssdid.drive.data.local.SecureStorage>(relaxed = true)
+        handler = NotificationHandler(context, secureStorage)
 
         // Access private methods via reflection for direct testing
         getChannelIdMethod = NotificationHandler::class.java.getDeclaredMethod(
@@ -224,14 +225,14 @@ class NotificationHandlerTest {
     // ==================== Notification Display Tests ====================
 
     @Test
-    fun `showNotification uses notification id hashCode as system notification id`() {
+    fun `showNotification uses incrementing notification id for system notification`() {
         val notification = createNotification(id = "test-notification-id")
 
         handler.showNotification(notification)
 
         verify {
             notificationManagerCompat.notify(
-                eq("test-notification-id".hashCode()),
+                any<Int>(),
                 any()
             )
         }

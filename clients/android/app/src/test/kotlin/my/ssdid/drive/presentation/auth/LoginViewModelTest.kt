@@ -3,6 +3,7 @@ package my.ssdid.drive.presentation.auth
 import app.cash.turbine.test
 import my.ssdid.drive.domain.repository.AuthRepository
 import my.ssdid.drive.domain.repository.ChallengeInfo
+import my.ssdid.drive.util.PushNotificationManager
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,21 +27,22 @@ import org.junit.Test
 class LoginViewModelTest {
 
     private lateinit var authRepository: AuthRepository
+    private lateinit var pushNotificationManager: PushNotificationManager
     private lateinit var viewModel: LoginViewModel
     private val testDispatcher = StandardTestDispatcher()
 
     private val testChallengeInfo = ChallengeInfo(
-        serverUrl = "https://api.example.com",
-        serverDid = "did:ssdid:server123",
         challengeId = "challenge-456",
-        walletDeepLink = "ssdidwallet://auth?challenge=challenge-456"
+        subscriberSecret = "secret-456",
+        walletDeepLink = "ssdid://login?challenge_id=challenge-456"
     )
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk()
-        viewModel = LoginViewModel(authRepository)
+        pushNotificationManager = mockk(relaxed = true)
+        viewModel = LoginViewModel(authRepository, pushNotificationManager)
     }
 
     @After

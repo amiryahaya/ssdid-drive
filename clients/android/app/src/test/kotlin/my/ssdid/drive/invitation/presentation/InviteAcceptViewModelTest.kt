@@ -25,10 +25,9 @@ class InviteAcceptViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private val testChallengeInfo = ChallengeInfo(
-        serverUrl = "https://api.example.com",
-        serverDid = "did:ssdid:server123",
         challengeId = "challenge-456",
-        walletDeepLink = "ssdidwallet://auth?challenge=challenge-456"
+        subscriberSecret = "secret-456",
+        walletDeepLink = "ssdid://login?challenge_id=challenge-456"
     )
 
     @Before

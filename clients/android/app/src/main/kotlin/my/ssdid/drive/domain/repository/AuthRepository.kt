@@ -37,6 +37,15 @@ interface AuthRepository {
     suspend fun launchWalletAuth(challenge: ChallengeInfo)
 
     /**
+     * Listen for session token via SSE after launching wallet.
+     * Blocks until the server sends the authenticated event or timeout.
+     *
+     * @param challenge The challenge info with SSE connection details
+     * @return The session token
+     */
+    suspend fun listenForSession(challenge: ChallengeInfo): String
+
+    /**
      * Save the session token received from the wallet callback.
      *
      * @param sessionToken The session token from the wallet
@@ -128,8 +137,7 @@ interface AuthRepository {
  * Information about a challenge for SSDID Wallet authentication.
  */
 data class ChallengeInfo(
-    val serverUrl: String,
-    val serverDid: String,
     val challengeId: String,
+    val subscriberSecret: String,
     val walletDeepLink: String
 )

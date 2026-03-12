@@ -34,21 +34,23 @@ class LoginViewModel @Inject constructor(
     /**
      * Initiate sign-in with SSDID Wallet.
      *
-     * Creates a challenge on the server, then launches the wallet app
-     * via deep link. The wallet will authenticate the user and call back
-     * with a session token.
+     * Same-device flow (per ssdid-drive-deeplink-protocol.md):
+     * 1. POST /login/initiate → get challenge_id, subscriber_secret, qr_payload
+     * 2. Build ssdid://login deep link and launch SSDID Wallet
+     * 3. Wallet authenticates with server and calls back via ssdiddrive://auth/callback?session_token=...
+     * 4. handleWalletCallback() saves session token
      */
     fun signInWithWallet() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                // 1. Get server info and create challenge
+                // 1. Create challenge on server
                 val challenge = authRepository.createChallenge("authenticate")
 
-                // 2. Launch deep link to wallet
+                // 2. Launch wallet deep link
                 authRepository.launchWalletAuth(challenge)
 
-                // 3. Update state to show waiting UI
+                // 3. Show waiting state — wallet will call back via deep link
                 _uiState.update { it.copy(isLoading = false, isWaitingForWallet = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -60,17 +62,13 @@ class LoginViewModel @Inject constructor(
      * Handle the callback from SSDID Wallet with the session token.
      *
      * Called when the wallet redirects back to the app via deep link:
-     * ssdiddrive://auth/callback?session_token=...
-     *
-     * @param sessionToken The session token from the wallet
+     * ssdid-drive://auth/callback?session_token=<token>
      */
     fun handleWalletCallback(sessionToken: String) {
         viewModelScope.launch {
             try {
                 authRepository.saveSession(sessionToken)
                 _uiState.update { it.copy(isWaitingForWallet = false, isAuthenticated = true) }
-
-                // D2: Request push notification permission after successful login
                 pushNotificationManager.requestPermission()
             } catch (e: Exception) {
                 _uiState.update { it.copy(isWaitingForWallet = false, error = e.message) }

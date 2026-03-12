@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,9 +56,7 @@ fun MembersScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        PullToRefreshBox(
-            isRefreshing = uiState.isLoading,
-            onRefresh = { viewModel.loadMembers() },
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
