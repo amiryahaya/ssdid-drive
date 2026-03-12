@@ -29,6 +29,11 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Create xcconfig from examples
+        run: |
+          cp SsdidDrive/Config/Debug.xcconfig.example SsdidDrive/Config/Debug.xcconfig
+          cp SsdidDrive/Config/Release.xcconfig.example SsdidDrive/Config/Release.xcconfig
+
       - name: Generate Xcode project
         run: xcodegen generate
 

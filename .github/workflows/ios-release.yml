@@ -31,6 +31,20 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Create xcconfig from secrets
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
+        run: |
+          cat > SsdidDrive/Config/Debug.xcconfig <<EOF
+          SENTRY_DSN = ${SENTRY_DSN}
+          ONESIGNAL_APP_ID = ${ONESIGNAL_APP_ID}
+          EOF
+          cat > SsdidDrive/Config/Release.xcconfig <<EOF
+          SENTRY_DSN = ${SENTRY_DSN}
+          ONESIGNAL_APP_ID = ${ONESIGNAL_APP_ID}
+          EOF
+
       - name: Generate Xcode project
         run: xcodegen generate
 
