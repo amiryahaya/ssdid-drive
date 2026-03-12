@@ -379,6 +379,13 @@ drive.ssdid.my {
         file_server
     }
 
+    # Apple App Site Association — must serve as application/json
+    handle /.well-known/apple-app-site-association {
+        root * /var/www/landing
+        header Content-Type application/json
+        file_server
+    }
+
     # Landing page (catch-all)
     handle {
         root * /var/www/landing
