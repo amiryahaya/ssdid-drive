@@ -213,7 +213,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(i => i.InvitedUserId);
             e.HasIndex(i => new { i.TenantId, i.Email })
                 .IsUnique()
-                .HasFilter("status = 'pending'")
+                .HasFilter("\"Status\" = 'pending'")
                 .HasDatabaseName("ix_invitations_pending_email_tenant");
 
             e.HasOne(i => i.Tenant)

@@ -15,7 +15,7 @@ namespace SsdidDrive.Api.Migrations
                 table: "invitations",
                 columns: new[] { "TenantId", "Email" },
                 unique: true,
-                filter: "status = 'pending'");
+                filter: "\"Status\" = 'pending'");
         }
 
         /// <inheritdoc />

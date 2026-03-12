@@ -317,7 +317,7 @@ namespace SsdidDrive.Api.Migrations
                     b.HasIndex("TenantId", "Email")
                         .IsUnique()
                         .HasDatabaseName("ix_invitations_pending_email_tenant")
-                        .HasFilter("status = 'pending'");
+                        .HasFilter("\"Status\" = 'pending'");
 
                     b.HasIndex("TenantId", "Status");
 
