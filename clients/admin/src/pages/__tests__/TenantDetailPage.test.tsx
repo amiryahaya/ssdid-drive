@@ -105,4 +105,27 @@ describe('TenantDetailPage — Invitations', () => {
     renderPage()
     expect(screen.queryByText('Revoke')).not.toBeInTheDocument()
   })
+
+  it('calls revokeAdminInvitation and refreshes list on revoke', async () => {
+    window.confirm = vi.fn().mockReturnValue(true)
+    const user = userEvent.setup()
+    mockStore.tenantInvitations = [
+      { id: 'i1', tenant_id: 't1', invited_by_id: 'u1', email: 'a@b.com',
+        invited_user_id: null, role: 'owner', status: 'pending',
+        short_code: 'CODE-1', message: null,
+        expires_at: '2026-03-19T00:00:00Z', created_at: '2026-03-12T00:00:00Z' },
+    ]
+    renderPage()
+    await user.click(screen.getByText('Revoke'))
+    await waitFor(() => {
+      expect(mockStore.revokeAdminInvitation).toHaveBeenCalledWith('t1', 'i1')
+    })
+  })
+
+  it('disables invite button for disabled tenant', () => {
+    mockStore.tenants = [{ id: 't1', name: 'Acme', slug: 'acme', disabled: true, storage_quota_bytes: null, user_count: 2, created_at: '2026-03-01T00:00:00Z' }]
+    mockStore.tenantInvitations = []
+    renderPage()
+    expect(screen.getByText('Invite User').closest('button')).toBeDisabled()
+  })
 })

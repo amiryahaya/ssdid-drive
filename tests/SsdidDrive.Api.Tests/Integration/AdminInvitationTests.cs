@@ -238,4 +238,71 @@ public class AdminInvitationTests : IClassFixture<SsdidDriveFactory>
         var response = await client.DeleteAsync($"/api/admin/tenants/{tenantId}/invitations/{invitationId}");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task CreateInvitation_MessageTooLong_Returns400()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("LongMsgAdmin");
+        var response = await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "msg@test.com", role = "owner", message = new string('x', 501) },
+            TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateInvitation_InvalidRole_Returns400()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("BadRoleAdmin");
+        var response = await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "r@test.com", role = "superadmin" }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RevokeInvitation_WrongTenant_Returns404()
+    {
+        var (client, tenantA) = await CreateAdminWithTenant("CrossTenantA");
+        // Create a second tenant
+        var slugB = $"inv-{Guid.NewGuid():N}"[..20];
+        var createRespB = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "TenantB", slug = slugB }, TestFixture.Json);
+        createRespB.EnsureSuccessStatusCode();
+        var tenantB = (await createRespB.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json)).GetProperty("id").GetGuid();
+
+        // Create invitation in tenantA
+        var createResp = await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantA}/invitations",
+            new { email = "cross@test.com", role = "owner" }, TestFixture.Json);
+        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitationId = created.GetProperty("id").GetGuid();
+
+        // Try to revoke via tenantB's route
+        var response = await client.DeleteAsync($"/api/admin/tenants/{tenantB}/invitations/{invitationId}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListInvitations_DoesNotLeakOtherTenantInvitations()
+    {
+        var (client, tenantA) = await CreateAdminWithTenant("IsoTenantA");
+        // Create a second tenant
+        var slugB = $"inv-{Guid.NewGuid():N}"[..20];
+        var createRespB = await client.PostAsJsonAsync("/api/admin/tenants",
+            new { name = "IsoTenantB", slug = slugB }, TestFixture.Json);
+        createRespB.EnsureSuccessStatusCode();
+        var tenantB = (await createRespB.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json)).GetProperty("id").GetGuid();
+
+        // Create invitation in tenantA
+        await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantA}/invitations",
+            new { email = "iso@test.com", role = "owner" }, TestFixture.Json);
+
+        // List invitations for tenantB — should be empty
+        var response = await client.GetAsync($"/api/admin/tenants/{tenantB}/invitations");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(0, body.GetProperty("items").GetArrayLength());
+    }
 }

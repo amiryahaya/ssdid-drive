@@ -111,4 +111,29 @@ describe('InviteUserDialog', () => {
       expect(screen.getByText('Email already invited')).toBeInTheDocument()
     })
   })
+
+  it('calls onInvited after successful invitation creation', async () => {
+    const user = userEvent.setup()
+    const onInvited = vi.fn()
+    mockCreateAdminInvitation.mockResolvedValue({
+      id: 'inv-1', short_code: 'ACME-X7K2', status: 'pending',
+    })
+    render(<InviteUserDialog {...defaultProps} onInvited={onInvited} />)
+    await user.type(screen.getByLabelText('Email'), 'test@example.com')
+    await user.click(screen.getByText('Send Invitation'))
+    await waitFor(() => expect(onInvited).toHaveBeenCalledTimes(1))
+  })
+
+  it('send button is disabled when email is empty', () => {
+    render(<InviteUserDialog {...defaultProps} />)
+    expect(screen.getByText('Send Invitation')).toBeDisabled()
+  })
+
+  it('closes on Escape key when not submitting', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<InviteUserDialog {...defaultProps} onClose={onClose} />)
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalled()
+  })
 })
