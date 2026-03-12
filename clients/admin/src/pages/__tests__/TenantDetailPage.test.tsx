@@ -9,7 +9,21 @@ vi.mock('../../stores/adminStore', () => ({
   useAdminStore: vi.fn(),
 }))
 
-const mockStore = {
+import type { AdminInvitation } from '../../stores/adminStore'
+
+const mockStore: {
+  tenants: { id: string; name: string; slug: string; disabled: boolean; storage_quota_bytes: number | null; user_count: number; created_at: string }[]
+  tenantMembers: { user_id: string; did: string; display_name: string; email: string; role: string }[]
+  tenantMembersLoading: boolean
+  tenantInvitations: AdminInvitation[]
+  tenantInvitationsLoading: boolean
+  tenantInvitationsTotal: number
+  fetchTenantById: ReturnType<typeof vi.fn>
+  fetchTenantMembers: ReturnType<typeof vi.fn>
+  fetchTenantInvitations: ReturnType<typeof vi.fn>
+  revokeAdminInvitation: ReturnType<typeof vi.fn>
+  createAdminInvitation: ReturnType<typeof vi.fn>
+} = {
   tenants: [{ id: 't1', name: 'Acme', slug: 'acme', disabled: false, storage_quota_bytes: null, user_count: 2, created_at: '2026-03-01T00:00:00Z' }],
   tenantMembers: [
     { user_id: 'u1', did: 'did:ssdid:abc', display_name: 'John', email: 'john@acme.com', role: 'Owner' },
