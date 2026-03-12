@@ -159,4 +159,83 @@ public class AdminInvitationTests : IClassFixture<SsdidDriveFactory>
         Assert.NotNull(membership);
         Assert.Equal(SsdidDrive.Api.Data.Entities.TenantRole.Owner, membership.Role);
     }
+
+    [Fact]
+    public async Task ListInvitations_ReturnsInvitationsForTenant()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("ListInvAdmin");
+        await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "list1@test.com", role = "owner" }, TestFixture.Json);
+        await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "list2@test.com", role = "admin" }, TestFixture.Json);
+
+        var response = await client.GetAsync($"/api/admin/tenants/{tenantId}/invitations");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.TryGetProperty("items", out var items));
+        Assert.Equal(2, items.GetArrayLength());
+        Assert.True(body.TryGetProperty("total", out var total));
+        Assert.Equal(2, total.GetInt32());
+    }
+
+    [Fact]
+    public async Task ListInvitations_TenantNotFound_Returns404()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ListNotFoundAdmin", systemRole: "SuperAdmin");
+        var response = await client.GetAsync($"/api/admin/tenants/{Guid.NewGuid()}/invitations");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RevokeInvitation_PendingInvitation_ReturnsNoContent()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("RevokeInvAdmin");
+        var createResp = await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "revoke@test.com", role = "owner" }, TestFixture.Json);
+        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitationId = created.GetProperty("id").GetGuid();
+
+        var response = await client.DeleteAsync($"/api/admin/tenants/{tenantId}/invitations/{invitationId}");
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Verify it's revoked in the list
+        var listResp = await client.GetAsync($"/api/admin/tenants/{tenantId}/invitations");
+        var listBody = await listResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invItems = listBody.GetProperty("items");
+        var inv = invItems.EnumerateArray().First();
+        Assert.Equal("revoked", inv.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task RevokeInvitation_NotFound_Returns404()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("RevokeNotFoundAdmin");
+        var response = await client.DeleteAsync($"/api/admin/tenants/{tenantId}/invitations/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RevokeInvitation_AlreadyAccepted_Returns400()
+    {
+        var (client, tenantId) = await CreateAdminWithTenant("RevokeAcceptedAdmin");
+        var createResp = await client.PostAsJsonAsync(
+            $"/api/admin/tenants/{tenantId}/invitations",
+            new { email = "accepted@test.com", role = "admin" }, TestFixture.Json);
+        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitationId = created.GetProperty("id").GetGuid();
+
+        // Manually set status to Accepted via DB
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SsdidDrive.Api.Data.AppDbContext>();
+        var invitation = await db.Invitations.FindAsync(invitationId);
+        invitation!.Status = SsdidDrive.Api.Data.Entities.InvitationStatus.Accepted;
+        await db.SaveChangesAsync();
+
+        var response = await client.DeleteAsync($"/api/admin/tenants/{tenantId}/invitations/{invitationId}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
