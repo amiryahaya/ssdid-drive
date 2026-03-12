@@ -1,3 +1,6 @@
+## Tool artifacts
+.superpowers/
+
 ## .NET
 bin/
 obj/
@@ -93,8 +96,8 @@ clients/ios/**/build/
 clients/ios/**/DerivedData/
 clients/ios/**/.build/
 clients/ios/**/.spm-cache/
-*.xcuserdata
-*.xcworkspace/xcuserdata/
+**/xcuserdata/
+**/.swiftpm/xcode/xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 Pods/
