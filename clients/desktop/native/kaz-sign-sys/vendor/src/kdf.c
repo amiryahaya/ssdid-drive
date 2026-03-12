@@ -10,11 +10,12 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/kdf.h>
+#include <stdlib.h>
 #include <string.h>
 
-/* Use SHA-512 as the default hash for KDF */
-#define KDF_HASH_ALG EVP_sha512()
-#define KDF_HASH_LEN 64
+/* Use SHA-256 as the default hash for KDF (aligned with JCAJCE) */
+#define KDF_HASH_ALG EVP_sha256()
+#define KDF_HASH_LEN 32
 
 /* ============================================================================
  * HKDF-Extract Implementation
@@ -73,7 +74,11 @@ int kaz_hkdf_expand(const unsigned char *prk, size_t prk_len,
                     unsigned char *okm, size_t okm_len)
 {
     unsigned char T[KDF_HASH_LEN];
-    unsigned char block[KDF_HASH_LEN + 256 + 1]; /* T || info || counter */
+    /* Static buffer for the common case (info <= 256 bytes) */
+    unsigned char static_block[KDF_HASH_LEN + 256 + 1];
+    unsigned char *block = static_block;
+    size_t block_cap = sizeof(static_block);
+    int block_heap = 0;
     size_t T_len = 0;
     size_t done = 0;
     unsigned char counter = 1;
@@ -95,6 +100,21 @@ int kaz_hkdf_expand(const unsigned char *prk, size_t prk_len,
 
     if (okm_len == 0) {
         return KAZ_KDF_SUCCESS;
+    }
+
+    /* Dynamically allocate block buffer if info is too large for static buffer.
+     * Required capacity: T (up to KDF_HASH_LEN) + info_len + 1 (counter byte) */
+    if (info_len > 256) {
+        if (info_len > SIZE_MAX - KDF_HASH_LEN - 1) {
+            return KAZ_KDF_ERROR_INVALID_LEN;
+        }
+        size_t needed = KDF_HASH_LEN + info_len + 1;
+        block = malloc(needed);
+        if (block == NULL) {
+            return KAZ_KDF_ERROR_NULL_PTR;
+        }
+        block_cap = needed;
+        block_heap = 1;
     }
 
     /* Generate output in blocks */
@@ -140,7 +160,10 @@ int kaz_hkdf_expand(const unsigned char *prk, size_t prk_len,
 
 cleanup:
     kaz_secure_zero(T, sizeof(T));
-    kaz_secure_zero(block, sizeof(block));
+    kaz_secure_zero(block, block_cap);
+    if (block_heap) {
+        free(block);
+    }
 
     return ret;
 }
@@ -242,7 +265,7 @@ int kaz_kdf_derive_signing_randomness(const unsigned char *seed, size_t seed_len
         return KAZ_KDF_ERROR_NULL_PTR;
     }
 
-    if (seed_len + sk_len > sizeof(combined_ikm)) {
+    if (seed_len >= sizeof(combined_ikm) || sk_len > sizeof(combined_ikm) - seed_len) {
         return KAZ_KDF_ERROR_INVALID_LEN;
     }
 
@@ -267,6 +290,12 @@ int kaz_kdf_derive_signing_randomness(const unsigned char *seed, size_t seed_len
             goto cleanup;
         }
         EVP_MD_CTX_free(ctx);
+
+        /* Validate hash length before using it as memcpy size */
+        if (hash_len != KDF_HASH_LEN) {
+            ret = KAZ_KDF_ERROR_CRYPTO;
+            goto cleanup;
+        }
     } else {
         memset(msg_hash, 0, KDF_HASH_LEN);
         hash_len = KDF_HASH_LEN;

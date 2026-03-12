@@ -1,17 +1,37 @@
 /*
  * KAZ-SIGN: Constant-Time Implementation using OpenSSL BIGNUM
- * Version 2.1 - Runtime Security Level Support
+ * Version 4.0 - Complete Algorithm Rewrite (3-component scheme)
  *
- * This implementation replaces GMP with OpenSSL's BIGNUM library
- * using constant-time operations to prevent timing side-channel attacks.
+ * This implementation matches the Java kaz-pqc-core-v2.0 reference exactly.
+ * Uses OpenSSL's BIGNUM library with constant-time operations.
  *
  * Key security features:
- * - BN_FLG_CONSTTIME flag on all secret values
- * - BN_mod_exp_mont_consttime for modular exponentiation
- * - Secure memory zeroization
- * - No branching on secret data
+ * - BN_FLG_CONSTTIME flag on all secret values (s, t, e1, e2, e1_inv)
+ * - BN_mod_exp_mont_consttime for all mod_exp with secret exponents
+ * - Secure memory zeroization via kaz_secure_zero
  *
- * Version 2.1 adds runtime security level selection.
+ * Algorithm: 3-component signature (S1, S2, S3) with simple verification.
+ *
+ * Key Generation:
+ *   s = random in [2^(lOg1N-2), Og1N]
+ *   t = random in [2^(lOg2N-2), Og2N]
+ *   v = g1^s * g2^t mod N
+ *   pk = v, sk = s || t
+ *
+ * Signing:
+ *   h = BigInteger(1, SHA-256(msg) zero-padded to hash_bytes)
+ *   e1 = nextProbablePrime(random in [2^(lOg1N-2), Og1N])
+ *   e2 = random in [2^(lOg2N-2), Og2N]
+ *   S1 = g2^e2 * g1^e1 mod N
+ *   S2 = (h - s*S1) * e1^(-1) mod phiN
+ *   S3 = h - t*S1 - e2*S2 mod phiN
+ *
+ * Verification:
+ *   LHS = v^S1 * S1^S2 * g2^S3 mod N
+ *   RHS = (g1*g2)^h mod N
+ *   Accept iff LHS == RHS
+ *
+ * N is ODD, enabling full constant-time Montgomery support.
  */
 
 #include <stdio.h>
@@ -34,10 +54,11 @@
 static const kaz_sign_level_params_t g_level_128_params = {
     .level = 128,
     .algorithm_name = "KAZ-SIGN-128",
-    .secret_key_bytes = 32,
-    .public_key_bytes = 54,
-    .hash_bytes = 32,
-    .signature_overhead = 162,  /* 54 + 54 + 54 */
+    .secret_key_bytes = 32,     /* s(16) + t(16) */
+    .public_key_bytes = 54,     /* v(54) */
+    .hash_bytes = 32,           /* SHA-256 */
+    .signature_overhead = 162,  /* S1(54) + S2(54) + S3(54) */
+    .v_bytes = 54,
     .s_bytes = 16,
     .t_bytes = 16,
     .s1_bytes = 54,
@@ -49,10 +70,11 @@ static const kaz_sign_level_params_t g_level_128_params = {
 static const kaz_sign_level_params_t g_level_192_params = {
     .level = 192,
     .algorithm_name = "KAZ-SIGN-192",
-    .secret_key_bytes = 50,
-    .public_key_bytes = 88,
-    .hash_bytes = 48,
-    .signature_overhead = 264,  /* 88 + 88 + 88 */
+    .secret_key_bytes = 50,     /* s(25) + t(25) */
+    .public_key_bytes = 88,     /* v(88) */
+    .hash_bytes = 48,           /* SHA-256 zero-padded to 48 */
+    .signature_overhead = 264,  /* S1(88) + S2(88) + S3(88) */
+    .v_bytes = 88,
     .s_bytes = 25,
     .t_bytes = 25,
     .s1_bytes = 88,
@@ -64,87 +86,79 @@ static const kaz_sign_level_params_t g_level_192_params = {
 static const kaz_sign_level_params_t g_level_256_params = {
     .level = 256,
     .algorithm_name = "KAZ-SIGN-256",
-    .secret_key_bytes = 64,
-    .public_key_bytes = 118,
-    .hash_bytes = 64,
-    .signature_overhead = 356,  /* 118 + 119 + 119 */
+    .secret_key_bytes = 64,     /* s(32) + t(32) */
+    .public_key_bytes = 118,    /* v(118) */
+    .hash_bytes = 64,           /* SHA-256 zero-padded to 64 */
+    .signature_overhead = 354,  /* S1(118) + S2(118) + S3(118) */
+    .v_bytes = 118,
     .s_bytes = 32,
     .t_bytes = 32,
     .s1_bytes = 118,
-    .s2_bytes = 119,
-    .s3_bytes = 119
+    .s2_bytes = 118,
+    .s3_bytes = 118
 };
 
-/* String constants for each level */
-static const char *g_level_128_g1 = "65537";
-static const char *g_level_128_g2 = "65539";
-static const char *g_level_128_N = "9680693320350411581735712527156160041331448806285781880953481207107506184928318589548473667621840334803765737814574120142199988285";
-static const char *g_level_128_phiN = "1862854061641389163337017925599133865006616816206541406153748908271169581801631840410608441366518309266967756800000000000000000000";
-static const char *g_level_128_Og1N = "104096837085595768062256170741230052000";
-static const char *g_level_128_Og2N = "17349472847599294677042695123538342000";
+/* ============================================================================
+ * System Parameter String Constants (verbatim from Java SystemParameters.java)
+ * ============================================================================ */
 
-static const char *g_level_192_g1 = "65537";
-static const char *g_level_192_g2 = "65539";
-static const char *g_level_192_N = "15982040643598444277320371265136974856402799594720686504760818091215333991414038871394426514903965899103553442859146701270930684879295849706045338879593833465052745734862675359470536861467492521046077102660572015";
-static const char *g_level_192_phiN = "2852982385092065996343896318300390927321234264319221230294884622249277900787903710363361658485275185133309433619496986167576406960701801204725152385400156421631204526170043735085154304000000000000000000000000000";
-static const char *g_level_192_Og1N = "12934000239870021828648909535012878456790556542848408504000";
-static const char *g_level_192_Og2N = "12934000239870021828648909535012878456790556542848408504000";
+static const char *SP_g1 = "65537";
+static const char *SP_g2 = "65539";
 
-static const char *g_level_256_g1 = "65537";
-static const char *g_level_256_g2 = "65539";
-static const char *g_level_256_N = "29421818394147345935036136135391375994024126405325576672227398037493559452008116283594709069097880319117946343281357631447556041903884586208161678710597469727999746179863045388559147407457068275815914914983896392757878683919189075898269550939868181179868469970964809582599153788719655";
-static const char *g_level_256_phiN = "502924248251635525629785876194372240141863912168458452749995697467455160087932504342175710330632944142887080586716346345907214888007643703094458414828200990128223075181127530152432620200757034038485458163071614226834741804596849230360138563704586240000000000000000000000000000000000000";
-static const char *g_level_256_Og1N = "49577346943749914278558040936897577826073730777121114343013903022328490384000";
-static const char *g_level_256_Og2N = "24788673471874957139279020468448788913036865388560557171506951511164245192000";
+/* Per-level parameters (indexed 0=128, 1=192, 2=256) */
+static const char *SP_N[3] = {
+    "9680693320350411581735712527156160041331448806285781880953481207107506184928318589548473667621840334803765737814574120142199988285",
+    "15982040643598444277320371265136974856402799594720686504760818091215333991414038871394426514903965899103553442859146701270930684879295849706045338879593833465052745734862675359470536861467492521046077102660572015",
+    "29421818394147345935036136135391375994024126405325576672227398037493559452008116283594709069097880319117946343281357631447556041903884586208161678710597469727999746179863045388559147407457068275815914914983896392757878683919189075898269550939868181179868469970964809582599153788719655"
+};
+
+static const char *SP_phiN[3] = {
+    "1862854061641389163337017925599133865006616816206541406153748908271169581801631840410608441366518309266967756800000000000000000000",
+    "2852982385092065996343896318300390927321234264319221230294884622249277900787903710363361658485275185133309433619496986167576406960701801204725152385400156421631204526170043735085154304000000000000000000000000000",
+    "50292424825163552562978587619437224014186391216845845274999569746745516008793250434217571033063294414288708058671634634590721488800764370309445841482820099012822307518112753015243262020075703403848545816307161422683474180459684923036013856370458624000000000000000000000000000000000"
+};
+
+static const char *SP_Og1N[3] = {
+    "104096837085595768062256170741230052000",
+    "12934000239870021828648909535012878456790556542848408504000",
+    "49577346943749914278558040936897577826073730777121114343013903022328490384000"
+};
+
+static const char *SP_Og2N[3] = {
+    "17349472847599294677042695123538342000",
+    "12934000239870021828648909535012878456790556542848408504000",
+    "24788673471874957139279020468448788913036865388560557171506951511164245192000"
+};
 
 /* ============================================================================
  * Runtime Parameter Cache (one per security level)
  * ============================================================================ */
 
 typedef struct {
-    BIGNUM *g1;         /* Generator 1 */
-    BIGNUM *g2;         /* Generator 2 */
-    BIGNUM *N;          /* Modulus */
-    BIGNUM *phiN;       /* Euler's totient of N */
-    BIGNUM *Og1N;       /* Order of g1 mod N */
-    BIGNUM *Og2N;       /* Order of g2 mod N */
-    BIGNUM *g1g2;       /* Pre-computed g1 * g2 */
-    BIGNUM *lb_g1;      /* Lower bound for s */
-    BIGNUM *lb_g2;      /* Lower bound for t */
-    BN_MONT_CTX *mont;  /* Montgomery context for N */
-    BN_CTX *bn_ctx;     /* Reusable BN context */
-    EVP_MD_CTX *hash_ctx;
-    const EVP_MD *hash_md;
+    /* System parameters as BIGNUMs */
+    BIGNUM *N;
+    BIGNUM *phiN;
+    BIGNUM *g1;
+    BIGNUM *g2;
+    BIGNUM *Og1N;
+    BIGNUM *Og2N;
+    int lOg1N;          /* BN_num_bits(Og1N) */
+    int lOg2N;          /* BN_num_bits(Og2N) */
+
+    /* Level params reference */
     const kaz_sign_level_params_t *params;
     int initialized;
 } kaz_runtime_params_t;
 
-/* Runtime parameter caches for each level */
+/* Runtime parameter caches for each level.
+ * THREAD SAFETY: These globals are lazily initialized and NOT thread-safe.
+ * Concurrent calls to kaz_sign_*_ex() for the same level may race on
+ * initialization. Call kaz_sign_init_random() from a single thread before
+ * concurrent use, or protect all kaz_sign_* calls with an external mutex.
+ * Do NOT call kaz_sign_clear_level/clear_all while other threads are active. */
 static kaz_runtime_params_t g_runtime_128 = { .initialized = 0 };
 static kaz_runtime_params_t g_runtime_192 = { .initialized = 0 };
 static kaz_runtime_params_t g_runtime_256 = { .initialized = 0 };
-
-/* Legacy global state (for backwards compatibility) */
-typedef struct {
-    BIGNUM *g1;         /* Generator 1 */
-    BIGNUM *g2;         /* Generator 2 */
-    BIGNUM *N;          /* Modulus */
-    BIGNUM *phiN;       /* Euler's totient of N */
-    BIGNUM *Og1N;       /* Order of g1 mod N */
-    BIGNUM *Og2N;       /* Order of g2 mod N */
-    BIGNUM *g1g2;       /* Pre-computed g1 * g2 */
-    BIGNUM *lb_g1;      /* Lower bound for s */
-    BIGNUM *lb_g2;      /* Lower bound for t */
-    BN_MONT_CTX *mont;  /* Montgomery context for N */
-    BN_CTX *bn_ctx;     /* Reusable BN context */
-    int initialized;
-} kaz_sign_params_legacy_t;
-
-static kaz_sign_params_legacy_t g_params = { .initialized = 0 };
-
-/* Hash context (legacy) */
-static EVP_MD_CTX *g_hash_ctx = NULL;
-static const EVP_MD *g_hash_md = NULL;
 
 /* ============================================================================
  * Helper Functions
@@ -166,24 +180,24 @@ static void bn_set_secret(BIGNUM *bn)
     }
 }
 
-/* Export BIGNUM to fixed-size buffer (right-aligned, zero-padded) */
+/* Export BIGNUM to fixed-size buffer (right-aligned, zero-padded, big-endian) */
 static int bn_export_padded(unsigned char *buf, size_t buf_size, const BIGNUM *bn)
 {
-    int bn_size;
-
     memset(buf, 0, buf_size);
 
     if (bn == NULL || BN_is_zero(bn)) {
         return 0;
     }
 
-    bn_size = BN_num_bytes(bn);
+    int bn_size = BN_num_bytes(bn);
     if ((size_t)bn_size > buf_size) {
         return -1;  /* Value too large for buffer */
     }
 
-    /* Write to end of buffer for right-alignment */
-    BN_bn2bin(bn, buf + (buf_size - bn_size));
+    /* BN_bn2binpad writes exactly buf_size bytes, zero-padded on the left */
+    if (BN_bn2binpad(bn, buf, (int)buf_size) < 0) {
+        return -1;
+    }
     return 0;
 }
 
@@ -196,144 +210,77 @@ static int bn_import(BIGNUM *bn, const unsigned char *buf, size_t buf_size)
     return 0;
 }
 
-/* ============================================================================
- * Parameter Initialization
- * ============================================================================ */
-
-static int init_params_cache(void)
+/*
+ * Sample a random BIGNUM uniformly in [lower, upper] via rejection sampling.
+ * Matches Java getRandom.getRandomIntInRange().
+ * Returns 0 on success, -1 on failure.
+ */
+static int sample_in_range(BIGNUM *result, const BIGNUM *lower, const BIGNUM *upper, BN_CTX *ctx)
 {
-    int ret = KAZ_SIGN_ERROR_MEMORY;
-    BIGNUM *two = NULL;
-    BIGNUM *exp = NULL;
-    int bits;
+    int ret = -1;
+    BIGNUM *range, *r;
 
-    if (g_params.initialized) {
-        return KAZ_SIGN_SUCCESS;
-    }
+    BN_CTX_start(ctx);
+    range = BN_CTX_get(ctx);
+    r = BN_CTX_get(ctx);
+    if (!range || !r) goto cleanup;
 
-    /* Allocate all BIGNUMs */
-    g_params.g1 = BN_new();
-    g_params.g2 = BN_new();
-    g_params.N = BN_new();
-    g_params.phiN = BN_new();
-    g_params.Og1N = BN_new();
-    g_params.Og2N = BN_new();
-    g_params.g1g2 = BN_new();
-    g_params.lb_g1 = BN_new();
-    g_params.lb_g2 = BN_new();
-    g_params.bn_ctx = BN_CTX_new();
-    two = BN_new();
-    exp = BN_new();
+    /* range = upper - lower */
+    if (!BN_sub(range, upper, lower)) goto cleanup;
 
-    if (!g_params.g1 || !g_params.g2 || !g_params.N || !g_params.phiN ||
-        !g_params.Og1N || !g_params.Og2N || !g_params.g1g2 ||
-        !g_params.lb_g1 || !g_params.lb_g2 || !g_params.bn_ctx ||
-        !two || !exp) {
+    /* If range is negative or zero, just set result = lower */
+    if (BN_is_negative(range) || BN_is_zero(range)) {
+        if (!BN_copy(result, lower)) goto cleanup;
+        ret = 0;
         goto cleanup;
     }
 
-    /* Parse system parameters */
-    if (!BN_dec2bn(&g_params.g1, KAZ_SIGN_SP_g1)) goto cleanup;
-    if (!BN_dec2bn(&g_params.g2, KAZ_SIGN_SP_g2)) goto cleanup;
-    if (!BN_dec2bn(&g_params.N, KAZ_SIGN_SP_N)) goto cleanup;
-    if (!BN_dec2bn(&g_params.phiN, KAZ_SIGN_SP_phiN)) goto cleanup;
-    if (!BN_dec2bn(&g_params.Og1N, KAZ_SIGN_SP_Og1N)) goto cleanup;
-    if (!BN_dec2bn(&g_params.Og2N, KAZ_SIGN_SP_Og2N)) goto cleanup;
+    /* Add 1 to make it inclusive: range = upper - lower + 1 */
+    if (!BN_add_word(range, 1)) goto cleanup;
 
-    /* Pre-compute g1 * g2 mod N */
-    if (!BN_mod_mul(g_params.g1g2, g_params.g1, g_params.g2,
-                    g_params.N, g_params.bn_ctx)) {
-        goto cleanup;
-    }
+    /* Generate random in [0, range) */
+    if (!BN_rand_range(r, range)) goto cleanup;
 
-    /* Pre-compute lower bounds: 2^(bits-2) */
-    BN_set_word(two, 2);
+    /* result = r + lower */
+    if (!BN_add(result, r, lower)) goto cleanup;
 
-    bits = BN_num_bits(g_params.Og1N);
-    BN_set_word(exp, bits - 2);
-    if (!BN_exp(g_params.lb_g1, two, exp, g_params.bn_ctx)) goto cleanup;
-
-    bits = BN_num_bits(g_params.Og2N);
-    BN_set_word(exp, bits - 2);
-    if (!BN_exp(g_params.lb_g2, two, exp, g_params.bn_ctx)) goto cleanup;
-
-    /* Create Montgomery context for faster modular operations */
-    g_params.mont = BN_MONT_CTX_new();
-    if (!g_params.mont) goto cleanup;
-    if (!BN_MONT_CTX_set(g_params.mont, g_params.N, g_params.bn_ctx)) {
-        goto cleanup;
-    }
-
-    /* Initialize hash function */
-#if KAZ_SECURITY_LEVEL == 128
-    g_hash_md = EVP_sha256();
-#elif KAZ_SECURITY_LEVEL == 192
-    g_hash_md = EVP_sha384();
-#elif KAZ_SECURITY_LEVEL == 256
-    g_hash_md = EVP_sha512();
-#endif
-
-    g_hash_ctx = EVP_MD_CTX_new();
-    if (!g_hash_ctx) goto cleanup;
-
-    g_params.initialized = 1;
-    ret = KAZ_SIGN_SUCCESS;
+    ret = 0;
 
 cleanup:
-    BN_free(two);
-    BN_free(exp);
-
-    if (ret != KAZ_SIGN_SUCCESS) {
-        /* Clean up on failure */
-        bn_secure_free(g_params.g1);
-        bn_secure_free(g_params.g2);
-        bn_secure_free(g_params.N);
-        bn_secure_free(g_params.phiN);
-        bn_secure_free(g_params.Og1N);
-        bn_secure_free(g_params.Og2N);
-        bn_secure_free(g_params.g1g2);
-        bn_secure_free(g_params.lb_g1);
-        bn_secure_free(g_params.lb_g2);
-        if (g_params.mont) BN_MONT_CTX_free(g_params.mont);
-        if (g_params.bn_ctx) BN_CTX_free(g_params.bn_ctx);
-        g_params.initialized = 0;
-    }
-
+    BN_CTX_end(ctx);
     return ret;
 }
 
-static void clear_params_cache(void)
+/*
+ * Find next probable prime >= start.
+ * Matches Java's BigInteger.nextProbablePrime().
+ * Uses BN_check_prime (OpenSSL 3.x).
+ * Returns 0 on success, -1 on failure.
+ */
+static int bn_next_probable_prime(BIGNUM *result, const BIGNUM *start, BN_CTX *ctx)
 {
-    if (g_params.initialized) {
-        bn_secure_free(g_params.g1);
-        bn_secure_free(g_params.g2);
-        bn_secure_free(g_params.N);
-        bn_secure_free(g_params.phiN);
-        bn_secure_free(g_params.Og1N);
-        bn_secure_free(g_params.Og2N);
-        bn_secure_free(g_params.g1g2);
-        bn_secure_free(g_params.lb_g1);
-        bn_secure_free(g_params.lb_g2);
+    if (!BN_copy(result, start)) return -1;
 
-        if (g_params.mont) {
-            BN_MONT_CTX_free(g_params.mont);
-            g_params.mont = NULL;
-        }
-        if (g_params.bn_ctx) {
-            BN_CTX_free(g_params.bn_ctx);
-            g_params.bn_ctx = NULL;
-        }
-        if (g_hash_ctx) {
-            EVP_MD_CTX_free(g_hash_ctx);
-            g_hash_ctx = NULL;
-        }
+    /* Java's nextProbablePrime returns strictly greater than start */
+    if (!BN_add_word(result, 1)) return -1;
 
-        g_params.initialized = 0;
+    /* Make odd if even */
+    if (!BN_is_odd(result)) {
+        if (!BN_add_word(result, 1)) return -1;
     }
+
+    /* Search for prime */
+    for (int attempts = 0; attempts < 10000; attempts++) {
+        int is_prime = BN_check_prime(result, ctx, NULL);
+        if (is_prime == 1) return 0;
+        if (is_prime < 0) return -1;
+        if (!BN_add_word(result, 2)) return -1;
+    }
+    return -1; /* Should not happen for reasonable inputs */
 }
 
 /* ============================================================================
- * Runtime Security Level API Implementation
+ * Parameter Initialization
  * ============================================================================ */
 
 const kaz_sign_level_params_t *kaz_sign_get_level_params(kaz_sign_level_t level)
@@ -357,30 +304,14 @@ static kaz_runtime_params_t *get_runtime_params(kaz_sign_level_t level)
     }
 }
 
-/* Get string constants for a level */
-static void get_level_strings(kaz_sign_level_t level,
-                              const char **g1, const char **g2,
-                              const char **N, const char **phiN,
-                              const char **Og1N, const char **Og2N)
+/* Convert level to array index (0,1,2) */
+static int level_to_index(kaz_sign_level_t level)
 {
     switch (level) {
-        case KAZ_LEVEL_128:
-            *g1 = g_level_128_g1; *g2 = g_level_128_g2;
-            *N = g_level_128_N; *phiN = g_level_128_phiN;
-            *Og1N = g_level_128_Og1N; *Og2N = g_level_128_Og2N;
-            break;
-        case KAZ_LEVEL_192:
-            *g1 = g_level_192_g1; *g2 = g_level_192_g2;
-            *N = g_level_192_N; *phiN = g_level_192_phiN;
-            *Og1N = g_level_192_Og1N; *Og2N = g_level_192_Og2N;
-            break;
-        case KAZ_LEVEL_256:
-            *g1 = g_level_256_g1; *g2 = g_level_256_g2;
-            *N = g_level_256_N; *phiN = g_level_256_phiN;
-            *Og1N = g_level_256_Og1N; *Og2N = g_level_256_Og2N;
-            break;
-        default:
-            *g1 = *g2 = *N = *phiN = *Og1N = *Og2N = NULL;
+        case KAZ_LEVEL_128: return 0;
+        case KAZ_LEVEL_192: return 1;
+        case KAZ_LEVEL_256: return 2;
+        default: return -1;
     }
 }
 
@@ -388,10 +319,7 @@ static void get_level_strings(kaz_sign_level_t level,
 static int init_runtime_params(kaz_runtime_params_t *rp, kaz_sign_level_t level)
 {
     int ret = KAZ_SIGN_ERROR_MEMORY;
-    BIGNUM *two = NULL;
-    BIGNUM *exp = NULL;
-    int bits;
-    const char *g1_str, *g2_str, *N_str, *phiN_str, *Og1N_str, *Og2N_str;
+    int idx;
 
     if (rp->initialized) {
         return KAZ_SIGN_SUCCESS;
@@ -403,96 +331,49 @@ static int init_runtime_params(kaz_runtime_params_t *rp, kaz_sign_level_t level)
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    /* Get string constants */
-    get_level_strings(level, &g1_str, &g2_str, &N_str, &phiN_str, &Og1N_str, &Og2N_str);
-    if (!g1_str) {
+    idx = level_to_index(level);
+    if (idx < 0) {
         return KAZ_SIGN_ERROR_INVALID;
     }
 
     /* Allocate all BIGNUMs */
-    rp->g1 = BN_new();
-    rp->g2 = BN_new();
     rp->N = BN_new();
     rp->phiN = BN_new();
+    rp->g1 = BN_new();
+    rp->g2 = BN_new();
     rp->Og1N = BN_new();
     rp->Og2N = BN_new();
-    rp->g1g2 = BN_new();
-    rp->lb_g1 = BN_new();
-    rp->lb_g2 = BN_new();
-    rp->bn_ctx = BN_CTX_new();
-    two = BN_new();
-    exp = BN_new();
 
-    if (!rp->g1 || !rp->g2 || !rp->N || !rp->phiN ||
-        !rp->Og1N || !rp->Og2N || !rp->g1g2 ||
-        !rp->lb_g1 || !rp->lb_g2 || !rp->bn_ctx ||
-        !two || !exp) {
+    if (!rp->N || !rp->phiN || !rp->g1 || !rp->g2 ||
+        !rp->Og1N || !rp->Og2N) {
         goto cleanup;
     }
 
-    /* Parse system parameters */
-    if (!BN_dec2bn(&rp->g1, g1_str)) goto cleanup;
-    if (!BN_dec2bn(&rp->g2, g2_str)) goto cleanup;
-    if (!BN_dec2bn(&rp->N, N_str)) goto cleanup;
-    if (!BN_dec2bn(&rp->phiN, phiN_str)) goto cleanup;
-    if (!BN_dec2bn(&rp->Og1N, Og1N_str)) goto cleanup;
-    if (!BN_dec2bn(&rp->Og2N, Og2N_str)) goto cleanup;
+    /* Parse constants */
+    if (!BN_dec2bn(&rp->g1, SP_g1)) goto cleanup;
+    if (!BN_dec2bn(&rp->g2, SP_g2)) goto cleanup;
 
-    /* Pre-compute g1 * g2 mod N */
-    if (!BN_mod_mul(rp->g1g2, rp->g1, rp->g2, rp->N, rp->bn_ctx)) {
-        goto cleanup;
-    }
+    /* Parse per-level constants */
+    if (!BN_dec2bn(&rp->N, SP_N[idx])) goto cleanup;
+    if (!BN_dec2bn(&rp->phiN, SP_phiN[idx])) goto cleanup;
+    if (!BN_dec2bn(&rp->Og1N, SP_Og1N[idx])) goto cleanup;
+    if (!BN_dec2bn(&rp->Og2N, SP_Og2N[idx])) goto cleanup;
 
-    /* Pre-compute lower bounds: 2^(bits-2) */
-    BN_set_word(two, 2);
-
-    bits = BN_num_bits(rp->Og1N);
-    BN_set_word(exp, bits - 2);
-    if (!BN_exp(rp->lb_g1, two, exp, rp->bn_ctx)) goto cleanup;
-
-    bits = BN_num_bits(rp->Og2N);
-    BN_set_word(exp, bits - 2);
-    if (!BN_exp(rp->lb_g2, two, exp, rp->bn_ctx)) goto cleanup;
-
-    /* Create Montgomery context for faster modular operations */
-    rp->mont = BN_MONT_CTX_new();
-    if (!rp->mont) goto cleanup;
-    if (!BN_MONT_CTX_set(rp->mont, rp->N, rp->bn_ctx)) {
-        goto cleanup;
-    }
-
-    /* Initialize hash function based on level */
-    switch (level) {
-        case KAZ_LEVEL_128: rp->hash_md = EVP_sha256(); break;
-        case KAZ_LEVEL_192: rp->hash_md = EVP_sha384(); break;
-        case KAZ_LEVEL_256: rp->hash_md = EVP_sha512(); break;
-        default: goto cleanup;
-    }
-
-    rp->hash_ctx = EVP_MD_CTX_new();
-    if (!rp->hash_ctx) goto cleanup;
+    /* Derived: bit-lengths of orders */
+    rp->lOg1N = BN_num_bits(rp->Og1N);
+    rp->lOg2N = BN_num_bits(rp->Og2N);
 
     rp->initialized = 1;
     ret = KAZ_SIGN_SUCCESS;
 
 cleanup:
-    BN_free(two);
-    BN_free(exp);
-
     if (ret != KAZ_SIGN_SUCCESS) {
-        /* Clean up on failure */
-        bn_secure_free(rp->g1); rp->g1 = NULL;
-        bn_secure_free(rp->g2); rp->g2 = NULL;
-        bn_secure_free(rp->N); rp->N = NULL;
-        bn_secure_free(rp->phiN); rp->phiN = NULL;
-        bn_secure_free(rp->Og1N); rp->Og1N = NULL;
-        bn_secure_free(rp->Og2N); rp->Og2N = NULL;
-        bn_secure_free(rp->g1g2); rp->g1g2 = NULL;
-        bn_secure_free(rp->lb_g1); rp->lb_g1 = NULL;
-        bn_secure_free(rp->lb_g2); rp->lb_g2 = NULL;
-        if (rp->mont) { BN_MONT_CTX_free(rp->mont); rp->mont = NULL; }
-        if (rp->bn_ctx) { BN_CTX_free(rp->bn_ctx); rp->bn_ctx = NULL; }
-        if (rp->hash_ctx) { EVP_MD_CTX_free(rp->hash_ctx); rp->hash_ctx = NULL; }
+        BN_free(rp->N); rp->N = NULL;
+        BN_clear_free(rp->phiN); rp->phiN = NULL;
+        BN_free(rp->g1); rp->g1 = NULL;
+        BN_free(rp->g2); rp->g2 = NULL;
+        BN_free(rp->Og1N); rp->Og1N = NULL;
+        BN_free(rp->Og2N); rp->Og2N = NULL;
         rp->initialized = 0;
     }
 
@@ -503,23 +384,20 @@ cleanup:
 static void clear_runtime_params(kaz_runtime_params_t *rp)
 {
     if (rp && rp->initialized) {
-        bn_secure_free(rp->g1); rp->g1 = NULL;
-        bn_secure_free(rp->g2); rp->g2 = NULL;
-        bn_secure_free(rp->N); rp->N = NULL;
-        bn_secure_free(rp->phiN); rp->phiN = NULL;
-        bn_secure_free(rp->Og1N); rp->Og1N = NULL;
-        bn_secure_free(rp->Og2N); rp->Og2N = NULL;
-        bn_secure_free(rp->g1g2); rp->g1g2 = NULL;
-        bn_secure_free(rp->lb_g1); rp->lb_g1 = NULL;
-        bn_secure_free(rp->lb_g2); rp->lb_g2 = NULL;
-        if (rp->mont) { BN_MONT_CTX_free(rp->mont); rp->mont = NULL; }
-        if (rp->bn_ctx) { BN_CTX_free(rp->bn_ctx); rp->bn_ctx = NULL; }
-        if (rp->hash_ctx) { EVP_MD_CTX_free(rp->hash_ctx); rp->hash_ctx = NULL; }
-        rp->hash_md = NULL;
+        BN_free(rp->N); rp->N = NULL;
+        BN_clear_free(rp->phiN); rp->phiN = NULL;
+        BN_free(rp->g1); rp->g1 = NULL;
+        BN_free(rp->g2); rp->g2 = NULL;
+        BN_free(rp->Og1N); rp->Og1N = NULL;
+        BN_free(rp->Og2N); rp->Og2N = NULL;
         rp->params = NULL;
         rp->initialized = 0;
     }
 }
+
+/* ============================================================================
+ * Public API: Level Management
+ * ============================================================================ */
 
 /* Public API: Initialize a specific security level */
 int kaz_sign_init_level(kaz_sign_level_t level)
@@ -540,20 +418,20 @@ void kaz_sign_clear_level(kaz_sign_level_t level)
     }
 }
 
+/* ============================================================================
+ * Random Number Generation
+ * ============================================================================ */
+
+static int g_rand_initialized = 0;
+
 /* Public API: Clear all security levels */
 void kaz_sign_clear_all(void)
 {
     clear_runtime_params(&g_runtime_128);
     clear_runtime_params(&g_runtime_192);
     clear_runtime_params(&g_runtime_256);
-    clear_params_cache();  /* Also clear legacy cache */
+    g_rand_initialized = 0;
 }
-
-/* ============================================================================
- * Random Number Generation (Constant-Time)
- * ============================================================================ */
-
-static int g_rand_initialized = 0;
 
 int kaz_sign_init_random(void)
 {
@@ -561,7 +439,10 @@ int kaz_sign_init_random(void)
         return KAZ_SIGN_SUCCESS;
     }
 
-    int ret = init_params_cache();
+    /* Initialize the compile-time level */
+    int ret = init_runtime_params(
+        get_runtime_params((kaz_sign_level_t)KAZ_SECURITY_LEVEL),
+        (kaz_sign_level_t)KAZ_SECURITY_LEVEL);
     if (ret != KAZ_SIGN_SUCCESS) {
         return ret;
     }
@@ -572,8 +453,7 @@ int kaz_sign_init_random(void)
 
 void kaz_sign_clear_random(void)
 {
-    clear_params_cache();
-    g_rand_initialized = 0;
+    kaz_sign_clear_all();
 }
 
 int kaz_sign_is_initialized(void)
@@ -581,528 +461,10 @@ int kaz_sign_is_initialized(void)
     return g_rand_initialized;
 }
 
-/* Generate random number in range [lb, ub] using rejection sampling */
-static int bn_random_range(BIGNUM *result, const BIGNUM *lb, const BIGNUM *ub,
-                           BN_CTX *ctx)
-{
-    BIGNUM *range = BN_new();
-    BIGNUM *rand_val = BN_new();
-    int ret = -1;
-
-    (void)ctx;  /* Reserved for future use */
-
-    if (!range || !rand_val) goto cleanup;
-
-    /* range = ub - lb + 1 */
-    if (!BN_sub(range, ub, lb)) goto cleanup;
-    if (!BN_add_word(range, 1)) goto cleanup;
-
-    /* Generate random in [0, range) */
-    if (!BN_rand_range(rand_val, range)) goto cleanup;
-
-    /* result = lb + rand_val */
-    if (!BN_add(result, lb, rand_val)) goto cleanup;
-
-    ret = 0;
-
-cleanup:
-    bn_secure_free(range);
-    bn_secure_free(rand_val);
-    return ret;
-}
-
 /* ============================================================================
  * Hash Function
- * ============================================================================ */
-
-int kaz_sign_hash(const unsigned char *msg,
-                  unsigned long long msglen,
-                  unsigned char *hash)
-{
-    unsigned int hash_len = 0;
-
-    if (!g_params.initialized || !g_hash_ctx || !g_hash_md) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (EVP_DigestInit_ex(g_hash_ctx, g_hash_md, NULL) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (EVP_DigestUpdate(g_hash_ctx, msg, msglen) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (EVP_DigestFinal_ex(g_hash_ctx, hash, &hash_len) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    return KAZ_SIGN_SUCCESS;
-}
-
-/* ============================================================================
- * Constant-Time Modular Exponentiation
- * ============================================================================ */
-
-/*
- * Perform modular exponentiation in constant time.
- * Uses Montgomery multiplication with constant-time flag.
- */
-static int bn_mod_exp_consttime(BIGNUM *result, const BIGNUM *base,
-                                 const BIGNUM *exp, const BIGNUM *mod,
-                                 BN_CTX *ctx, BN_MONT_CTX *mont)
-{
-    /* Use constant-time Montgomery exponentiation */
-    return BN_mod_exp_mont_consttime(result, base, exp, mod, ctx, mont);
-}
-
-/* ============================================================================
- * Key Generation (Constant-Time)
- * ============================================================================ */
-
-int kaz_sign_keypair(unsigned char *pk, unsigned char *sk)
-{
-    BIGNUM *s = NULL;
-    BIGNUM *t = NULL;
-    BIGNUM *V = NULL;
-    BIGNUM *tmp = NULL;
-    int ret = KAZ_SIGN_ERROR_MEMORY;
-
-    if (pk == NULL || sk == NULL) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (!g_rand_initialized) {
-        ret = kaz_sign_init_random();
-        if (ret != KAZ_SIGN_SUCCESS) {
-            return ret;
-        }
-    }
-
-    /* Allocate BIGNUMs */
-    s = BN_secure_new();  /* Use secure allocation for secrets */
-    t = BN_secure_new();
-    V = BN_new();
-    tmp = BN_new();
-
-    if (!s || !t || !V || !tmp) {
-        goto cleanup;
-    }
-
-    /* Mark secret values for constant-time operations */
-    bn_set_secret(s);
-    bn_set_secret(t);
-
-    /* Generate random s in [lb_g1, Og1N] */
-    if (bn_random_range(s, g_params.lb_g1, g_params.Og1N, g_params.bn_ctx) != 0) {
-        ret = KAZ_SIGN_ERROR_RNG;
-        goto cleanup;
-    }
-
-    /* Generate random t in [lb_g2, Og2N] */
-    if (bn_random_range(t, g_params.lb_g2, g_params.Og2N, g_params.bn_ctx) != 0) {
-        ret = KAZ_SIGN_ERROR_RNG;
-        goto cleanup;
-    }
-
-    /* Compute V = g1^s * g2^t mod N using constant-time exponentiation */
-    if (!bn_mod_exp_consttime(tmp, g_params.g1, s, g_params.N,
-                              g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    if (!bn_mod_exp_consttime(V, g_params.g2, t, g_params.N,
-                              g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    if (!BN_mod_mul(V, V, tmp, g_params.N, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Export to output buffers */
-    if (bn_export_padded(sk, KAZ_SIGN_SBYTES, s) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_export_padded(sk + KAZ_SIGN_SBYTES, KAZ_SIGN_TBYTES, t) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_export_padded(pk, KAZ_SIGN_PUBLICKEYBYTES, V) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    ret = KAZ_SIGN_SUCCESS;
-
-cleanup:
-    /* Securely clear secret values */
-    bn_secure_free(s);
-    bn_secure_free(t);
-    BN_free(V);
-    BN_free(tmp);
-
-    return ret;
-}
-
-/* ============================================================================
- * Signature Generation (Constant-Time)
- * ============================================================================ */
-
-int kaz_sign_signature(unsigned char *sig,
-                       unsigned long long *siglen,
-                       const unsigned char *msg,
-                       unsigned long long msglen,
-                       const unsigned char *sk)
-{
-    BIGNUM *s = NULL, *t = NULL;
-    BIGNUM *e1 = NULL, *e2 = NULL;
-    BIGNUM *h = NULL;
-    BIGNUM *S1 = NULL, *S2 = NULL, *S3 = NULL;
-    BIGNUM *tmp = NULL, *tmp2 = NULL;
-    BIGNUM *e1_inv = NULL;
-    unsigned char hash_buf[KAZ_SIGN_BYTES];
-    int ret = KAZ_SIGN_ERROR_MEMORY;
-
-    if (sig == NULL || siglen == NULL || sk == NULL) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (msg == NULL && msglen > 0) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (!g_rand_initialized) {
-        ret = kaz_sign_init_random();
-        if (ret != KAZ_SIGN_SUCCESS) {
-            return ret;
-        }
-    }
-
-    /* Allocate BIGNUMs - use secure allocation for secrets */
-    s = BN_secure_new();
-    t = BN_secure_new();
-    e1 = BN_secure_new();
-    e2 = BN_secure_new();
-    h = BN_new();
-    S1 = BN_new();
-    S2 = BN_new();
-    S3 = BN_new();
-    tmp = BN_secure_new();
-    tmp2 = BN_secure_new();
-    e1_inv = BN_secure_new();
-
-    if (!s || !t || !e1 || !e2 || !h || !S1 || !S2 || !S3 ||
-        !tmp || !tmp2 || !e1_inv) {
-        goto cleanup;
-    }
-
-    /* Mark secret values */
-    bn_set_secret(s);
-    bn_set_secret(t);
-    bn_set_secret(e1);
-    bn_set_secret(e2);
-    bn_set_secret(tmp);
-    bn_set_secret(tmp2);
-    bn_set_secret(e1_inv);
-
-    /* Import secret key */
-    if (bn_import(s, sk, KAZ_SIGN_SBYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(t, sk + KAZ_SIGN_SBYTES, KAZ_SIGN_TBYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    bn_set_secret(s);
-    bn_set_secret(t);
-
-    /* Hash message */
-    if (kaz_sign_hash(msg, msglen, hash_buf) != KAZ_SIGN_SUCCESS) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(h, hash_buf, KAZ_SIGN_BYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Generate random e1, then find next prime */
-    if (bn_random_range(e1, g_params.lb_g1, g_params.Og1N, g_params.bn_ctx) != 0) {
-        ret = KAZ_SIGN_ERROR_RNG;
-        goto cleanup;
-    }
-    /* Find next prime (not constant-time, but e1 is random so timing doesn't leak secrets) */
-    if (!BN_generate_prime_ex(e1, BN_num_bits(e1), 0, NULL, NULL, NULL)) {
-        /* Fallback: just use the random value if prime generation fails */
-    }
-    bn_set_secret(e1);
-
-    /* Generate random e2 */
-    if (bn_random_range(e2, g_params.lb_g2, g_params.Og2N, g_params.bn_ctx) != 0) {
-        ret = KAZ_SIGN_ERROR_RNG;
-        goto cleanup;
-    }
-    bn_set_secret(e2);
-
-    /* Compute S1 = g1^e1 * g2^e2 mod N (constant-time) */
-    if (!bn_mod_exp_consttime(tmp, g_params.g1, e1, g_params.N,
-                              g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!bn_mod_exp_consttime(S1, g_params.g2, e2, g_params.N,
-                              g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(S1, S1, tmp, g_params.N, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Compute e1^(-1) mod phi(N) */
-    if (!BN_mod_inverse(e1_inv, e1, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    bn_set_secret(e1_inv);
-
-    /* Compute S2 = (h - s*S1) * e1^(-1) mod phi(N) */
-    if (!BN_mod_mul(tmp, s, S1, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_sub(tmp, h, tmp, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(S2, tmp, e1_inv, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Compute S3 = h - t*S1 - e2*S2 mod phi(N) */
-    if (!BN_mod_mul(tmp, t, S1, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(tmp2, e2, S2, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_add(tmp, tmp, tmp2, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_sub(S3, h, tmp, g_params.phiN, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Export signature */
-    memset(sig, 0, KAZ_SIGN_SIGNATURE_OVERHEAD + msglen);
-
-    if (bn_export_padded(sig, KAZ_SIGN_S1BYTES, S1) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_export_padded(sig + KAZ_SIGN_S1BYTES, KAZ_SIGN_S2BYTES, S2) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_export_padded(sig + KAZ_SIGN_S1BYTES + KAZ_SIGN_S2BYTES,
-                         KAZ_SIGN_S3BYTES, S3) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Append message */
-    if (msglen > 0) {
-        memcpy(sig + KAZ_SIGN_SIGNATURE_OVERHEAD, msg, msglen);
-    }
-
-    *siglen = KAZ_SIGN_SIGNATURE_OVERHEAD + msglen;
-    ret = KAZ_SIGN_SUCCESS;
-
-cleanup:
-    /* Securely clear all sensitive data */
-    kaz_secure_zero(hash_buf, sizeof(hash_buf));
-
-    bn_secure_free(s);
-    bn_secure_free(t);
-    bn_secure_free(e1);
-    bn_secure_free(e2);
-    bn_secure_free(tmp);
-    bn_secure_free(tmp2);
-    bn_secure_free(e1_inv);
-    BN_free(h);
-    BN_free(S1);
-    BN_free(S2);
-    BN_free(S3);
-
-    return ret;
-}
-
-/* ============================================================================
- * Signature Verification (Constant-Time where applicable)
- * ============================================================================ */
-
-int kaz_sign_verify(unsigned char *msg,
-                    unsigned long long *msglen,
-                    const unsigned char *sig,
-                    unsigned long long siglen,
-                    const unsigned char *pk)
-{
-    BIGNUM *V = NULL;
-    BIGNUM *S1 = NULL, *S2 = NULL, *S3 = NULL;
-    BIGNUM *h = NULL;
-    BIGNUM *Y1 = NULL, *Y2 = NULL;
-    BIGNUM *tmp = NULL;
-    unsigned char hash_buf[KAZ_SIGN_BYTES];
-    unsigned long long extracted_msglen;
-    int ret = KAZ_SIGN_ERROR_VERIFY;
-
-    if (msg == NULL || msglen == NULL || sig == NULL || pk == NULL) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (siglen < KAZ_SIGN_SIGNATURE_OVERHEAD) {
-        return KAZ_SIGN_ERROR_INVALID;
-    }
-
-    if (!g_params.initialized) {
-        if (init_params_cache() != KAZ_SIGN_SUCCESS) {
-            return KAZ_SIGN_ERROR_INVALID;
-        }
-    }
-
-    extracted_msglen = siglen - KAZ_SIGN_SIGNATURE_OVERHEAD;
-
-    /* Allocate BIGNUMs */
-    V = BN_new();
-    S1 = BN_new();
-    S2 = BN_new();
-    S3 = BN_new();
-    h = BN_new();
-    Y1 = BN_new();
-    Y2 = BN_new();
-    tmp = BN_new();
-
-    if (!V || !S1 || !S2 || !S3 || !h || !Y1 || !Y2 || !tmp) {
-        ret = KAZ_SIGN_ERROR_MEMORY;
-        goto cleanup;
-    }
-
-    /* Import public key and signature components */
-    if (bn_import(V, pk, KAZ_SIGN_PUBLICKEYBYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(S1, sig, KAZ_SIGN_S1BYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(S2, sig + KAZ_SIGN_S1BYTES, KAZ_SIGN_S2BYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(S3, sig + KAZ_SIGN_S1BYTES + KAZ_SIGN_S2BYTES,
-                  KAZ_SIGN_S3BYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Hash the embedded message */
-    const unsigned char *embedded_msg = sig + KAZ_SIGN_SIGNATURE_OVERHEAD;
-    if (kaz_sign_hash(embedded_msg, extracted_msglen, hash_buf) != KAZ_SIGN_SUCCESS) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_import(h, hash_buf, KAZ_SIGN_BYTES) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Compute Y1 = V^S1 * S1^S2 * g2^S3 mod N */
-    /* Note: Verification doesn't need constant-time since all values are public */
-    if (!BN_mod_exp_mont(tmp, V, S1, g_params.N, g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_exp_mont(Y1, S1, S2, g_params.N, g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(Y1, Y1, tmp, g_params.N, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    if (!BN_mod_exp_mont(tmp, g_params.g2, S3, g_params.N,
-                         g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(Y1, Y1, tmp, g_params.N, g_params.bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Compute Y2 = (g1 * g2)^h mod N */
-    if (!BN_mod_exp_mont(Y2, g_params.g1g2, h, g_params.N,
-                         g_params.bn_ctx, g_params.mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Verify Y1 == Y2 */
-    if (BN_cmp(Y1, Y2) != 0) {
-        ret = KAZ_SIGN_ERROR_VERIFY;
-        goto cleanup;
-    }
-
-    /* Copy out the message */
-    memcpy(msg, embedded_msg, extracted_msglen);
-    *msglen = extracted_msglen;
-    ret = KAZ_SIGN_SUCCESS;
-
-cleanup:
-    kaz_secure_zero(hash_buf, sizeof(hash_buf));
-
-    BN_free(V);
-    BN_free(S1);
-    BN_free(S2);
-    BN_free(S3);
-    BN_free(h);
-    BN_free(Y1);
-    BN_free(Y2);
-    BN_free(tmp);
-
-    return ret;
-}
-
-/* ============================================================================
- * Version API
- * ============================================================================ */
-
-const char *kaz_sign_version(void)
-{
-    return KAZ_SIGN_VERSION_STRING;
-}
-
-int kaz_sign_version_number(void)
-{
-    return KAZ_SIGN_VERSION_NUMBER;
-}
-
-/* ============================================================================
- * Runtime Security Level Functions (_ex variants)
+ *
+ * Always SHA-256, zero-padded to hash_bytes (32/48/64).
  * ============================================================================ */
 
 int kaz_sign_hash_ex(kaz_sign_level_t level,
@@ -1111,9 +473,16 @@ int kaz_sign_hash_ex(kaz_sign_level_t level,
                      unsigned char *hash)
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(level);
     unsigned int hash_len = 0;
+    unsigned char sha256_buf[32]; /* SHA-256 = 32 bytes */
+    EVP_MD_CTX *hash_ctx = NULL;
 
-    if (!rp) {
+    if (!rp || !params) {
+        return KAZ_SIGN_ERROR_INVALID;
+    }
+
+    if (hash == NULL) {
         return KAZ_SIGN_ERROR_INVALID;
     }
 
@@ -1125,24 +494,61 @@ int kaz_sign_hash_ex(kaz_sign_level_t level,
         }
     }
 
-    if (!rp->hash_ctx || !rp->hash_md) {
+    /* Allocate per-call hash context for thread safety */
+    hash_ctx = EVP_MD_CTX_new();
+    if (!hash_ctx) {
+        return KAZ_SIGN_ERROR_MEMORY;
+    }
+
+    if (msg == NULL && msglen > 0) {
+        EVP_MD_CTX_free(hash_ctx);
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    if (EVP_DigestInit_ex(rp->hash_ctx, rp->hash_md, NULL) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
+    /* Always SHA-256 regardless of level */
+    if (EVP_DigestInit_ex(hash_ctx, EVP_sha256(), NULL) != 1) {
+        EVP_MD_CTX_free(hash_ctx);
+        return KAZ_SIGN_ERROR_HASH;
     }
 
-    if (EVP_DigestUpdate(rp->hash_ctx, msg, msglen) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
+    if (msg != NULL && msglen > 0 && EVP_DigestUpdate(hash_ctx, msg, (size_t)msglen) != 1) {
+        EVP_MD_CTX_free(hash_ctx);
+        return KAZ_SIGN_ERROR_HASH;
     }
 
-    if (EVP_DigestFinal_ex(rp->hash_ctx, hash, &hash_len) != 1) {
-        return KAZ_SIGN_ERROR_INVALID;
+    if (EVP_DigestFinal_ex(hash_ctx, sha256_buf, &hash_len) != 1) {
+        kaz_secure_zero(sha256_buf, sizeof(sha256_buf));
+        EVP_MD_CTX_free(hash_ctx);
+        return KAZ_SIGN_ERROR_HASH;
     }
+
+    EVP_MD_CTX_free(hash_ctx);
+
+    /* Zero-pad output: SHA-256 digest at front, trailing zeros (matches Java exactly:
+     * System.arraycopy(digest, 0, buf, 0, len); new BigInteger(1, buf)) */
+    memset(hash, 0, params->hash_bytes);
+    memcpy(hash, sha256_buf, 32);
+    kaz_secure_zero(sha256_buf, sizeof(sha256_buf));
 
     return KAZ_SIGN_SUCCESS;
 }
+
+int kaz_sign_hash(const unsigned char *msg,
+                  unsigned long long msglen,
+                  unsigned char *hash)
+{
+    return kaz_sign_hash_ex((kaz_sign_level_t)KAZ_SECURITY_LEVEL, msg, msglen, hash);
+}
+
+/* ============================================================================
+ * Key Generation (matches Java KAZSIGNKeyGenerator.java v2.0)
+ *
+ * s = random in [2^(lOg1N-2), Og1N]
+ * t = random in [2^(lOg2N-2), Og2N]
+ * v = g1^s * g2^t mod N
+ * pk = v (v_bytes big-endian)
+ * sk = s (s_bytes) || t (t_bytes) big-endian
+ * ============================================================================ */
 
 int kaz_sign_keypair_ex(kaz_sign_level_t level,
                         unsigned char *pk,
@@ -1150,10 +556,10 @@ int kaz_sign_keypair_ex(kaz_sign_level_t level,
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
     const kaz_sign_level_params_t *params;
-    BIGNUM *s = NULL;
-    BIGNUM *t = NULL;
-    BIGNUM *V = NULL;
-    BIGNUM *tmp = NULL;
+    BN_CTX *local_ctx = NULL;
+    BIGNUM *s = NULL, *t = NULL;
+    BIGNUM *lower_s = NULL, *lower_t = NULL;
+    BIGNUM *g1_s = NULL, *g2_t = NULL, *v = NULL;
     int ret = KAZ_SIGN_ERROR_MEMORY;
 
     if (!rp) {
@@ -1174,72 +580,108 @@ int kaz_sign_keypair_ex(kaz_sign_level_t level,
 
     params = rp->params;
 
-    /* Allocate BIGNUMs */
-    s = BN_secure_new();
-    t = BN_secure_new();
-    V = BN_new();
-    tmp = BN_new();
+    /* Allocate per-call BN_CTX for thread safety */
+    local_ctx = BN_CTX_new();
+    if (!local_ctx) {
+        return KAZ_SIGN_ERROR_MEMORY;
+    }
 
-    if (!s || !t || !V || !tmp) {
+    /* Allocate BIGNUMs */
+    s = BN_secure_new();       /* secret */
+    t = BN_secure_new();       /* secret */
+    lower_s = BN_new();
+    lower_t = BN_new();
+    g1_s = BN_new();
+    g2_t = BN_new();
+    v = BN_new();
+
+    if (!s || !t || !lower_s || !lower_t || !g1_s || !g2_t || !v) {
         goto cleanup;
     }
 
-    /* Mark secret values for constant-time operations */
     bn_set_secret(s);
     bn_set_secret(t);
 
-    /* Generate random s in [lb_g1, Og1N] */
-    if (bn_random_range(s, rp->lb_g1, rp->Og1N, rp->bn_ctx) != 0) {
+    /* lower_s = 2^(lOg1N - 2) */
+    if (!BN_set_bit(lower_s, rp->lOg1N - 2)) goto cleanup;
+
+    /* lower_t = 2^(lOg2N - 2) */
+    if (!BN_set_bit(lower_t, rp->lOg2N - 2)) goto cleanup;
+
+    /* s = random in [2^(lOg1N-2), Og1N] */
+    if (sample_in_range(s, lower_s, rp->Og1N, local_ctx) != 0) {
         ret = KAZ_SIGN_ERROR_RNG;
         goto cleanup;
     }
+    bn_set_secret(s);
 
-    /* Generate random t in [lb_g2, Og2N] */
-    if (bn_random_range(t, rp->lb_g2, rp->Og2N, rp->bn_ctx) != 0) {
+    /* t = random in [2^(lOg2N-2), Og2N] */
+    if (sample_in_range(t, lower_t, rp->Og2N, local_ctx) != 0) {
         ret = KAZ_SIGN_ERROR_RNG;
         goto cleanup;
     }
+    bn_set_secret(t);
 
-    /* Compute V = g1^s * g2^t mod N using constant-time exponentiation */
-    if (!bn_mod_exp_consttime(tmp, rp->g1, s, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+    /* g1_s = g1^s mod N (N is odd, constant-time Montgomery) */
+    if (!BN_mod_exp_mont_consttime(g1_s, rp->g1, s, rp->N, local_ctx, NULL)) goto cleanup;
+
+    /* g2_t = g2^t mod N */
+    if (!BN_mod_exp_mont_consttime(g2_t, rp->g2, t, rp->N, local_ctx, NULL)) goto cleanup;
+
+    /* v = g1_s * g2_t mod N */
+    if (!BN_mod_mul(v, g1_s, g2_t, rp->N, local_ctx)) goto cleanup;
+
+    /* pk = v (v_bytes big-endian) */
+    if (bn_export_padded(pk, params->v_bytes, v) != 0) {
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
 
-    if (!bn_mod_exp_consttime(V, rp->g2, t, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    if (!BN_mod_mul(V, V, tmp, rp->N, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Export to output buffers */
+    /* sk = s (s_bytes) || t (t_bytes) big-endian */
     if (bn_export_padded(sk, params->s_bytes, s) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
     if (bn_export_padded(sk + params->s_bytes, params->t_bytes, t) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (bn_export_padded(pk, params->public_key_bytes, V) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
 
     ret = KAZ_SIGN_SUCCESS;
 
 cleanup:
+    BN_CTX_free(local_ctx);
     bn_secure_free(s);
     bn_secure_free(t);
-    BN_free(V);
-    BN_free(tmp);
+    BN_free(lower_s);
+    BN_free(lower_t);
+    BN_free(g1_s);
+    BN_free(g2_t);
+    BN_free(v);
 
     return ret;
 }
+
+int kaz_sign_keypair(unsigned char *pk, unsigned char *sk)
+{
+    if (!g_rand_initialized) {
+        int ret = kaz_sign_init_random();
+        if (ret != KAZ_SIGN_SUCCESS) return ret;
+    }
+    return kaz_sign_keypair_ex((kaz_sign_level_t)KAZ_SECURITY_LEVEL, pk, sk);
+}
+
+/* ============================================================================
+ * Signature Generation (matches Java KAZSIGNSigner.java v2.0)
+ *
+ * h = BigInteger(1, SHA-256(msg) zero-padded to hash_bytes)
+ * e1 = nextProbablePrime(random in [2^(lOg1N-2), Og1N])
+ * e2 = random in [2^(lOg2N-2), Og2N]
+ * S1 = g2^e2 * g1^e1 mod N
+ * S2 = (h - s*S1) * e1^(-1) mod phiN
+ * S3 = h - t*S1 - e2*S2 mod phiN
+ * Output: S1 || S2 || S3 || message
+ * ============================================================================ */
 
 int kaz_sign_signature_ex(kaz_sign_level_t level,
                           unsigned char *sig,
@@ -1250,12 +692,14 @@ int kaz_sign_signature_ex(kaz_sign_level_t level,
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
     const kaz_sign_level_params_t *params;
-    BIGNUM *s = NULL, *t = NULL;
-    BIGNUM *e1 = NULL, *e2 = NULL;
-    BIGNUM *h = NULL;
+    BN_CTX *local_ctx = NULL;
+    BIGNUM *s_bn = NULL, *t_bn = NULL;
+    BIGNUM *hashInt = NULL;
+    BIGNUM *lower_e1 = NULL, *lower_e2 = NULL;
+    BIGNUM *e1 = NULL, *e2 = NULL, *e1_inv = NULL;
+    BIGNUM *g1_e1 = NULL, *g2_e2 = NULL;
     BIGNUM *S1 = NULL, *S2 = NULL, *S3 = NULL;
     BIGNUM *tmp = NULL, *tmp2 = NULL;
-    BIGNUM *e1_inv = NULL;
     unsigned char *hash_buf = NULL;
     int ret = KAZ_SIGN_ERROR_MEMORY;
 
@@ -1281,176 +725,214 @@ int kaz_sign_signature_ex(kaz_sign_level_t level,
 
     params = rp->params;
 
+    /* Allocate per-call BN_CTX */
+    local_ctx = BN_CTX_new();
+    if (!local_ctx) {
+        return KAZ_SIGN_ERROR_MEMORY;
+    }
+
     /* Allocate hash buffer */
     hash_buf = malloc(params->hash_bytes);
     if (!hash_buf) {
+        BN_CTX_free(local_ctx);
         return KAZ_SIGN_ERROR_MEMORY;
     }
 
     /* Allocate BIGNUMs */
-    s = BN_secure_new();
-    t = BN_secure_new();
-    e1 = BN_secure_new();
-    e2 = BN_secure_new();
-    h = BN_new();
+    s_bn = BN_secure_new();    /* secret */
+    t_bn = BN_secure_new();    /* secret */
+    hashInt = BN_new();
+    lower_e1 = BN_new();
+    lower_e2 = BN_new();
+    e1 = BN_secure_new();      /* secret */
+    e2 = BN_secure_new();      /* secret */
+    e1_inv = BN_secure_new();  /* secret */
+    g1_e1 = BN_new();
+    g2_e2 = BN_new();
     S1 = BN_new();
     S2 = BN_new();
     S3 = BN_new();
-    tmp = BN_secure_new();
-    tmp2 = BN_secure_new();
-    e1_inv = BN_secure_new();
+    tmp = BN_new();
+    tmp2 = BN_new();
 
-    if (!s || !t || !e1 || !e2 || !h || !S1 || !S2 || !S3 ||
-        !tmp || !tmp2 || !e1_inv) {
+    if (!s_bn || !t_bn || !hashInt || !lower_e1 || !lower_e2 ||
+        !e1 || !e2 || !e1_inv || !g1_e1 || !g2_e2 ||
+        !S1 || !S2 || !S3 || !tmp || !tmp2) {
         goto cleanup;
     }
 
-    /* Mark secret values */
-    bn_set_secret(s);
-    bn_set_secret(t);
+    bn_set_secret(s_bn);
+    bn_set_secret(t_bn);
     bn_set_secret(e1);
     bn_set_secret(e2);
-    bn_set_secret(tmp);
-    bn_set_secret(tmp2);
     bn_set_secret(e1_inv);
 
-    /* Import secret key */
-    if (bn_import(s, sk, params->s_bytes) != 0) {
+    /* Import secret key: sk = s (s_bytes) || t (t_bytes) */
+    if (bn_import(s_bn, sk, params->s_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
-    if (bn_import(t, sk + params->s_bytes, params->t_bytes) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    bn_set_secret(s);
-    bn_set_secret(t);
+    bn_set_secret(s_bn);
 
-    /* Hash message */
+    if (bn_import(t_bn, sk + params->s_bytes, params->t_bytes) != 0) {
+        ret = KAZ_SIGN_ERROR_INVALID;
+        goto cleanup;
+    }
+    bn_set_secret(t_bn);
+
+    /* Hash the message: h = BigInteger(1, SHA-256(msg) zero-padded to hash_bytes) */
     if (kaz_sign_hash_ex(level, msg, msglen, hash_buf) != KAZ_SIGN_SUCCESS) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_HASH;
         goto cleanup;
     }
-    if (bn_import(h, hash_buf, params->hash_bytes) != 0) {
+    if (bn_import(hashInt, hash_buf, params->hash_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
 
-    /* Generate random e1, then find next prime */
-    if (bn_random_range(e1, rp->lb_g1, rp->Og1N, rp->bn_ctx) != 0) {
-        ret = KAZ_SIGN_ERROR_RNG;
-        goto cleanup;
-    }
-    if (!BN_generate_prime_ex(e1, BN_num_bits(e1), 0, NULL, NULL, NULL)) {
-        /* Fallback: just use the random value if prime generation fails */
-    }
-    bn_set_secret(e1);
+    /* lower_e1 = 2^(lOg1N - 2) */
+    if (!BN_set_bit(lower_e1, rp->lOg1N - 2)) goto cleanup;
 
-    /* Generate random e2 */
-    if (bn_random_range(e2, rp->lb_g2, rp->Og2N, rp->bn_ctx) != 0) {
+    /* lower_e2 = 2^(lOg2N - 2) */
+    if (!BN_set_bit(lower_e2, rp->lOg2N - 2)) goto cleanup;
+
+    /* e1 = random in [2^(lOg1N-2), Og1N], then find next probable prime > e1.
+     * Retry if e1_inv doesn't exist (extremely unlikely since e1 is prime). */
+    {
+        int inv_ok = 0;
+        for (int retry = 0; retry < 20 && !inv_ok; retry++) {
+            if (sample_in_range(e1, lower_e1, rp->Og1N, local_ctx) != 0) {
+                ret = KAZ_SIGN_ERROR_RNG;
+                goto cleanup;
+            }
+            if (bn_next_probable_prime(e1, e1, local_ctx) != 0) {
+                ret = KAZ_SIGN_ERROR_RNG;
+                goto cleanup;
+            }
+            bn_set_secret(e1);
+
+            /* e1_inv = e1^(-1) mod phiN */
+            /* Verify e1 is still in a reasonable range after prime search */
+            if (BN_cmp(e1, rp->Og1N) > 0) {
+                continue; /* e1 exceeded Og1N, retry with new sample */
+            }
+
+            if (BN_mod_inverse(e1_inv, e1, rp->phiN, local_ctx)) {
+                inv_ok = 1;
+            } else {
+                ERR_clear_error();
+            }
+        }
+        if (!inv_ok) {
+            ret = KAZ_SIGN_ERROR_INVALID;
+            goto cleanup;
+        }
+        bn_set_secret(e1_inv);
+    }
+
+    /* e2 = random in [2^(lOg2N-2), Og2N] */
+    if (sample_in_range(e2, lower_e2, rp->Og2N, local_ctx) != 0) {
         ret = KAZ_SIGN_ERROR_RNG;
         goto cleanup;
     }
     bn_set_secret(e2);
 
-    /* Compute S1 = g1^e1 * g2^e2 mod N */
-    if (!bn_mod_exp_consttime(tmp, rp->g1, e1, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!bn_mod_exp_consttime(S1, rp->g2, e2, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(S1, S1, tmp, rp->N, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
+    /* S1 = g2^e2 * g1^e1 mod N (N is odd, constant-time Montgomery) */
+    if (!BN_mod_exp_mont_consttime(g2_e2, rp->g2, e2, rp->N, local_ctx, NULL)) goto cleanup;
+    if (!BN_mod_exp_mont_consttime(g1_e1, rp->g1, e1, rp->N, local_ctx, NULL)) goto cleanup;
+    if (!BN_mod_mul(S1, g2_e2, g1_e1, rp->N, local_ctx)) goto cleanup;
 
-    /* Compute e1^(-1) mod phi(N) */
-    if (!BN_mod_inverse(e1_inv, e1, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    bn_set_secret(e1_inv);
+    /* S2 = (h - s*S1) * e1^(-1) mod phiN */
+    /* tmp = s * S1 mod phiN */
+    if (!BN_mod_mul(tmp, s_bn, S1, rp->phiN, local_ctx)) goto cleanup;
+    /* tmp2 = h - s*S1 mod phiN */
+    if (!BN_mod_sub(tmp2, hashInt, tmp, rp->phiN, local_ctx)) goto cleanup;
+    /* S2 = tmp2 * e1_inv mod phiN */
+    if (!BN_mod_mul(S2, tmp2, e1_inv, rp->phiN, local_ctx)) goto cleanup;
 
-    /* Compute S2 = (h - s*S1) * e1^(-1) mod phi(N) */
-    if (!BN_mod_mul(tmp, s, S1, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_sub(tmp, h, tmp, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(S2, tmp, e1_inv, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
+    /* S3 = h - t*S1 - e2*S2 mod phiN */
+    /* tmp = t * S1 mod phiN */
+    if (!BN_mod_mul(tmp, t_bn, S1, rp->phiN, local_ctx)) goto cleanup;
+    /* tmp2 = e2 * S2 mod phiN */
+    if (!BN_mod_mul(tmp2, e2, S2, rp->phiN, local_ctx)) goto cleanup;
+    /* S3 = h - tmp - tmp2 mod phiN */
+    if (!BN_mod_sub(S3, hashInt, tmp, rp->phiN, local_ctx)) goto cleanup;
+    if (!BN_mod_sub(S3, S3, tmp2, rp->phiN, local_ctx)) goto cleanup;
 
-    /* Compute S3 = h - t*S1 - e2*S2 mod phi(N) */
-    if (!BN_mod_mul(tmp, t, S1, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(tmp2, e2, S2, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_add(tmp, tmp, tmp2, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_sub(S3, h, tmp, rp->phiN, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Export signature */
-    memset(sig, 0, params->signature_overhead + msglen);
-
+    /* Output: S1(s1_bytes) || S2(s2_bytes) || S3(s3_bytes) || message */
     if (bn_export_padded(sig, params->s1_bytes, S1) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
     if (bn_export_padded(sig + params->s1_bytes, params->s2_bytes, S2) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
     if (bn_export_padded(sig + params->s1_bytes + params->s2_bytes,
                          params->s3_bytes, S3) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
+        ret = KAZ_SIGN_ERROR_BUFFER;
         goto cleanup;
     }
 
-    /* Append message */
-    if (msglen > 0) {
-        memcpy(sig + params->signature_overhead, msg, msglen);
+    /* Copy message after signature components */
+    if (msg != NULL && msglen > 0) {
+        memcpy(sig + params->signature_overhead, msg, (size_t)msglen);
     }
-
     *siglen = params->signature_overhead + msglen;
+
     ret = KAZ_SIGN_SUCCESS;
 
 cleanup:
+    BN_CTX_free(local_ctx);
     if (hash_buf) {
-        kaz_secure_zero(hash_buf, params->hash_bytes);
+        kaz_secure_zero(hash_buf, params ? params->hash_bytes : 64);
         free(hash_buf);
     }
 
-    bn_secure_free(s);
-    bn_secure_free(t);
+    bn_secure_free(s_bn);
+    bn_secure_free(t_bn);
+    BN_free(hashInt);
+    BN_free(lower_e1);
+    BN_free(lower_e2);
     bn_secure_free(e1);
     bn_secure_free(e2);
-    bn_secure_free(tmp);
-    bn_secure_free(tmp2);
     bn_secure_free(e1_inv);
-    BN_free(h);
+    BN_free(g1_e1);
+    BN_free(g2_e2);
     BN_free(S1);
     BN_free(S2);
     BN_free(S3);
+    BN_free(tmp);
+    BN_free(tmp2);
 
     return ret;
 }
+
+int kaz_sign_signature(unsigned char *sig,
+                       unsigned long long *siglen,
+                       const unsigned char *msg,
+                       unsigned long long msglen,
+                       const unsigned char *sk)
+{
+    if (!g_rand_initialized) {
+        int ret = kaz_sign_init_random();
+        if (ret != KAZ_SIGN_SUCCESS) return ret;
+    }
+    return kaz_sign_signature_ex((kaz_sign_level_t)KAZ_SECURITY_LEVEL,
+                                 sig, siglen, msg, msglen, sk);
+}
+
+/* ============================================================================
+ * Signature Verification (matches Java KAZSIGNVerifier.java v2.0)
+ *
+ * h = BigInteger(1, SHA-256(msg) zero-padded to hash_bytes)
+ * V = v mod N
+ * S1' = S1 mod N
+ * LHS = V^S1' * S1'^S2 * g2^S3 mod N
+ * RHS = (g1*g2)^h mod N
+ * Accept iff LHS == RHS
+ * Extract message from sig[signature_overhead:]
+ * ============================================================================ */
 
 int kaz_sign_verify_ex(kaz_sign_level_t level,
                        unsigned char *msg,
@@ -1461,11 +943,13 @@ int kaz_sign_verify_ex(kaz_sign_level_t level,
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
     const kaz_sign_level_params_t *params;
+    BN_CTX *local_ctx = NULL;
     BIGNUM *V = NULL;
     BIGNUM *S1 = NULL, *S2 = NULL, *S3 = NULL;
-    BIGNUM *h = NULL;
-    BIGNUM *Y1 = NULL, *Y2 = NULL;
-    BIGNUM *tmp = NULL;
+    BIGNUM *hashInt = NULL;
+    BIGNUM *V_S1 = NULL, *S1_S2 = NULL, *g2_S3 = NULL;
+    BIGNUM *g1g2 = NULL;
+    BIGNUM *LHS = NULL, *RHS = NULL;
     unsigned char *hash_buf = NULL;
     unsigned long long extracted_msglen;
     int ret = KAZ_SIGN_ERROR_VERIFY;
@@ -1494,9 +978,16 @@ int kaz_sign_verify_ex(kaz_sign_level_t level,
 
     extracted_msglen = siglen - params->signature_overhead;
 
+    /* Allocate per-call BN_CTX */
+    local_ctx = BN_CTX_new();
+    if (!local_ctx) {
+        return KAZ_SIGN_ERROR_MEMORY;
+    }
+
     /* Allocate hash buffer */
     hash_buf = malloc(params->hash_bytes);
     if (!hash_buf) {
+        BN_CTX_free(local_ctx);
         return KAZ_SIGN_ERROR_MEMORY;
     }
 
@@ -1505,21 +996,31 @@ int kaz_sign_verify_ex(kaz_sign_level_t level,
     S1 = BN_new();
     S2 = BN_new();
     S3 = BN_new();
-    h = BN_new();
-    Y1 = BN_new();
-    Y2 = BN_new();
-    tmp = BN_new();
+    hashInt = BN_new();
+    V_S1 = BN_new();
+    S1_S2 = BN_new();
+    g2_S3 = BN_new();
+    g1g2 = BN_new();
+    LHS = BN_new();
+    RHS = BN_new();
 
-    if (!V || !S1 || !S2 || !S3 || !h || !Y1 || !Y2 || !tmp) {
+    if (!V || !S1 || !S2 || !S3 || !hashInt ||
+        !V_S1 || !S1_S2 || !g2_S3 || !g1g2 ||
+        !LHS || !RHS) {
         ret = KAZ_SIGN_ERROR_MEMORY;
         goto cleanup;
     }
 
-    /* Import public key and signature components */
-    if (bn_import(V, pk, params->public_key_bytes) != 0) {
+    /* Parse pk = v (v_bytes) */
+    if (bn_import(V, pk, params->v_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
+
+    /* V = v mod N */
+    if (!BN_mod(V, V, rp->N, local_ctx)) goto cleanup;
+
+    /* Parse sig = S1(s1_bytes) || S2(s2_bytes) || S3(s3_bytes) || [message] */
     if (bn_import(S1, sig, params->s1_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
@@ -1528,64 +1029,61 @@ int kaz_sign_verify_ex(kaz_sign_level_t level,
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
-    if (bn_import(S3, sig + params->s1_bytes + params->s2_bytes,
-                  params->s3_bytes) != 0) {
+    if (bn_import(S3, sig + params->s1_bytes + params->s2_bytes, params->s3_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
+
+    /* S1' = S1 mod N */
+    if (!BN_mod(S1, S1, rp->N, local_ctx)) goto cleanup;
 
     /* Hash the embedded message */
-    const unsigned char *embedded_msg = sig + params->signature_overhead;
-    if (kaz_sign_hash_ex(level, embedded_msg, extracted_msglen, hash_buf) != KAZ_SIGN_SUCCESS) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
+    {
+        const unsigned char *embedded_msg = sig + params->signature_overhead;
+        if (kaz_sign_hash_ex(level, embedded_msg, extracted_msglen, hash_buf) != KAZ_SIGN_SUCCESS) {
+            ret = KAZ_SIGN_ERROR_INVALID;
+            goto cleanup;
+        }
     }
-    if (bn_import(h, hash_buf, params->hash_bytes) != 0) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-
-    /* Compute Y1 = V^S1 * S1^S2 * g2^S3 mod N */
-    if (!BN_mod_exp_mont(tmp, V, S1, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_exp_mont(Y1, S1, S2, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(Y1, Y1, tmp, rp->N, rp->bn_ctx)) {
+    if (bn_import(hashInt, hash_buf, params->hash_bytes) != 0) {
         ret = KAZ_SIGN_ERROR_INVALID;
         goto cleanup;
     }
 
-    if (!BN_mod_exp_mont(tmp, rp->g2, S3, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
-    if (!BN_mod_mul(Y1, Y1, tmp, rp->N, rp->bn_ctx)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
+    /* LHS = V^S1' * S1'^S2 * g2^S3 mod N */
+    /* V^S1 mod N (public values, use regular mod_exp — N is odd) */
+    if (!BN_mod_exp(V_S1, V, S1, rp->N, local_ctx)) goto cleanup;
 
-    /* Compute Y2 = (g1 * g2)^h mod N */
-    if (!BN_mod_exp_mont(Y2, rp->g1g2, h, rp->N, rp->bn_ctx, rp->mont)) {
-        ret = KAZ_SIGN_ERROR_INVALID;
-        goto cleanup;
-    }
+    /* S1^S2 mod N */
+    if (!BN_mod_exp(S1_S2, S1, S2, rp->N, local_ctx)) goto cleanup;
 
-    /* Verify Y1 == Y2 */
-    if (BN_cmp(Y1, Y2) != 0) {
+    /* g2^S3 mod N */
+    if (!BN_mod_exp(g2_S3, rp->g2, S3, rp->N, local_ctx)) goto cleanup;
+
+    /* LHS = V_S1 * S1_S2 * g2_S3 mod N */
+    if (!BN_mod_mul(LHS, V_S1, S1_S2, rp->N, local_ctx)) goto cleanup;
+    if (!BN_mod_mul(LHS, LHS, g2_S3, rp->N, local_ctx)) goto cleanup;
+
+    /* RHS = (g1*g2)^h mod N */
+    if (!BN_mod_mul(g1g2, rp->g1, rp->g2, rp->N, local_ctx)) goto cleanup;
+    if (!BN_mod_exp(RHS, g1g2, hashInt, rp->N, local_ctx)) goto cleanup;
+
+    /* Accept iff LHS == RHS */
+    if (BN_cmp(LHS, RHS) != 0) {
         ret = KAZ_SIGN_ERROR_VERIFY;
         goto cleanup;
     }
 
-    /* Copy out the message */
-    memcpy(msg, embedded_msg, extracted_msglen);
+    /* All checks passed - copy out the message */
+    {
+        const unsigned char *embedded_msg = sig + params->signature_overhead;
+        memcpy(msg, embedded_msg, (size_t)extracted_msglen);
+    }
     *msglen = extracted_msglen;
     ret = KAZ_SIGN_SUCCESS;
 
 cleanup:
+    BN_CTX_free(local_ctx);
     if (hash_buf) {
         kaz_secure_zero(hash_buf, params ? params->hash_bytes : 64);
         free(hash_buf);
@@ -1595,10 +1093,274 @@ cleanup:
     BN_free(S1);
     BN_free(S2);
     BN_free(S3);
-    BN_free(h);
-    BN_free(Y1);
-    BN_free(Y2);
-    BN_free(tmp);
+    BN_free(hashInt);
+    BN_free(V_S1);
+    BN_free(S1_S2);
+    BN_free(g2_S3);
+    BN_free(g1g2);
+    BN_free(LHS);
+    BN_free(RHS);
 
     return ret;
+}
+
+int kaz_sign_verify(unsigned char *msg,
+                    unsigned long long *msglen,
+                    const unsigned char *sig,
+                    unsigned long long siglen,
+                    const unsigned char *pk)
+{
+    if (!g_rand_initialized) {
+        int ret = kaz_sign_init_random();
+        if (ret != KAZ_SIGN_SUCCESS) return ret;
+    }
+    return kaz_sign_verify_ex((kaz_sign_level_t)KAZ_SECURITY_LEVEL,
+                               msg, msglen, sig, siglen, pk);
+}
+
+/* ============================================================================
+ * Version API
+ * ============================================================================ */
+
+const char *kaz_sign_version(void)
+{
+    return KAZ_SIGN_VERSION_STRING;
+}
+
+int kaz_sign_version_number(void)
+{
+    return KAZ_SIGN_VERSION_NUMBER;
+}
+
+/* ============================================================================
+ * KazWire Encoding/Decoding
+ * ============================================================================ */
+
+static int level_to_wire_alg(kaz_sign_level_t level) {
+    switch (level) {
+        case KAZ_LEVEL_128: return KAZ_WIRE_SIGN_128;
+        case KAZ_LEVEL_192: return KAZ_WIRE_SIGN_192;
+        case KAZ_LEVEL_256: return KAZ_WIRE_SIGN_256;
+        default: return -1;
+    }
+}
+
+static int wire_alg_to_level(int alg) {
+    switch (alg) {
+        case KAZ_WIRE_SIGN_128: return KAZ_LEVEL_128;
+        case KAZ_WIRE_SIGN_192: return KAZ_LEVEL_192;
+        case KAZ_WIRE_SIGN_256: return KAZ_LEVEL_256;
+        default: return 0; /* 0 is not a valid level */
+    }
+}
+
+static void wire_write_header(unsigned char *out, int alg_id, int type_id) {
+    out[0] = KAZ_WIRE_MAGIC_HI;
+    out[1] = KAZ_WIRE_MAGIC_LO;
+    out[2] = (unsigned char)alg_id;
+    out[3] = (unsigned char)type_id;
+    out[4] = KAZ_WIRE_VERSION;
+}
+
+static int wire_validate_header(const unsigned char *wire, size_t wire_len,
+                                int expected_type, kaz_sign_level_t *level) {
+    if (wire_len < KAZ_WIRE_HEADER_LEN)
+        return KAZ_SIGN_ERROR_INVALID;
+    if (wire[0] != KAZ_WIRE_MAGIC_HI || wire[1] != KAZ_WIRE_MAGIC_LO)
+        return KAZ_SIGN_ERROR_INVALID;
+    if (wire[3] != (unsigned char)expected_type)
+        return KAZ_SIGN_ERROR_INVALID;
+    if (wire[4] != KAZ_WIRE_VERSION)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    int lvl_int = wire_alg_to_level(wire[2]);
+    if (lvl_int == 0)
+        return KAZ_SIGN_ERROR_INVALID;
+    kaz_sign_level_t lvl = (kaz_sign_level_t)lvl_int;
+
+    *level = lvl;
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_pubkey_to_wire(kaz_sign_level_t level,
+                            const unsigned char *pk, size_t pk_len,
+                            unsigned char *out, size_t *out_len) {
+    if (!pk || !out_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(level);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (pk_len != params->public_key_bytes)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t needed = KAZ_WIRE_HEADER_LEN + params->public_key_bytes;
+
+    if (!out) {
+        *out_len = needed;
+        return KAZ_SIGN_SUCCESS;
+    }
+
+    if (*out_len < needed)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    int alg = level_to_wire_alg(level);
+    if (alg < 0)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    wire_write_header(out, alg, KAZ_WIRE_TYPE_PUB);
+    memcpy(out + KAZ_WIRE_HEADER_LEN, pk, params->public_key_bytes);
+    *out_len = needed;
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_pubkey_from_wire(const unsigned char *wire, size_t wire_len,
+                              kaz_sign_level_t *level,
+                              unsigned char *pk, size_t *pk_len) {
+    if (!wire || !level || !pk || !pk_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    kaz_sign_level_t lvl;
+    int ret = wire_validate_header(wire, wire_len, KAZ_WIRE_TYPE_PUB, &lvl);
+    if (ret != KAZ_SIGN_SUCCESS)
+        return ret;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(lvl);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t expected = KAZ_WIRE_HEADER_LEN + params->public_key_bytes;
+    if (wire_len != expected)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (*pk_len < params->public_key_bytes)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    *level = lvl;
+    *pk_len = params->public_key_bytes;
+    memcpy(pk, wire + KAZ_WIRE_HEADER_LEN, params->public_key_bytes);
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_privkey_to_wire(kaz_sign_level_t level,
+                             const unsigned char *sk, size_t sk_len,
+                             unsigned char *out, size_t *out_len) {
+    if (!sk || !out_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(level);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (sk_len != params->secret_key_bytes)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t needed = KAZ_WIRE_HEADER_LEN + params->secret_key_bytes;
+
+    if (!out) {
+        *out_len = needed;
+        return KAZ_SIGN_SUCCESS;
+    }
+
+    if (*out_len < needed)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    int alg = level_to_wire_alg(level);
+    if (alg < 0)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    wire_write_header(out, alg, KAZ_WIRE_TYPE_PRIV);
+    memcpy(out + KAZ_WIRE_HEADER_LEN, sk, params->secret_key_bytes);
+    *out_len = needed;
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_privkey_from_wire(const unsigned char *wire, size_t wire_len,
+                               kaz_sign_level_t *level,
+                               unsigned char *sk, size_t *sk_len) {
+    if (!wire || !level || !sk || !sk_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    kaz_sign_level_t lvl;
+    int ret = wire_validate_header(wire, wire_len, KAZ_WIRE_TYPE_PRIV, &lvl);
+    if (ret != KAZ_SIGN_SUCCESS)
+        return ret;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(lvl);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t expected = KAZ_WIRE_HEADER_LEN + params->secret_key_bytes;
+    if (wire_len != expected)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (*sk_len < params->secret_key_bytes)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    *level = lvl;
+    *sk_len = params->secret_key_bytes;
+    memcpy(sk, wire + KAZ_WIRE_HEADER_LEN, params->secret_key_bytes);
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_sig_to_wire(kaz_sign_level_t level,
+                         const unsigned char *sig, size_t sig_len,
+                         unsigned char *out, size_t *out_len) {
+    if (!sig || !out_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(level);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (sig_len != params->signature_overhead)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t needed = KAZ_WIRE_HEADER_LEN + params->signature_overhead;
+
+    if (!out) {
+        *out_len = needed;
+        return KAZ_SIGN_SUCCESS;
+    }
+
+    if (*out_len < needed)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    int alg = level_to_wire_alg(level);
+    if (alg < 0)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    wire_write_header(out, alg, KAZ_WIRE_TYPE_SIG_DET);
+    memcpy(out + KAZ_WIRE_HEADER_LEN, sig, params->signature_overhead);
+    *out_len = needed;
+    return KAZ_SIGN_SUCCESS;
+}
+
+int kaz_sign_sig_from_wire(const unsigned char *wire, size_t wire_len,
+                           kaz_sign_level_t *level,
+                           unsigned char *sig, size_t *sig_len) {
+    if (!wire || !level || !sig || !sig_len)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    kaz_sign_level_t lvl;
+    int ret = wire_validate_header(wire, wire_len, KAZ_WIRE_TYPE_SIG_DET, &lvl);
+    if (ret != KAZ_SIGN_SUCCESS)
+        return ret;
+
+    const kaz_sign_level_params_t *params = kaz_sign_get_level_params(lvl);
+    if (!params)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    size_t expected = KAZ_WIRE_HEADER_LEN + params->signature_overhead;
+    if (wire_len != expected)
+        return KAZ_SIGN_ERROR_INVALID;
+
+    if (*sig_len < params->signature_overhead)
+        return KAZ_SIGN_ERROR_BUFFER;
+
+    *level = lvl;
+    *sig_len = params->signature_overhead;
+    memcpy(sig, wire + KAZ_WIRE_HEADER_LEN, params->signature_overhead);
+    return KAZ_SIGN_SUCCESS;
 }

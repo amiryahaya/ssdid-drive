@@ -1,6 +1,6 @@
 /*
  * KAZ-KEM API Header
- * Version 2.1.0
+ * Version 2.0.0
  *
  * Post-quantum Key Encapsulation Mechanism
  * Supports Security Levels: 128, 192, 256 (runtime selectable)
@@ -45,14 +45,11 @@ typedef struct {
 
     const char *g1;             /* Generator 1 */
     const char *g2;             /* Generator 2 */
-    const char *g3;             /* Generator 3 */
 
     const char *Og1N;           /* Order of g1 mod N */
     int LOg1N;                  /* Bit length of Og1N */
     const char *Og2N;           /* Order of g2 mod N */
     int LOg2N;                  /* Bit length of Og2N */
-    const char *Og3N;           /* Order of g3 mod N */
-    int LOg3N;                  /* Bit length of Og3N */
 
     size_t publickey_bytes;     /* Size of each public key component (A1, A2) */
     size_t privatekey_bytes;    /* Size of each private key component (a1, a2) */
@@ -177,7 +174,7 @@ extern void kaz_kem_cleanup_full(void);
 
 /**
  * Get version string at runtime.
- * Returns: Pointer to version string (e.g., "2.1.0")
+ * Returns: Pointer to version string (e.g., "2.0.0")
  * Note: The returned string is statically allocated and should not be freed.
  */
 extern const char* kaz_kem_version(void);
@@ -198,13 +195,10 @@ extern const char* kaz_kem_version(void);
 #define KAZ_KEM_SP_LN                       432
 #define KAZ_KEM_SP_g1                       "7"
 #define KAZ_KEM_SP_g2                       "23"
-#define KAZ_KEM_SP_g3                       "65537"
 #define KAZ_KEM_SP_Og1N                     "832774696684766144498049365929840416000"
 #define KAZ_KEM_SP_LOg1N                    130
 #define KAZ_KEM_SP_Og2N                     "23132630463465726236056926831384456000"
 #define KAZ_KEM_SP_LOg2N                    125
-#define KAZ_KEM_SP_Og3N                     "104096837085595768062256170741230052000"
-#define KAZ_KEM_SP_LOg3N                    127
 #define KAZ_KEM_PUBLICKEY_BYTES             54
 #define KAZ_KEM_PRIVATEKEY_BYTES            17
 #define KAZ_KEM_EPHERMERAL_PUBLIC_BYTES     54
@@ -218,13 +212,10 @@ extern const char* kaz_kem_version(void);
 #define KAZ_KEM_SP_LN                       702
 #define KAZ_KEM_SP_g1                       "7"
 #define KAZ_KEM_SP_g2                       "23"
-#define KAZ_KEM_SP_g3                       "65537"
 #define KAZ_KEM_SP_Og1N                     "51736000959480087314595638140051513827162226171393634016000"
 #define KAZ_KEM_SP_LOg1N                    196
 #define KAZ_KEM_SP_Og2N                     "38802000719610065485946728605038635370371669628545225512000"
 #define KAZ_KEM_SP_LOg2N                    195
-#define KAZ_KEM_SP_Og3N                     "12934000239870021828648909535012878456790556542848408504000"
-#define KAZ_KEM_SP_LOg3N                    194
 #define KAZ_KEM_PUBLICKEY_BYTES             88
 #define KAZ_KEM_PRIVATEKEY_BYTES            25
 #define KAZ_KEM_EPHERMERAL_PUBLIC_BYTES     88
@@ -238,13 +229,10 @@ extern const char* kaz_kem_version(void);
 #define KAZ_KEM_SP_LN                       942
 #define KAZ_KEM_SP_g1                       "7"
 #define KAZ_KEM_SP_g2                       "23"
-#define KAZ_KEM_SP_g3                       "65537"
 #define KAZ_KEM_SP_Og1N                     "99154693887499828557116081873795155652147461554242228686027806044656980768000"
 #define KAZ_KEM_SP_LOg1N                    256
 #define KAZ_KEM_SP_Og2N                     "148732040831249742835674122810692733478221192331363343029041709066985471152000"
 #define KAZ_KEM_SP_LOg2N                    257
-#define KAZ_KEM_SP_Og3N                     "49577346943749914278558040936897577826073730777121114343013903022328490384000"
-#define KAZ_KEM_SP_LOg3N                    255
 #define KAZ_KEM_PUBLICKEY_BYTES             118
 #define KAZ_KEM_PRIVATEKEY_BYTES            33
 #define KAZ_KEM_EPHERMERAL_PUBLIC_BYTES     118
@@ -265,6 +253,83 @@ extern void KAZ_KEM_CLEANUP(void);
 #endif /* KAZ_SECURITY_LEVEL */
 
 /* ============================================================================
+ * KazWire Encoding Constants (aligned with kaz-pqc-core-v2.0)
+ * ============================================================================ */
+
+#define KAZ_KEM_WIRE_MAGIC_HI   0x67
+#define KAZ_KEM_WIRE_MAGIC_LO   0x52
+#define KAZ_KEM_WIRE_VERSION    0x01
+
+#define KAZ_KEM_WIRE_128        0x10
+#define KAZ_KEM_WIRE_192        0x11
+#define KAZ_KEM_WIRE_256        0x12
+
+#define KAZ_KEM_WIRE_TYPE_PRIV  0x01
+#define KAZ_KEM_WIRE_TYPE_PUB   0x02
+
+#define KAZ_KEM_WIRE_HEADER     5
+
+/* ============================================================================
+ * KazWire Encoding Functions
+ * ============================================================================ */
+
+/**
+ * Encode a public key to KazWire format (5-byte header + raw key).
+ *
+ * @param level     Security level (128, 192, or 256)
+ * @param pk        Raw public key buffer (2 * publickey_bytes)
+ * @param pk_len    Length of raw public key
+ * @param out       Output buffer (must be at least KAZ_KEM_WIRE_HEADER + pk_len)
+ * @param out_len   On input: size of out buffer; on output: bytes written
+ * @return          0 on success, negative error code on failure
+ */
+extern int kaz_kem_pubkey_to_wire(int level,
+                                   const unsigned char *pk, size_t pk_len,
+                                   unsigned char *out, size_t *out_len);
+
+/**
+ * Decode a public key from KazWire format.
+ *
+ * @param wire      Wire-encoded data
+ * @param wire_len  Length of wire data
+ * @param level     Output: decoded security level
+ * @param pk        Output buffer for raw public key
+ * @param pk_len    On input: size of pk buffer; on output: bytes written
+ * @return          0 on success, negative error code on failure
+ */
+extern int kaz_kem_pubkey_from_wire(const unsigned char *wire, size_t wire_len,
+                                     int *level,
+                                     unsigned char *pk, size_t *pk_len);
+
+/**
+ * Encode a private key to KazWire format (5-byte header + raw key).
+ *
+ * @param level     Security level (128, 192, or 256)
+ * @param sk        Raw private key buffer (2 * privatekey_bytes)
+ * @param sk_len    Length of raw private key
+ * @param out       Output buffer (must be at least KAZ_KEM_WIRE_HEADER + sk_len)
+ * @param out_len   On input: size of out buffer; on output: bytes written
+ * @return          0 on success, negative error code on failure
+ */
+extern int kaz_kem_privkey_to_wire(int level,
+                                    const unsigned char *sk, size_t sk_len,
+                                    unsigned char *out, size_t *out_len);
+
+/**
+ * Decode a private key from KazWire format.
+ *
+ * @param wire      Wire-encoded data
+ * @param wire_len  Length of wire data
+ * @param level     Output: decoded security level
+ * @param sk        Output buffer for raw private key
+ * @param sk_len    On input: size of sk buffer; on output: bytes written
+ * @return          0 on success, negative error code on failure
+ */
+extern int kaz_kem_privkey_from_wire(const unsigned char *wire, size_t wire_len,
+                                      int *level,
+                                      unsigned char *sk, size_t *sk_len);
+
+/* ============================================================================
  * ERROR CODES
  * ============================================================================ */
 
@@ -276,6 +341,7 @@ extern void KAZ_KEM_CLEANUP(void);
 #define KAZ_KEM_ERROR_MSG_TOO_LARGE -5
 #define KAZ_KEM_ERROR_NOT_INIT      -6
 #define KAZ_KEM_ERROR_INVALID_LEVEL -7
+#define KAZ_KEM_ERROR_WIRE_FORMAT  -8
 
 #ifdef __cplusplus
 }

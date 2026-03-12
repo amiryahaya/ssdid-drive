@@ -14,14 +14,14 @@
 #define KAZ_KEM_VERSION_MAJOR 2
 #endif
 #ifndef KAZ_KEM_VERSION_MINOR
-#define KAZ_KEM_VERSION_MINOR 1
+#define KAZ_KEM_VERSION_MINOR 0
 #endif
 #ifndef KAZ_KEM_VERSION_PATCH
 #define KAZ_KEM_VERSION_PATCH 0
 #endif
 
 /* Version string */
-#define KAZ_KEM_VERSION_STRING "2.1.0"
+#define KAZ_KEM_VERSION_STRING "2.0.0"
 
 /* Version as a single number for comparison */
 #define KAZ_KEM_VERSION_NUMBER ((KAZ_KEM_VERSION_MAJOR << 16) | \
@@ -29,7 +29,7 @@
                                  (KAZ_KEM_VERSION_PATCH))
 
 /* Release date */
-#define KAZ_KEM_RELEASE_DATE "2025-11-30"
+#define KAZ_KEM_RELEASE_DATE "2026-03-09"
 
 /* Build information */
 #define KAZ_KEM_BUILD_TYPE "release"
@@ -49,21 +49,10 @@
 #define KAZ_KEM_VERSION_AT_LEAST(major, minor, patch) \
     (KAZ_KEM_VERSION_NUMBER >= (((major) << 16) | ((minor) << 8) | (patch)))
 
-/* Function to get version string at runtime */
-static inline const char* kaz_kem_version(void) {
-    return KAZ_KEM_VERSION_STRING;
-}
-
-/* Function to get version number at runtime */
-static inline int kaz_kem_version_number(void) {
-    return KAZ_KEM_VERSION_NUMBER;
-}
-
-/* Function to get version components */
-static inline void kaz_kem_version_info(int *major, int *minor, int *patch) {
-    if (major) *major = KAZ_KEM_VERSION_MAJOR;
-    if (minor) *minor = KAZ_KEM_VERSION_MINOR;
-    if (patch) *patch = KAZ_KEM_VERSION_PATCH;
-}
+/*
+ * Runtime version functions are declared in kaz/kem.h and
+ * implemented in kem_secure.c.  The macros above are available
+ * for compile-time checks.
+ */
 
 #endif /* KAZ_KEM_VERSION_H */

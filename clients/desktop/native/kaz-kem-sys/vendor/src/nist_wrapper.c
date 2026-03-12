@@ -1,6 +1,6 @@
 /*
  * NIST API Wrapper for KAZ-KEM
- * Version 2.1.0
+ * Version 2.0.0
  *
  * Provides NIST-compliant API that wraps the internal KAZ-KEM implementation.
  * Supports both compile-time and runtime security level selection.

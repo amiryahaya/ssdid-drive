@@ -27,7 +27,7 @@ extern "C" {
 /* Prevent compiler from optimizing away security-critical operations */
 #if defined(__GNUC__) || defined(__clang__)
 #define KAZ_NOINLINE __attribute__((noinline))
-#define KAZ_SENSITIVE __attribute__((sensitive))
+#define KAZ_SENSITIVE /* __attribute__((sensitive)) - not widely supported */
 #else
 #define KAZ_NOINLINE
 #define KAZ_SENSITIVE
@@ -110,8 +110,8 @@ static inline int kaz_ct_memcmp(const void *a, const void *b, size_t len)
         diff |= pa[i] ^ pb[i];
     }
 
-    /* Return 0 if equal, 1 if different (constant-time) */
-    return (1 & ((diff - 1) >> 8)) ^ 1;
+    /* Return 0 if equal, 1 if different (constant-time, portable) */
+    return (int)(((unsigned int)diff | (unsigned int)(-(int)diff)) >> 31);
 }
 
 /**
@@ -177,8 +177,8 @@ static inline void kaz_ct_cmov(int condition, void *dst, const void *src, size_t
  */
 static inline int kaz_ct_is_zero(uint64_t x)
 {
-    /* If x is 0, x-1 will have high bit set (underflow) */
-    /* If x is non-zero, x-1 won't have high bit set unless x was negative */
+    /* If x is 0, (x-1) wraps to UINT64_MAX (all bits set including bit 63) */
+    /* If x is non-zero, (x-1) has bit 63 clear (for x <= 2^63) */
     return (int)(1 & ((x - 1) >> 63));
 }
 
@@ -253,7 +253,7 @@ static inline void kaz_secure_buffer_clear(kaz_secure_buffer_t *buf)
  */
 static inline int kaz_validate_ptr(const void *ptr, const char *name)
 {
-    (void)name; /* Used for debugging */
+    (void)name; /* Reserved for debug/logging; intentionally unused in release */
     return (ptr == NULL) ? -1 : 0;
 }
 
@@ -281,7 +281,7 @@ typedef struct {
     int initialized;
     int constant_time_enabled;
     int zeroize_on_free;
-    unsigned long operations_count;
+    unsigned long operations_count;  /* Not atomic; approximate in concurrent use */
 } kaz_security_state_t;
 
 /**

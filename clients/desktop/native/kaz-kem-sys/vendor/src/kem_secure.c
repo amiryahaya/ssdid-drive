@@ -1,6 +1,6 @@
 /*
  * KAZ-KEM Secure Implementation
- * Version 2.1.0
+ * Version 2.0.0
  *
  * Production-hardened implementation with runtime security level selection using:
  * - OpenSSL BIGNUM with constant-time operations
@@ -32,13 +32,10 @@ static const kaz_kem_params_t KAZ_KEM_PARAMS_128 = {
     .LN = 432,
     .g1 = "7",
     .g2 = "23",
-    .g3 = "65537",
     .Og1N = "832774696684766144498049365929840416000",
     .LOg1N = 130,
     .Og2N = "23132630463465726236056926831384456000",
     .LOg2N = 125,
-    .Og3N = "104096837085595768062256170741230052000",
-    .LOg3N = 127,
     .publickey_bytes = 54,
     .privatekey_bytes = 17,
     .ephemeral_public_bytes = 54,
@@ -53,13 +50,10 @@ static const kaz_kem_params_t KAZ_KEM_PARAMS_192 = {
     .LN = 702,
     .g1 = "7",
     .g2 = "23",
-    .g3 = "65537",
     .Og1N = "51736000959480087314595638140051513827162226171393634016000",
     .LOg1N = 196,
     .Og2N = "38802000719610065485946728605038635370371669628545225512000",
     .LOg2N = 195,
-    .Og3N = "12934000239870021828648909535012878456790556542848408504000",
-    .LOg3N = 194,
     .publickey_bytes = 88,
     .privatekey_bytes = 25,
     .ephemeral_public_bytes = 88,
@@ -74,13 +68,10 @@ static const kaz_kem_params_t KAZ_KEM_PARAMS_256 = {
     .LN = 942,
     .g1 = "7",
     .g2 = "23",
-    .g3 = "65537",
     .Og1N = "99154693887499828557116081873795155652147461554242228686027806044656980768000",
     .LOg1N = 256,
     .Og2N = "148732040831249742835674122810692733478221192331363343029041709066985471152000",
     .LOg2N = 257,
-    .Og3N = "49577346943749914278558040936897577826073730777121114343013903022328490384000",
-    .LOg3N = 255,
     .publickey_bytes = 118,
     .privatekey_bytes = 33,
     .ephemeral_public_bytes = 118,
@@ -337,7 +328,7 @@ const char* kaz_kem_version(void)
 #ifdef KAZ_KEM_VERSION
     return KAZ_KEM_VERSION;
 #else
-    return "2.1.0";
+    return "2.0.0";
 #endif
 }
 
@@ -496,19 +487,17 @@ int kaz_kem_encapsulate(unsigned char *ct, unsigned long long *ctlen,
     const kaz_kem_params_t *p = g_state.params;
 
     ctx = BN_CTX_new();
-    e1 = BN_new();
-    e2 = BN_new();
+    /* e1, e2, M are assigned by bytes_to_bn() below — no pre-alloc needed */
     b1 = BN_secure_new();
     b2 = BN_secure_new();
     B1 = BN_new();
     B2 = BN_new();
-    M = BN_new();
     ENCAP = BN_new();
     tmp = BN_new();
     tmp2 = BN_new();
     lowerbound = BN_new();
 
-    if (!ctx || !e1 || !e2 || !b1 || !b2 || !B1 || !B2 || !M || !ENCAP ||
+    if (!ctx || !b1 || !b2 || !B1 || !B2 || !ENCAP ||
         !tmp || !tmp2 || !lowerbound) {
         ret = KAZ_KEM_ERROR_MEMORY;
         goto cleanup;
@@ -610,8 +599,6 @@ int kaz_kem_decapsulate(unsigned char *ss, unsigned long long *sslen,
     BIGNUM *ENCAP = NULL, *DECAP = NULL;
     BIGNUM *tmp = NULL;
 
-    (void)ctlen;  /* Unused but kept for API compatibility */
-
     if (!ss || !sslen || !ct || !sk) {
         return KAZ_KEM_ERROR_INVALID_PARAM;
     }
@@ -622,24 +609,28 @@ int kaz_kem_decapsulate(unsigned char *ss, unsigned long long *sslen,
 
     const kaz_kem_params_t *p = g_state.params;
 
+    /* Validate ciphertext length: ENCAP || B1 || B2 */
+    size_t expected_ctlen = p->general_bytes + 2 * p->ephemeral_public_bytes;
+    if ((size_t)ctlen < expected_ctlen) {
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+    }
+
     ctx = BN_CTX_new();
+    /* a1, a2 use secure memory for private key material */
     a1 = BN_secure_new();
     a2 = BN_secure_new();
-    B1 = BN_new();
-    B2 = BN_new();
-    ENCAP = BN_new();
+    /* ENCAP, B1, B2 are assigned by bytes_to_bn() below — no pre-alloc */
     DECAP = BN_new();
     tmp = BN_new();
 
-    if (!ctx || !a1 || !a2 || !B1 || !B2 || !ENCAP || !DECAP || !tmp) {
+    if (!ctx || !a1 || !a2 || !DECAP || !tmp) {
         ret = KAZ_KEM_ERROR_MEMORY;
         goto cleanup;
     }
 
-    /* Import private key */
-    a1 = bytes_to_bn(sk, p->privatekey_bytes);
-    a2 = bytes_to_bn(sk + p->privatekey_bytes, p->privatekey_bytes);
-    if (!a1 || !a2) {
+    /* Import private key into pre-allocated secure BIGNUMs */
+    if (!BN_bin2bn(sk, (int)p->privatekey_bytes, a1) ||
+        !BN_bin2bn(sk + p->privatekey_bytes, (int)p->privatekey_bytes, a2)) {
         ret = KAZ_KEM_ERROR_OPENSSL;
         goto cleanup;
     }
@@ -686,6 +677,189 @@ cleanup:
     if (ctx) BN_CTX_free(ctx);
 
     return ret;
+}
+
+/* ============================================================================
+ * KazWire Encoding/Decoding
+ * ============================================================================ */
+
+/**
+ * Map security level to wire algorithm ID.
+ */
+static int kem_level_to_alg_id(int level)
+{
+    switch (level) {
+        case 128: return KAZ_KEM_WIRE_128;
+        case 192: return KAZ_KEM_WIRE_192;
+        case 256: return KAZ_KEM_WIRE_256;
+        default:  return -1;
+    }
+}
+
+/**
+ * Map wire algorithm ID to security level.
+ */
+static int kem_alg_id_to_level(int alg_id)
+{
+    switch (alg_id) {
+        case KAZ_KEM_WIRE_128: return 128;
+        case KAZ_KEM_WIRE_192: return 192;
+        case KAZ_KEM_WIRE_256: return 256;
+        default:               return -1;
+    }
+}
+
+/**
+ * Get expected key sizes for a given level.
+ */
+static const kaz_kem_params_t* kem_params_for_level(int level)
+{
+    switch (level) {
+        case 128: return &KAZ_KEM_PARAMS_128;
+        case 192: return &KAZ_KEM_PARAMS_192;
+        case 256: return &KAZ_KEM_PARAMS_256;
+        default:  return NULL;
+    }
+}
+
+int kaz_kem_pubkey_to_wire(int level,
+                            const unsigned char *pk, size_t pk_len,
+                            unsigned char *out, size_t *out_len)
+{
+    if (!pk || !out || !out_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    int alg_id = kem_level_to_alg_id(level);
+    if (alg_id < 0)
+        return KAZ_KEM_ERROR_INVALID_LEVEL;
+
+    const kaz_kem_params_t *p = kem_params_for_level(level);
+    size_t expected = p->publickey_bytes * 2;
+    if (pk_len != expected)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    size_t total = KAZ_KEM_WIRE_HEADER + pk_len;
+    if (*out_len < total)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    out[0] = KAZ_KEM_WIRE_MAGIC_HI;
+    out[1] = KAZ_KEM_WIRE_MAGIC_LO;
+    out[2] = (unsigned char)alg_id;
+    out[3] = KAZ_KEM_WIRE_TYPE_PUB;
+    out[4] = KAZ_KEM_WIRE_VERSION;
+    memcpy(out + KAZ_KEM_WIRE_HEADER, pk, pk_len);
+    *out_len = total;
+
+    return KAZ_KEM_SUCCESS;
+}
+
+int kaz_kem_pubkey_from_wire(const unsigned char *wire, size_t wire_len,
+                              int *level,
+                              unsigned char *pk, size_t *pk_len)
+{
+    if (!wire || !level || !pk || !pk_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    if (wire_len < KAZ_KEM_WIRE_HEADER)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[0] != KAZ_KEM_WIRE_MAGIC_HI || wire[1] != KAZ_KEM_WIRE_MAGIC_LO)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[3] != KAZ_KEM_WIRE_TYPE_PUB)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[4] != KAZ_KEM_WIRE_VERSION)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    int decoded_level = kem_alg_id_to_level(wire[2]);
+    if (decoded_level < 0)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    const kaz_kem_params_t *p = kem_params_for_level(decoded_level);
+    size_t key_len = p->publickey_bytes * 2;
+
+    if (wire_len != KAZ_KEM_WIRE_HEADER + key_len)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (*pk_len < key_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    *level = decoded_level;
+    memcpy(pk, wire + KAZ_KEM_WIRE_HEADER, key_len);
+    *pk_len = key_len;
+
+    return KAZ_KEM_SUCCESS;
+}
+
+int kaz_kem_privkey_to_wire(int level,
+                             const unsigned char *sk, size_t sk_len,
+                             unsigned char *out, size_t *out_len)
+{
+    if (!sk || !out || !out_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    int alg_id = kem_level_to_alg_id(level);
+    if (alg_id < 0)
+        return KAZ_KEM_ERROR_INVALID_LEVEL;
+
+    const kaz_kem_params_t *p = kem_params_for_level(level);
+    size_t expected = p->privatekey_bytes * 2;
+    if (sk_len != expected)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    size_t total = KAZ_KEM_WIRE_HEADER + sk_len;
+    if (*out_len < total)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    out[0] = KAZ_KEM_WIRE_MAGIC_HI;
+    out[1] = KAZ_KEM_WIRE_MAGIC_LO;
+    out[2] = (unsigned char)alg_id;
+    out[3] = KAZ_KEM_WIRE_TYPE_PRIV;
+    out[4] = KAZ_KEM_WIRE_VERSION;
+    memcpy(out + KAZ_KEM_WIRE_HEADER, sk, sk_len);
+    *out_len = total;
+
+    return KAZ_KEM_SUCCESS;
+}
+
+int kaz_kem_privkey_from_wire(const unsigned char *wire, size_t wire_len,
+                               int *level,
+                               unsigned char *sk, size_t *sk_len)
+{
+    if (!wire || !level || !sk || !sk_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    if (wire_len < KAZ_KEM_WIRE_HEADER)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[0] != KAZ_KEM_WIRE_MAGIC_HI || wire[1] != KAZ_KEM_WIRE_MAGIC_LO)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[3] != KAZ_KEM_WIRE_TYPE_PRIV)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (wire[4] != KAZ_KEM_WIRE_VERSION)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    int decoded_level = kem_alg_id_to_level(wire[2]);
+    if (decoded_level < 0)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    const kaz_kem_params_t *p = kem_params_for_level(decoded_level);
+    size_t key_len = p->privatekey_bytes * 2;
+
+    if (wire_len != KAZ_KEM_WIRE_HEADER + key_len)
+        return KAZ_KEM_ERROR_WIRE_FORMAT;
+
+    if (*sk_len < key_len)
+        return KAZ_KEM_ERROR_INVALID_PARAM;
+
+    *level = decoded_level;
+    memcpy(sk, wire + KAZ_KEM_WIRE_HEADER, key_len);
+    *sk_len = key_len;
+
+    return KAZ_KEM_SUCCESS;
 }
 
 /* ============================================================================
