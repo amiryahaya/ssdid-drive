@@ -7,7 +7,7 @@ namespace SsdidDrive.Api.Ssdid;
 
 public record RegisterResponse(string Challenge, string ServerDid, string ServerKeyId, string ServerSignature);
 public record VerifyResponse(JsonElement Credential, string Did);
-public record AuthenticateResponse(string SessionToken, string Did, string ServerDid, string ServerSignature);
+public record AuthenticateResponse(string SessionToken, string Did, string ServerDid, string ServerKeyId, string ServerSignature);
 
 public class SsdidAuthService
 {
@@ -145,7 +145,7 @@ public class SsdidAuthService
         var serverSignature = _identity.SignChallenge(sessionToken);
         _logger.LogInformation("Authenticated {Did}", did);
 
-        return new AuthenticateResponse(sessionToken, did, _identity.Did, serverSignature);
+        return new AuthenticateResponse(sessionToken, did, _identity.Did, _identity.KeyId, serverSignature);
     }
 
     public void RevokeSession(string token) => _sessionStore.DeleteSession(token);

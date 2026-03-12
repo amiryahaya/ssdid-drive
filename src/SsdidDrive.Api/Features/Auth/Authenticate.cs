@@ -64,6 +64,7 @@ public static class Authenticate
                             session_token = ok.SessionToken,
                             did = ok.Did,
                             server_did = ok.ServerDid,
+                            server_key_id = ok.ServerKeyId,
                             server_signature = ok.ServerSignature,
                             user = new { user.Id, user.Did, user.DisplayName, status = user.Status.ToString().ToLowerInvariant() },
                             tenants
