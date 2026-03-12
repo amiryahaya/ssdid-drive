@@ -12,5 +12,6 @@ public static class InvitationFeature
         DeclineInvitation.Map(group);
         RevokeInvitation.Map(group);
         GetInvitationByToken.Map(group);
+        AcceptWithWallet.Map(group);
     }
 }
