@@ -1,5 +1,4 @@
 import { useNavigate, Link } from 'react-router-dom';
-import { Shield } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { QrChallenge } from '@/components/auth/QrChallenge';
 
@@ -21,9 +20,11 @@ export function LoginPage() {
       <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-xl border">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center mb-4">
-            <Shield className="h-10 w-10 text-primary-foreground" />
-          </div>
+          <img
+            src="/app-icon.png"
+            alt="SSDID Drive"
+            className="h-32 w-32 rounded-2xl mb-4"
+          />
           <h1 className="text-2xl font-bold">SSDID Drive</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Sign in with your SSDID Wallet
