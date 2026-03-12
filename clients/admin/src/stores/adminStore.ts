@@ -214,7 +214,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   tenantInvitationsLoading: false,
 
   fetchTenantInvitations: async (tenantId: string, page = 1, pageSize = 20) => {
-    set({ tenantInvitationsLoading: true })
+    set({ tenantInvitationsLoading: true, tenantInvitations: [], tenantInvitationsTotal: 0 })
     try {
       const res = await api.get<AdminInvitationsResponse>(
         `/api/admin/tenants/${tenantId}/invitations?page=${page}&page_size=${pageSize}`)

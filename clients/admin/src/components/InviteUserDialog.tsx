@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAdminStore } from '../stores/adminStore'
 import type { AdminInvitation } from '../stores/adminStore'
 
@@ -26,6 +26,7 @@ export default function InviteUserDialog({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<AdminInvitation | null>(null)
   const [copied, setCopied] = useState(false)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -47,6 +48,12 @@ export default function InviteUserDialog({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, submitting, onClose])
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    }
+  }, [])
 
   if (!open) return null
 
@@ -70,9 +77,14 @@ export default function InviteUserDialog({
 
   const handleCopy = async () => {
     if (!success) return
-    await navigator.clipboard.writeText(success.short_code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(success.short_code)
+      setCopied(true)
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard API unavailable — user can manually select the code
+    }
   }
 
   return (
@@ -94,7 +106,7 @@ export default function InviteUserDialog({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold mb-1">Invitation Sent!</h3>
+            <h3 id="invite-user-title" className="text-lg font-semibold mb-1">Invitation Sent!</h3>
             <p className="text-gray-500 text-sm mb-5">Share this code with the invited user</p>
 
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-2 flex items-center justify-center gap-3">
@@ -155,6 +167,7 @@ export default function InviteUserDialog({
                   <button
                     type="button"
                     onClick={() => setRole('owner')}
+                    aria-pressed={role === 'owner'}
                     className={`flex-1 p-3 rounded-lg border-2 text-center transition-colors ${
                       role === 'owner'
                         ? 'border-blue-600 bg-blue-50'
@@ -169,6 +182,7 @@ export default function InviteUserDialog({
                   <button
                     type="button"
                     onClick={() => setRole('admin')}
+                    aria-pressed={role === 'admin'}
                     className={`flex-1 p-3 rounded-lg border-2 text-center transition-colors ${
                       role === 'admin'
                         ? 'border-blue-600 bg-blue-50'

@@ -52,7 +52,7 @@ export default function TenantDetailPage() {
         .then(setDirectTenant)
         .catch(() => setError('Tenant not found'))
     }
-  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, tenants, fetchTenantById])
 
   // Fetch members
   useEffect(() => {
@@ -178,7 +178,8 @@ export default function TenantDetailPage() {
         <h3 className="text-lg font-semibold">Members</h3>
         <button
           onClick={() => setInviteOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          disabled={tenant?.disabled}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="text-base leading-none">+</span> Invite User
         </button>
@@ -270,7 +271,7 @@ export default function TenantDetailPage() {
           onClose={() => setInviteOpen(false)}
           tenantId={id!}
           tenantName={tenant.name}
-          onInvited={() => fetchTenantInvitations(id!)}
+          onInvited={() => { fetchTenantInvitations(id!).catch(() => {}) }}
         />
       )}
     </div>
