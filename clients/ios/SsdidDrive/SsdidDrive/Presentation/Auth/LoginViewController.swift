@@ -29,9 +29,10 @@ final class LoginViewController: BaseViewController {
     private lazy var logoImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(systemName: "lock.shield.fill")
-        imageView.tintColor = .systemBlue
+        imageView.image = UIImage(named: "AppIcon")
         imageView.contentMode = .scaleAspectFit
+        imageView.layer.cornerRadius = 16
+        imageView.clipsToBounds = true
         imageView.accessibilityIdentifier = "loginLogoImageView"
         imageView.accessibilityLabel = "SSDID Drive logo"
         return imageView
