@@ -77,6 +77,17 @@ protocol RecoveryRepository {
     /// Complete recovery (after threshold is met)
     func completeRecovery() async throws -> Data  // Returns recovered master key
 
+    // MARK: - File-Based Recovery Setup
+
+    /// Store the server-held share and key proof on the backend.
+    /// `serverShare` is the base64-encoded serialized Shamir share.
+    /// `keyProof` is the SHA-256 hex digest of the KEM public key (64 chars).
+    func setupRecovery(serverShare: String, keyProof: String) async throws
+
+    /// Retrieve the server-held share for a given DID (unauthenticated, used during recovery).
+    /// Returns the raw serialized share bytes.
+    func getServerShare(did: String) async throws -> Data
+
     // MARK: - Shamir Secret Sharing
 
     /// Split master key into shares using Shamir's scheme

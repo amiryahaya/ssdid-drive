@@ -135,6 +135,24 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
         return response.masterKey
     }
 
+    // MARK: - File-Based Recovery Setup
+
+    func setupRecovery(serverShare: String, keyProof: String) async throws {
+        let body = SetupRecoveryShareRequest(serverShare: serverShare, keyProof: keyProof)
+        try await apiClient.requestNoContent("/recovery/setup", method: .post, body: body)
+    }
+
+    func getServerShare(did: String) async throws -> Data {
+        let response: ServerShareResponse = try await apiClient.request(
+            "/recovery/share",
+            queryItems: [URLQueryItem(name: "did", value: did)]
+        )
+        guard let shareData = Data(base64Encoded: response.serverShare) else {
+            throw RecoveryError.invalidShare
+        }
+        return shareData
+    }
+
     // MARK: - Shamir Secret Sharing
 
     /// Split the master key into shares using real Shamir's Secret Sharing
@@ -250,4 +268,24 @@ private struct RecoverySharesResponse: Codable {
 
 private struct MyRecoveryRequestResponse: Codable {
     let request: RecoveryRequest?
+}
+
+private struct SetupRecoveryShareRequest: Codable {
+    let serverShare: String
+    let keyProof: String
+
+    enum CodingKeys: String, CodingKey {
+        case serverShare = "server_share"
+        case keyProof = "key_proof"
+    }
+}
+
+private struct ServerShareResponse: Codable {
+    let serverShare: String
+    let shareIndex: Int
+
+    enum CodingKeys: String, CodingKey {
+        case serverShare = "server_share"
+        case shareIndex = "share_index"
+    }
 }
