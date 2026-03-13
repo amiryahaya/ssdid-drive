@@ -63,29 +63,7 @@ public static class GetRootFolder
 
         return Results.Ok(new
         {
-            Data = BuildResponse(folder)
+            Data = FolderHelper.BuildFolderDto(folder)
         });
     }
-
-    private static object BuildResponse(Folder f) => new
-    {
-        f.Id,
-        f.Name,
-        ParentId = f.ParentFolderId,
-        f.OwnerId,
-        f.TenantId,
-        IsRoot = true,
-        EncryptedMetadata = (string?)null,
-        MetadataNonce = (string?)null,
-        WrappedKek = f.EncryptedFolderKey is not null ? Convert.ToBase64String(f.EncryptedFolderKey) : "",
-        KemCiphertext = (string?)null,
-        OwnerWrappedKek = f.EncryptedFolderKey is not null ? Convert.ToBase64String(f.EncryptedFolderKey) : "",
-        OwnerKemCiphertext = "",
-        Signature = (string?)null,
-        f.KemAlgorithm,
-        f.CreatedAt,
-        f.UpdatedAt,
-        SubFolderCount = 0,
-        FileCount = 0
-    };
 }

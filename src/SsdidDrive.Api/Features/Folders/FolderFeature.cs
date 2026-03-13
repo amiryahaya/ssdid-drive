@@ -10,6 +10,7 @@ public static class FolderFeature
         ListFolders.Map(group);
         GetRootFolder.Map(group);
         GetRootFolderContents.Map(group);
+        GetFolderChildren.Map(group);
         GetFolder.Map(group);
         RenameFolder.Map(group);
         DeleteFolder.Map(group);

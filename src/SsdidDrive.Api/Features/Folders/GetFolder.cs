@@ -18,28 +18,12 @@ public static class GetFolder
 
         var folder = await db.Folders
             .Where(f => f.Id == id && f.TenantId == user.TenantId)
-            .Select(f => new
-            {
-                f.Id,
-                f.Name,
-                f.ParentFolderId,
-                f.OwnerId,
-                f.TenantId,
-                f.EncryptedFolderKey,
-                f.KemAlgorithm,
-                f.CreatedAt,
-                f.UpdatedAt,
-                SubFolderCount = f.SubFolders.Count,
-                FileCount = f.Files.Count
-            })
             .FirstOrDefaultAsync(ct);
 
         if (folder is null)
             return AppError.NotFound("Folder not found").ToProblemResult();
 
-        // Check ownership or share access.
-        // Evaluate expiry client-side for cross-database compatibility
-        // (SQLite cannot compare DateTimeOffset in LINQ).
+        // Check ownership or share access
         var now = DateTimeOffset.UtcNow;
         var hasAccess = folder.OwnerId == user.Id
             || (await db.Shares
@@ -53,19 +37,7 @@ public static class GetFolder
 
         return Results.Ok(new
         {
-            folder.Id,
-            folder.Name,
-            folder.ParentFolderId,
-            folder.OwnerId,
-            folder.TenantId,
-            EncryptedFolderKey = folder.EncryptedFolderKey is not null
-                ? Convert.ToBase64String(folder.EncryptedFolderKey)
-                : null,
-            folder.KemAlgorithm,
-            folder.CreatedAt,
-            folder.UpdatedAt,
-            folder.SubFolderCount,
-            folder.FileCount
+            Data = FolderHelper.BuildFolderDto(folder)
         });
     }
 }

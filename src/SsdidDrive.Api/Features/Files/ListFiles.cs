@@ -24,9 +24,6 @@ public static class ListFiles
         if (folder is null)
             return AppError.NotFound("Folder not found").ToProblemResult();
 
-        // Check ownership or share access.
-        // Evaluate expiry client-side for cross-database compatibility
-        // (SQLite cannot compare DateTimeOffset in LINQ).
         var now = DateTimeOffset.UtcNow;
         var hasAccess = folder.OwnerId == user.Id
             || (await db.Shares
@@ -38,36 +35,14 @@ public static class ListFiles
         if (!hasAccess)
             return AppError.Forbidden("You do not have access to this folder").ToProblemResult();
 
-        var pagination = new PaginationParams(page, pageSize, search);
-
-        var query = db.Files.Where(f => f.FolderId == folderId);
-
-        if (!string.IsNullOrWhiteSpace(pagination.Search))
-            query = query.Where(f => f.Name.Contains(pagination.Search));
-
-        // Load into memory for client-side ordering (SQLite compatibility).
-        var allMatching = await query
-            .Select(f => new
-            {
-                f.Id,
-                f.Name,
-                f.ContentType,
-                f.Size,
-                f.FolderId,
-                f.UploadedById,
-                f.EncryptionAlgorithm,
-                f.CreatedAt,
-                f.UpdatedAt
-            })
+        var files = await db.Files
+            .Where(f => f.FolderId == folderId && f.Status == "complete")
+            .OrderBy(f => f.Name)
             .ToListAsync(ct);
 
-        var total = allMatching.Count;
-        var items = allMatching
-            .OrderBy(f => f.Name)
-            .Skip(pagination.Skip)
-            .Take(pagination.Take)
-            .ToList();
-
-        return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));
+        return Results.Ok(new
+        {
+            Data = files.Select(f => FileHelper.BuildFileDto(f, folder.TenantId)).ToList()
+        });
     }
 }

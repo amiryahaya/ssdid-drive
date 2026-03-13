@@ -117,8 +117,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(f => f.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(f => f.Name).HasMaxLength(512).IsRequired();
             e.Property(f => f.ContentType).HasMaxLength(256).IsRequired();
-            e.Property(f => f.StoragePath).HasMaxLength(1024).IsRequired();
+            e.Property(f => f.StoragePath).HasMaxLength(1024);
             e.Property(f => f.EncryptionAlgorithm).HasMaxLength(64);
+            e.Property(f => f.Status).HasMaxLength(32).HasDefaultValue("complete");
+            e.Property(f => f.BlobHash).HasMaxLength(128);
             e.Property(f => f.CreatedAt).HasDefaultValueSql("now()");
             e.Property(f => f.UpdatedAt).HasDefaultValueSql("now()");
 

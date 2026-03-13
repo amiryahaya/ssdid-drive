@@ -43,8 +43,8 @@ class FolderRepositoryImpl @Inject constructor(
                             tenantId = folderDto.tenantId,
                             isRoot = true,
                             name = "My Files",
-                            createdAt = java.time.Instant.parse(folderDto.createdAt),
-                            updatedAt = java.time.Instant.parse(folderDto.updatedAt)
+                            createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
+                            updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
                         )
                     } else {
                         return Result.error(AppException.CryptoError("Failed to decrypt folder"))
@@ -202,8 +202,8 @@ class FolderRepositoryImpl @Inject constructor(
                     tenantId = folderDto.tenantId,
                     isRoot = folderDto.isRoot,
                     name = name,
-                    createdAt = java.time.Instant.parse(folderDto.createdAt),
-                    updatedAt = java.time.Instant.parse(folderDto.updatedAt)
+                    createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
+                    updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
                 )
                 Result.success(folder)
             } else {
@@ -265,8 +265,8 @@ class FolderRepositoryImpl @Inject constructor(
                     tenantId = folderDto.tenantId,
                     isRoot = folderDto.isRoot,
                     name = newName,
-                    createdAt = java.time.Instant.parse(folderDto.createdAt),
-                    updatedAt = java.time.Instant.parse(folderDto.updatedAt)
+                    createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
+                    updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
                 )
                 Result.success(folder)
             } else {
@@ -396,8 +396,8 @@ class FolderRepositoryImpl @Inject constructor(
             kemCiphertext = kemCiphertext?.let { Base64.decode(it, Base64.NO_WRAP) } ?: ByteArray(0),
             signature = signature?.let { Base64.decode(it, Base64.NO_WRAP) } ?: ByteArray(0),
             cachedName = cachedName,
-            insertedAt = java.time.Instant.parse(createdAt),
-            updatedAt = java.time.Instant.parse(updatedAt)
+            insertedAt = java.time.OffsetDateTime.parse(createdAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 
@@ -484,8 +484,8 @@ class FolderRepositoryImpl @Inject constructor(
             tenantId = dto.tenantId,
             isRoot = dto.isRoot,
             name = name,
-            createdAt = java.time.Instant.parse(dto.createdAt),
-            updatedAt = java.time.Instant.parse(dto.updatedAt)
+            createdAt = java.time.OffsetDateTime.parse(dto.createdAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(dto.updatedAt).toInstant()
         )
     }
 

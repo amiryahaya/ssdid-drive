@@ -22,9 +22,6 @@ public static class ListFolders
         var now = DateTimeOffset.UtcNow;
         var pagination = new PaginationParams(page, pageSize, search);
 
-        // Folder IDs shared with this user (active, non-expired shares).
-        // Fetch candidates server-side, then filter expiry client-side for
-        // cross-database compatibility (SQLite cannot compare DateTimeOffset).
         var sharedFolderIds = (await db.Shares
             .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder")
             .Select(s => new { s.ResourceId, s.ExpiresAt })
@@ -41,27 +38,14 @@ public static class ListFolders
         if (!string.IsNullOrWhiteSpace(pagination.Search))
             query = query.Where(f => f.Name.Contains(pagination.Search));
 
-        // Load into memory for client-side ordering (SQLite compatibility).
-        var allMatching = await query
-            .Select(f => new
-            {
-                f.Id,
-                f.Name,
-                f.ParentFolderId,
-                f.OwnerId,
-                f.KemAlgorithm,
-                f.CreatedAt,
-                f.UpdatedAt,
-                SubFolderCount = f.SubFolders.Count,
-                FileCount = f.Files.Count
-            })
-            .ToListAsync(ct);
+        var allMatching = await query.ToListAsync(ct);
 
         var total = allMatching.Count;
         var items = allMatching
             .OrderBy(f => f.Name)
             .Skip(pagination.Skip)
             .Take(pagination.Take)
+            .Select(f => FolderHelper.BuildFolderDto(f))
             .ToList();
 
         return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));

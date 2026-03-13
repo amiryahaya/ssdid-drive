@@ -7,7 +7,17 @@ namespace SsdidDrive.Api.Features.Folders;
 
 public static class CreateFolder
 {
-    public record Request(string Name, Guid? ParentFolderId, string EncryptedFolderKey, string KemAlgorithm);
+    private record Request(
+        string? ParentId,
+        string EncryptedMetadata,
+        string MetadataNonce,
+        string WrappedKek,
+        string? KemCiphertext,
+        string OwnerWrappedKek,
+        string OwnerKemCiphertext,
+        string? MlKemCiphertext,
+        string? OwnerMlKemCiphertext,
+        string Signature);
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
@@ -19,33 +29,37 @@ public static class CreateFolder
         if (user.TenantId is null)
             return AppError.BadRequest("User does not belong to a tenant").ToProblemResult();
 
-        if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 512)
-            return AppError.BadRequest("Folder name is required (max 512 chars)").ToProblemResult();
-
-        if (string.IsNullOrWhiteSpace(req.EncryptedFolderKey))
-            return AppError.BadRequest("Encrypted folder key is required").ToProblemResult();
-
-        if (string.IsNullOrWhiteSpace(req.KemAlgorithm))
-            return AppError.BadRequest("KEM algorithm is required").ToProblemResult();
-
-        if (req.ParentFolderId is not null)
+        Guid? parentId = null;
+        if (!string.IsNullOrWhiteSpace(req.ParentId))
         {
+            if (!Guid.TryParse(req.ParentId, out var pid))
+                return AppError.BadRequest("Invalid parent ID").ToProblemResult();
+            parentId = pid;
+
             var parent = await db.Folders
-                .FirstOrDefaultAsync(f => f.Id == req.ParentFolderId && f.TenantId == user.TenantId, ct);
+                .FirstOrDefaultAsync(f => f.Id == parentId && f.TenantId == user.TenantId, ct);
             if (parent is null)
                 return AppError.NotFound("Parent folder not found").ToProblemResult();
         }
 
+        var now = DateTimeOffset.UtcNow;
         var folder = new Folder
         {
-            Name = req.Name.Trim(),
-            ParentFolderId = req.ParentFolderId,
+            Name = "encrypted",
+            ParentFolderId = parentId,
             OwnerId = user.Id,
             TenantId = user.TenantId.Value,
-            EncryptedFolderKey = Convert.FromBase64String(req.EncryptedFolderKey),
-            KemAlgorithm = req.KemAlgorithm,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
+            EncryptedMetadata = req.EncryptedMetadata,
+            MetadataNonce = req.MetadataNonce,
+            WrappedKek = req.WrappedKek,
+            KemCiphertext = req.KemCiphertext,
+            OwnerWrappedKek = req.OwnerWrappedKek,
+            OwnerKemCiphertext = req.OwnerKemCiphertext,
+            MlKemCiphertext = req.MlKemCiphertext,
+            OwnerMlKemCiphertext = req.OwnerMlKemCiphertext,
+            Signature = req.Signature,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         db.Folders.Add(folder);
@@ -53,15 +67,7 @@ public static class CreateFolder
 
         return Results.Created($"/api/folders/{folder.Id}", new
         {
-            folder.Id,
-            folder.Name,
-            folder.ParentFolderId,
-            folder.OwnerId,
-            folder.TenantId,
-            EncryptedFolderKey = Convert.ToBase64String(folder.EncryptedFolderKey!),
-            folder.KemAlgorithm,
-            folder.CreatedAt,
-            folder.UpdatedAt
+            Data = FolderHelper.BuildFolderDto(folder)
         });
     }
 }

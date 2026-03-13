@@ -6,6 +6,9 @@ public static class FileFeature
     {
         var group = routes.MapGroup("/api").WithTags("Files");
 
+        CreateUploadUrl.Map(group);
+        UploadBlob.Map(group);
+        UpdateFile.Map(group);
         UploadFile.Map(group);
         ListFiles.Map(group);
         DownloadFile.Map(group);
