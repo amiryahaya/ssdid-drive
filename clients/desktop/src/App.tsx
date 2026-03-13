@@ -19,6 +19,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { InvitationsPage } from '@/pages/InvitationsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { JoinTenantPage } from '@/pages/JoinTenantPage';
+import { RecoveryPage } from '@/pages/RecoveryPage';
 import { UnlockScreen } from '@/components/auth/UnlockScreen';
 import { Toaster } from '@/components/ui/toaster';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
@@ -138,6 +139,10 @@ function App() {
               <RegisterPage />
             </PublicRoute>
           }
+        />
+        <Route
+          path="/recover"
+          element={<RecoveryPage />}
         />
         <Route
           path="/join"
