@@ -27,18 +27,18 @@ struct FileActivity: Codable, Identifiable, Equatable {
     /// Human-readable label for the event type
     var eventLabel: String {
         switch eventType {
-        case "file.uploaded": return "Uploaded"
-        case "file.downloaded": return "Downloaded"
-        case "file.deleted": return "Deleted"
-        case "file.renamed": return "Renamed"
-        case "file.moved": return "Moved"
-        case "file.copied": return "Copied"
-        case "file.shared": return "Shared"
-        case "file.unshared": return "Unshared"
-        case "folder.created": return "Created folder"
-        case "folder.deleted": return "Deleted folder"
-        case "folder.renamed": return "Renamed folder"
-        case "folder.moved": return "Moved folder"
+        case "file_uploaded": return "Uploaded"
+        case "file_downloaded": return "Downloaded"
+        case "file_deleted": return "Deleted"
+        case "file_renamed": return "Renamed"
+        case "file_moved": return "Moved"
+        case "file_previewed": return "Previewed"
+        case "file_shared": return "Shared"
+        case "share_revoked": return "Share revoked"
+        case "share_permission_changed": return "Permission changed"
+        case "folder_created": return "Created folder"
+        case "folder_deleted": return "Deleted folder"
+        case "folder_renamed": return "Renamed folder"
         default: return eventType
         }
     }
@@ -46,15 +46,16 @@ struct FileActivity: Codable, Identifiable, Equatable {
     /// SF Symbol icon name for the event type
     var iconName: String {
         switch eventType {
-        case "file.uploaded": return "arrow.up.doc"
-        case "file.downloaded": return "arrow.down.doc"
-        case "file.deleted", "folder.deleted": return "trash"
-        case "file.renamed", "folder.renamed": return "pencil"
-        case "file.moved", "folder.moved": return "folder.badge.questionmark"
-        case "file.copied": return "doc.on.doc"
-        case "file.shared": return "person.badge.plus"
-        case "file.unshared": return "person.badge.minus"
-        case "folder.created": return "folder.badge.plus"
+        case "file_uploaded": return "arrow.up.doc"
+        case "file_downloaded": return "arrow.down.doc"
+        case "file_deleted", "folder_deleted": return "trash"
+        case "file_renamed", "folder_renamed": return "pencil"
+        case "file_moved": return "folder.badge.questionmark"
+        case "file_previewed": return "eye"
+        case "file_shared": return "person.badge.plus"
+        case "share_revoked": return "person.badge.minus"
+        case "share_permission_changed": return "person.badge.key"
+        case "folder_created": return "folder.badge.plus"
         default: return "doc"
         }
     }
@@ -62,14 +63,14 @@ struct FileActivity: Codable, Identifiable, Equatable {
     /// Tint color name for the event icon
     var iconColorName: String {
         switch eventType {
-        case "file.uploaded": return "systemBlue"
-        case "file.downloaded": return "systemGreen"
-        case "file.deleted", "folder.deleted": return "systemRed"
-        case "file.renamed", "folder.renamed": return "systemOrange"
-        case "file.moved", "folder.moved": return "systemPurple"
-        case "file.copied": return "systemTeal"
-        case "file.shared", "file.unshared": return "systemIndigo"
-        case "folder.created": return "systemYellow"
+        case "file_uploaded": return "systemBlue"
+        case "file_downloaded": return "systemGreen"
+        case "file_deleted", "folder_deleted": return "systemRed"
+        case "file_renamed", "folder_renamed": return "systemOrange"
+        case "file_moved": return "systemPurple"
+        case "file_previewed": return "systemTeal"
+        case "file_shared", "share_revoked", "share_permission_changed": return "systemIndigo"
+        case "folder_created": return "systemYellow"
         default: return "systemGray"
         }
     }
@@ -83,12 +84,12 @@ struct FileActivity: Codable, Identifiable, Equatable {
 
     /// Filter category for segmented control
     var filterCategory: String {
-        if eventType.hasPrefix("folder.") { return "folders" }
+        if eventType.hasPrefix("folder_") { return "folders" }
         switch eventType {
-        case "file.uploaded": return "uploads"
-        case "file.downloaded": return "downloads"
-        case "file.shared", "file.unshared": return "shares"
-        case "file.deleted": return "deletes"
+        case "file_uploaded": return "uploads"
+        case "file_downloaded": return "downloads"
+        case "file_shared", "share_revoked", "share_permission_changed": return "shares"
+        case "file_deleted": return "deletes"
         default: return "all"
         }
     }

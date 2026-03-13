@@ -23,6 +23,7 @@ final class ActivityViewModel: BaseViewModel {
     private var currentPage = 1
     private let pageSize = 20
     private var isLoadingMore = false
+    private var loadTask: Task<Void, Never>?
 
     // MARK: - Filter Options
 
@@ -49,7 +50,8 @@ final class ActivityViewModel: BaseViewModel {
         isLoading = true
         clearError()
 
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
             do {
                 let eventType = eventTypeForFilter(selectedFilter)
                 let response = try await activityRepository.getActivity(
@@ -57,10 +59,14 @@ final class ActivityViewModel: BaseViewModel {
                     pageSize: pageSize,
                     eventType: eventType
                 )
+                guard !Task.isCancelled else { return }
                 self.activities = response.items
                 self.hasMorePages = response.items.count >= pageSize && response.total > response.items.count
                 self.isLoading = false
+            } catch is CancellationError {
+                // Task was cancelled, do nothing
             } catch {
+                guard !Task.isCancelled else { return }
                 handleError(error)
             }
         }
@@ -141,11 +147,11 @@ final class ActivityViewModel: BaseViewModel {
 
     private func eventTypeForFilter(_ filter: String) -> String? {
         switch filter {
-        case "uploads": return "file.uploaded"
-        case "downloads": return "file.downloaded"
-        case "shares": return "file.shared"
-        case "deletes": return "file.deleted"
-        case "folders": return "folder.created"
+        case "uploads": return "file_uploaded"
+        case "downloads": return "file_downloaded"
+        case "shares": return "file_shared"
+        case "deletes": return "file_deleted"
+        case "folders": return "folder_created"
         default: return nil
         }
     }

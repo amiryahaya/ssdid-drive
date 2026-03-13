@@ -35,6 +35,10 @@ final class ActivityRepositoryImpl: ActivityRepository {
     }
 
     func getResourceActivity(resourceId: String, page: Int, pageSize: Int) async throws -> ActivityResponse {
+        guard UUID(uuidString: resourceId) != nil else {
+            throw APIClient.APIError.invalidURL
+        }
+
         let queryItems = [
             URLQueryItem(name: "page", value: "\(page)"),
             URLQueryItem(name: "page_size", value: "\(pageSize)")

@@ -204,20 +204,18 @@ private fun ActivityListItem(
 @Composable
 private fun activityIcon(eventType: String): ImageVector {
     return when (eventType) {
-        "file.uploaded" -> Icons.Default.Upload
-        "file.downloaded" -> Icons.Default.Download
-        "file.deleted" -> Icons.Default.Delete
-        "file.renamed" -> Icons.Default.DriveFileRenameOutline
-        "file.moved" -> Icons.Default.DriveFileMove
-        "file.shared" -> Icons.Default.Share
-        "file.unshared" -> Icons.Default.PersonRemove
-        "file.versioned" -> Icons.Default.History
-        "folder.created" -> Icons.Default.CreateNewFolder
-        "folder.deleted" -> Icons.Default.FolderDelete
-        "folder.renamed" -> Icons.Default.DriveFileRenameOutline
-        "folder.moved" -> Icons.Default.DriveFileMove
-        "folder.shared" -> Icons.Default.FolderShared
-        "folder.unshared" -> Icons.Default.PersonRemove
+        "file_uploaded" -> Icons.Default.Upload
+        "file_downloaded" -> Icons.Default.Download
+        "file_deleted" -> Icons.Default.Delete
+        "file_renamed" -> Icons.Default.DriveFileRenameOutline
+        "file_moved" -> Icons.Default.DriveFileMove
+        "file_shared" -> Icons.Default.Share
+        "share_revoked" -> Icons.Default.PersonRemove
+        "share_permission_changed" -> Icons.Default.ManageAccounts
+        "file_previewed" -> Icons.Default.Visibility
+        "folder_created" -> Icons.Default.CreateNewFolder
+        "folder_deleted" -> Icons.Default.FolderDelete
+        "folder_renamed" -> Icons.Default.DriveFileRenameOutline
         else -> Icons.Default.Info
     }
 }

@@ -23,21 +23,19 @@ data class FileActivity(
      */
     val eventLabel: String
         get() = when (eventType) {
-            "file.uploaded" -> "Uploaded"
-            "file.downloaded" -> "Downloaded"
-            "file.deleted" -> "Deleted"
-            "file.renamed" -> "Renamed"
-            "file.moved" -> "Moved"
-            "file.shared" -> "Shared"
-            "file.unshared" -> "Unshared"
-            "file.versioned" -> "New version"
-            "folder.created" -> "Folder created"
-            "folder.deleted" -> "Folder deleted"
-            "folder.renamed" -> "Folder renamed"
-            "folder.moved" -> "Folder moved"
-            "folder.shared" -> "Folder shared"
-            "folder.unshared" -> "Folder unshared"
-            else -> eventType.replace(".", " ").replaceFirstChar { it.uppercase() }
+            "file_uploaded" -> "Uploaded"
+            "file_downloaded" -> "Downloaded"
+            "file_deleted" -> "Deleted"
+            "file_renamed" -> "Renamed"
+            "file_moved" -> "Moved"
+            "file_shared" -> "Shared"
+            "share_revoked" -> "Share revoked"
+            "share_permission_changed" -> "Permission changed"
+            "file_previewed" -> "Previewed"
+            "folder_created" -> "Folder created"
+            "folder_deleted" -> "Folder deleted"
+            "folder_renamed" -> "Folder renamed"
+            else -> eventType.replace("_", " ").replaceFirstChar { it.uppercase() }
         }
 
     /**

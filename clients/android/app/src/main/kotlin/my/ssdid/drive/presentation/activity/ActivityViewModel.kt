@@ -71,11 +71,11 @@ class ActivityViewModel @Inject constructor(
 
     private fun mapFilterToEventType(filter: String): String? {
         return when (filter) {
-            "Uploads" -> "file.uploaded"
-            "Downloads" -> "file.downloaded"
-            "Shares" -> "file.shared"
-            "Renames" -> "file.renamed"
-            "Deletes" -> "file.deleted"
+            "Uploads" -> "file_uploaded"
+            "Downloads" -> "file_downloaded"
+            "Shares" -> "file_shared"
+            "Renames" -> "file_renamed"
+            "Deletes" -> "file_deleted"
             else -> null
         }
     }

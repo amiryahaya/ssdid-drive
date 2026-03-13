@@ -30,13 +30,17 @@ class ActivityRepositoryImpl @Inject constructor(
             )
 
             if (response.isSuccessful) {
-                val items = response.body()!!.items.map { it.toDomain() }
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response body"))
+                val items = body.items.map { it.toDomain() }
                 Result.success(items)
             } else {
-                Result.error(AppException.Unknown("Failed to get activity logs"))
+                Result.error(AppException.Unknown("Failed to get activity logs: ${response.code()}"))
             }
+        } catch (e: java.io.IOException) {
+            Result.error(AppException.Network("Network error while fetching activity logs", e))
         } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to get activity logs", e))
+            Result.error(AppException.Unknown("Failed to get activity logs: ${e.message}"))
         }
     }
 
@@ -53,13 +57,17 @@ class ActivityRepositoryImpl @Inject constructor(
             )
 
             if (response.isSuccessful) {
-                val items = response.body()!!.items.map { it.toDomain() }
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response body"))
+                val items = body.items.map { it.toDomain() }
                 Result.success(items)
             } else {
-                Result.error(AppException.Unknown("Failed to get resource activity"))
+                Result.error(AppException.Unknown("Failed to get resource activity: ${response.code()}"))
             }
+        } catch (e: java.io.IOException) {
+            Result.error(AppException.Network("Network error while fetching resource activity", e))
         } catch (e: Exception) {
-            Result.error(AppException.Network("Failed to get resource activity", e))
+            Result.error(AppException.Unknown("Failed to get resource activity: ${e.message}"))
         }
     }
 

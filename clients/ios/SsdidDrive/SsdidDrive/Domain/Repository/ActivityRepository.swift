@@ -7,7 +7,7 @@ protocol ActivityRepository {
     /// - Parameters:
     ///   - page: Page number (1-based)
     ///   - pageSize: Number of items per page
-    ///   - eventType: Optional event type filter (e.g. "file.uploaded")
+    ///   - eventType: Optional event type filter (e.g. "file_uploaded")
     /// - Returns: Paginated activity response
     func getActivity(page: Int, pageSize: Int, eventType: String?) async throws -> ActivityResponse
 
