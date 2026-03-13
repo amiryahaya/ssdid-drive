@@ -38,6 +38,25 @@ export interface ActivityResponse {
   page_size: number;
 }
 
+// ==================== Recovery Types ====================
+
+export interface RecoveryStatus {
+  is_active: boolean;
+  created_at: string | null;
+}
+
+export interface SplitResult {
+  file1: string;
+  file2: string;
+  server_share: string;
+  key_proof: string;
+}
+
+export interface RecoverResult {
+  master_key_b64: string;
+  user_did: string;
+}
+
 // ==================== SSDID Auth Helpers ====================
 
 export interface ChallengeResult {
@@ -397,6 +416,32 @@ export const tauriService = {
     encrypted_kaz_kem_sk: string;
   }> {
     return invoke('get_folder_encryption_metadata', { folderId });
+  },
+
+  // ==================== Recovery Commands ====================
+
+  async getRecoveryStatus(): Promise<RecoveryStatus> {
+    return invoke('get_recovery_status');
+  },
+
+  async splitMasterKey(): Promise<SplitResult> {
+    return invoke('split_master_key');
+  },
+
+  async setupRecovery(serverShare: string, keyProof: string): Promise<void> {
+    return invoke('setup_recovery', { server_share: serverShare, key_proof: keyProof });
+  },
+
+  async recoverWithFiles(file1Contents: string, file2Contents: string): Promise<RecoverResult> {
+    return invoke('recover_with_files', { file1_contents: file1Contents, file2_contents: file2Contents });
+  },
+
+  async recoverWithFileAndServer(fileContents: string): Promise<RecoverResult> {
+    return invoke('recover_with_file_and_server', { file_contents: fileContents });
+  },
+
+  async deleteRecoverySetup(): Promise<void> {
+    return invoke('delete_recovery_setup');
   },
 };
 
