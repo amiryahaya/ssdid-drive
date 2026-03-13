@@ -139,7 +139,7 @@ public class AcceptWithWalletTests : IClassFixture<SsdidDriveFactory>
         var user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
             .FirstOrDefaultAsync(db.Users, u => u.Did == walletIdentity.Did);
         Assert.NotNull(user);
-        Assert.Equal("newuser@example.com", user.DisplayName);
+        Assert.Null(user.DisplayName); // wallet-created users have no display name initially
 
         // Verify UserTenant
         var userTenant = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions

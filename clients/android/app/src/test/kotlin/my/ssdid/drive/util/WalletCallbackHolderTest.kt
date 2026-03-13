@@ -11,10 +11,10 @@ import java.util.concurrent.atomic.AtomicReference
  * Unit tests for WalletCallbackHolder.
  *
  * Tests cover:
- * - Setting and consuming session tokens
- * - Consume-once semantics (token cleared after consume)
- * - Null when no token is set
- * - Overwrite behavior on repeated set
+ * - Setting and consuming session tokens with flow tagging
+ * - Consume-once semantics (result cleared after consume)
+ * - Flow isolation (auth and invite don't cross-contaminate)
+ * - Error results
  * - Thread safety / concurrent access
  */
 class WalletCallbackHolderTest {
@@ -22,100 +22,137 @@ class WalletCallbackHolderTest {
     @Before
     fun setup() {
         // Ensure clean state before each test
-        WalletCallbackHolder.consume()
+        WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
+        WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
     }
 
     // ==================== Basic Functionality Tests ====================
 
     @Test
-    fun `pendingSessionToken is null initially`() {
-        assertNull(WalletCallbackHolder.pendingSessionToken)
+    fun `consume returns null when nothing is set`() {
+        assertNull(WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH))
+        assertNull(WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE))
     }
 
     @Test
-    fun `set stores the session token`() {
-        WalletCallbackHolder.set("token-abc-123")
+    fun `set stores success result with flow tag`() {
+        WalletCallbackHolder.set("token-abc", WalletCallbackHolder.Flow.AUTH)
 
-        assertEquals("token-abc-123", WalletCallbackHolder.pendingSessionToken)
+        val result = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
+
+        assertTrue(result is WalletCallbackHolder.Result.Success)
+        assertEquals("token-abc", (result as WalletCallbackHolder.Result.Success).sessionToken)
+        assertEquals(WalletCallbackHolder.Flow.AUTH, result.flow)
     }
 
     @Test
-    fun `consume returns the stored token`() {
-        WalletCallbackHolder.set("my-session-token")
+    fun `consume clears result after retrieval`() {
+        WalletCallbackHolder.set("one-time-token", WalletCallbackHolder.Flow.INVITE)
 
-        val result = WalletCallbackHolder.consume()
+        WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
+        val second = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
 
-        assertEquals("my-session-token", result)
-    }
-
-    @Test
-    fun `consume clears the token after retrieval`() {
-        WalletCallbackHolder.set("one-time-token")
-
-        WalletCallbackHolder.consume()
-
-        assertNull(WalletCallbackHolder.pendingSessionToken)
-    }
-
-    @Test
-    fun `consume returns null when no token is set`() {
-        val result = WalletCallbackHolder.consume()
-
-        assertNull(result)
-    }
-
-    @Test
-    fun `second consume returns null after first consume`() {
-        WalletCallbackHolder.set("ephemeral-token")
-
-        val first = WalletCallbackHolder.consume()
-        val second = WalletCallbackHolder.consume()
-
-        assertEquals("ephemeral-token", first)
         assertNull(second)
+    }
+
+    @Test
+    fun `consumeToken returns session token string`() {
+        WalletCallbackHolder.set("my-token", WalletCallbackHolder.Flow.AUTH)
+
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)
+
+        assertEquals("my-token", token)
+    }
+
+    // ==================== Flow Isolation Tests ====================
+
+    @Test
+    fun `auth flow does not consume invite result`() {
+        WalletCallbackHolder.set("invite-token", WalletCallbackHolder.Flow.INVITE)
+
+        val authResult = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
+
+        assertNull(authResult)
+        // Invite result should still be pending
+        val inviteResult = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
+        assertNotNull(inviteResult)
+    }
+
+    @Test
+    fun `invite flow does not consume auth result`() {
+        WalletCallbackHolder.set("auth-token", WalletCallbackHolder.Flow.AUTH)
+
+        val inviteResult = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
+
+        assertNull(inviteResult)
+        // Auth result should still be pending
+        val authResult = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
+        assertNotNull(authResult)
+    }
+
+    // ==================== Error Result Tests ====================
+
+    @Test
+    fun `setError stores error result`() {
+        WalletCallbackHolder.setError("Something went wrong", WalletCallbackHolder.Flow.INVITE)
+
+        val result = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)
+
+        assertTrue(result is WalletCallbackHolder.Result.Error)
+        assertEquals("Something went wrong", (result as WalletCallbackHolder.Result.Error).message)
+    }
+
+    @Test
+    fun `consumeToken returns null for error results`() {
+        WalletCallbackHolder.setError("error msg", WalletCallbackHolder.Flow.INVITE)
+
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.INVITE)
+
+        assertNull(token)
     }
 
     // ==================== Overwrite Behavior Tests ====================
 
     @Test
-    fun `set overwrites previous token`() {
-        WalletCallbackHolder.set("first-token")
-        WalletCallbackHolder.set("second-token")
+    fun `set overwrites previous result`() {
+        WalletCallbackHolder.set("first-token", WalletCallbackHolder.Flow.AUTH)
+        WalletCallbackHolder.set("second-token", WalletCallbackHolder.Flow.AUTH)
 
-        val result = WalletCallbackHolder.consume()
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)
 
-        assertEquals("second-token", result)
+        assertEquals("second-token", token)
     }
 
     @Test
-    fun `set after consume stores new token`() {
-        WalletCallbackHolder.set("token-1")
-        WalletCallbackHolder.consume()
+    fun `set after consume stores new result`() {
+        WalletCallbackHolder.set("token-1", WalletCallbackHolder.Flow.AUTH)
+        WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
 
-        WalletCallbackHolder.set("token-2")
+        WalletCallbackHolder.set("token-2", WalletCallbackHolder.Flow.AUTH)
 
-        assertEquals("token-2", WalletCallbackHolder.pendingSessionToken)
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)
+        assertEquals("token-2", token)
     }
 
     // ==================== Edge Cases ====================
 
     @Test
     fun `set with empty string is valid`() {
-        WalletCallbackHolder.set("")
+        WalletCallbackHolder.set("", WalletCallbackHolder.Flow.AUTH)
 
-        val result = WalletCallbackHolder.consume()
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)
 
-        assertEquals("", result)
+        assertEquals("", token)
     }
 
     @Test
     fun `set with very long token works`() {
         val longToken = "x".repeat(10_000)
-        WalletCallbackHolder.set(longToken)
+        WalletCallbackHolder.set(longToken, WalletCallbackHolder.Flow.AUTH)
 
-        val result = WalletCallbackHolder.consume()
+        val token = WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)
 
-        assertEquals(longToken, result)
+        assertEquals(longToken, token)
     }
 
     // ==================== Concurrent Access Tests ====================
@@ -126,12 +163,11 @@ class WalletCallbackHolderTest {
         val successfulConsumes = AtomicInteger(0)
         val errors = AtomicReference<Throwable?>(null)
 
-        // Run many iterations of set-then-consume across threads
         val threads = (1..iterations).map { i ->
             Thread {
                 try {
-                    WalletCallbackHolder.set("token-$i")
-                    val consumed = WalletCallbackHolder.consume()
+                    WalletCallbackHolder.set("token-$i", WalletCallbackHolder.Flow.AUTH)
+                    val consumed = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
                     if (consumed != null) {
                         successfulConsumes.incrementAndGet()
                     }
@@ -145,24 +181,23 @@ class WalletCallbackHolderTest {
         threads.forEach { it.join(5000) }
 
         assertNull("No exceptions should occur during concurrent access", errors.get())
-        // At least some consumes should succeed (exact count depends on scheduling)
         assertTrue("Some consumes should succeed", successfulConsumes.get() > 0)
     }
 
     @Test
-    fun `only one thread can consume a given token`() {
+    fun `only one thread can consume a given result`() {
         val barrier = CyclicBarrier(2)
-        val results = Array<String?>(2) { null }
+        val results = arrayOfNulls<WalletCallbackHolder.Result>(2)
 
-        WalletCallbackHolder.set("exclusive-token")
+        WalletCallbackHolder.set("exclusive-token", WalletCallbackHolder.Flow.AUTH)
 
         val t1 = Thread {
             barrier.await()
-            results[0] = WalletCallbackHolder.consume()
+            results[0] = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
         }
         val t2 = Thread {
             barrier.await()
-            results[1] = WalletCallbackHolder.consume()
+            results[1] = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)
         }
 
         t1.start()
@@ -170,32 +205,8 @@ class WalletCallbackHolderTest {
         t1.join(5000)
         t2.join(5000)
 
-        // Exactly one thread should get the token, the other gets null.
-        // Due to the volatile field (not synchronized consume), there is a small
-        // race window where both could see the token. However, the @Volatile
-        // annotation ensures visibility. In practice, at most one gets it in
-        // the common case; we verify at least one got it.
-        val nonNullCount = results.count { it == "exclusive-token" }
-        assertTrue(
-            "At least one thread should consume the token",
-            nonNullCount >= 1
-        )
-    }
-
-    @Test
-    fun `pendingSessionToken visibility across threads`() {
-        val tokenSeen = AtomicReference<String?>(null)
-
-        WalletCallbackHolder.set("visible-token")
-
-        val reader = Thread {
-            // The @Volatile annotation should guarantee visibility
-            tokenSeen.set(WalletCallbackHolder.pendingSessionToken)
-        }
-
-        reader.start()
-        reader.join(5000)
-
-        assertEquals("visible-token", tokenSeen.get())
+        // With AtomicReference.compareAndSet, exactly one thread gets the result
+        val nonNullCount = results.count { it != null }
+        assertEquals("Exactly one thread should consume the result", 1, nonNullCount)
     }
 }

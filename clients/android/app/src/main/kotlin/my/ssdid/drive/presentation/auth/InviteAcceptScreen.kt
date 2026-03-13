@@ -39,8 +39,12 @@ fun InviteAcceptScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                WalletCallbackHolder.consume()?.let { sessionToken ->
-                    viewModel.handleWalletCallback(sessionToken)
+                when (val result = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.INVITE)) {
+                    is WalletCallbackHolder.Result.Success ->
+                        viewModel.handleWalletCallback(result.sessionToken)
+                    is WalletCallbackHolder.Result.Error ->
+                        viewModel.handleWalletError(result.message)
+                    null -> {} // no pending result
                 }
             }
         }

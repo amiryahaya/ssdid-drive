@@ -61,7 +61,6 @@ public static class GetInvitationByToken
 
         return Results.Ok(new
         {
-            invitation.Id,
             TenantName = invitation.Tenant.Name,
             Role = invitation.Role.ToString().ToLowerInvariant(),
             invitation.ShortCode,

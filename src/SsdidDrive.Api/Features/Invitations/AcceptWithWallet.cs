@@ -35,37 +35,46 @@ public static class AcceptWithWallet
         if (invitation is null)
             return AppError.NotFound("Invitation not found").ToProblemResult();
 
-        if (invitation.Status != InvitationStatus.Pending)
-            return AppError.Conflict("Invitation has already been " + invitation.Status.ToString().ToLowerInvariant()).ToProblemResult();
-
+        // 2. Check expiry first (returns 404 per spec)
         if (invitation.ExpiresAt <= DateTimeOffset.UtcNow)
         {
-            invitation.Status = InvitationStatus.Expired;
-            invitation.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
+            if (invitation.Status == InvitationStatus.Pending)
+            {
+                invitation.Status = InvitationStatus.Expired;
+                invitation.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
             return AppError.NotFound("Invitation has expired").ToProblemResult();
         }
 
-        // 2. Verify credential
+        // 3. Check status (Accepted → 409, others → 404)
+        if (invitation.Status == InvitationStatus.Accepted)
+            return AppError.Conflict("Invitation has already been accepted").ToProblemResult();
+
+        if (invitation.Status != InvitationStatus.Pending)
+            return AppError.NotFound("Invitation not found or is no longer valid").ToProblemResult();
+
+        // 4. Invitation must have an email to verify
+        if (string.IsNullOrWhiteSpace(invitation.Email))
+            return AppError.BadRequest("Invitation has no email to verify").ToProblemResult();
+
+        // 5. Email match (case-insensitive) — check before credential verification (cheap first)
+        if (!string.Equals(req.Email?.Trim(), invitation.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+            return AppError.Forbidden("Email verification failed").ToProblemResult();
+
+        // 6. Verify credential
         var verifyResult = auth.VerifyCredential(req.Credential);
         return await verifyResult.Match(
             async did =>
             {
-                // 3. Invitation must have an email to verify
-                if (string.IsNullOrWhiteSpace(invitation.Email))
-                    return AppError.BadRequest("Invitation has no email to verify").ToProblemResult();
-
-                // 4. Email match (case-insensitive)
-                if (!string.Equals(req.Email?.Trim(), invitation.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-                    return AppError.Forbidden("Email verification failed").ToProblemResult();
-
-                // 4. Begin transaction for all DB changes
+                // 7. Begin transaction for all DB changes
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-                // 5. Find or create user
+                // 8. Find or create user
                 var user = await db.Users
                     .FirstOrDefaultAsync(u => u.Did == did, ct);
 
+                var isNewUser = false;
                 if (user is null)
                 {
                     user = new User
@@ -78,17 +87,35 @@ public static class AcceptWithWallet
                         CreatedAt = DateTimeOffset.UtcNow,
                         UpdatedAt = DateTimeOffset.UtcNow
                     };
-                    db.Users.Add(user);
-                    await db.SaveChangesAsync(ct);
+                    isNewUser = true;
                 }
 
-                // 6. Check not already a member (direct DB query)
-                var existingMembership = await db.UserTenants
-                    .AnyAsync(ut => ut.UserId == user.Id && ut.TenantId == invitation.TenantId, ct);
-                if (existingMembership)
-                    return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
+                // 9. Check not already a member (direct DB query)
+                if (!isNewUser)
+                {
+                    var existingMembership = await db.UserTenants
+                        .AnyAsync(ut => ut.UserId == user.Id && ut.TenantId == invitation.TenantId, ct);
+                    if (existingMembership)
+                        return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
+                }
 
-                // 7. Accept invitation atomically
+                // 10. Persist new user (deferred from step 8)
+                if (isNewUser)
+                {
+                    db.Users.Add(user);
+                    try
+                    {
+                        await db.SaveChangesAsync(ct);
+                    }
+                    catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+                    {
+                        // Concurrent request created the same DID — re-fetch
+                        db.ChangeTracker.Clear();
+                        user = await db.Users.FirstAsync(u => u.Did == did, ct);
+                    }
+                }
+
+                // 11. Accept invitation atomically
                 var updated = await db.Invitations
                     .Where(i => i.Id == invitation.Id && i.Status == InvitationStatus.Pending)
                     .ExecuteUpdateAsync(s => s
@@ -101,7 +128,7 @@ public static class AcceptWithWallet
                 if (updated == 0)
                     return AppError.Conflict("Invitation has already been processed").ToProblemResult();
 
-                // 8. Create UserTenant
+                // 12. Create UserTenant
                 db.UserTenants.Add(new UserTenant
                 {
                     UserId = user.Id,
@@ -110,7 +137,7 @@ public static class AcceptWithWallet
                     CreatedAt = DateTimeOffset.UtcNow
                 });
 
-                // 9. Notify inviter
+                // 13. Notify inviter
                 await notifications.CreateAsync(
                     invitation.InvitedById,
                     "invitation_accepted",
@@ -123,7 +150,7 @@ public static class AcceptWithWallet
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
 
-                // 10. Create session
+                // 14. Create session
                 var sessionResult = auth.CreateAuthenticatedSession(did);
                 return sessionResult.Match(
                     ok => Results.Ok(new

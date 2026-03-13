@@ -159,4 +159,11 @@ class InviteAcceptViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Handle an error returned from SSDID Wallet during invitation acceptance.
+     */
+    fun handleWalletError(message: String) {
+        _uiState.update { it.copy(isWaitingForWallet = false, registrationError = message) }
+    }
 }

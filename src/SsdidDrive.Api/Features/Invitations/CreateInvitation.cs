@@ -114,7 +114,6 @@ public static class CreateInvitation
             id = invitation.Id,
             tenant_id = invitation.TenantId,
             invited_by_id = invitation.InvitedById,
-            token = invitation.Token,
             email = invitation.Email,
             invited_user_id = invitation.InvitedUserId,
             role = invitation.Role.ToString().ToLowerInvariant(),

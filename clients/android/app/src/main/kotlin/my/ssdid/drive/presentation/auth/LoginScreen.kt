@@ -22,7 +22,7 @@ fun LoginScreen(
 
     // Check for pending wallet callback (from deep link)
     LaunchedEffect(Unit) {
-        WalletCallbackHolder.consume()?.let { sessionToken ->
+        WalletCallbackHolder.consumeToken(WalletCallbackHolder.Flow.AUTH)?.let { sessionToken ->
             viewModel.handleWalletCallback(sessionToken)
         }
     }
