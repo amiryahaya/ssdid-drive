@@ -62,10 +62,7 @@ final class DependencyContainer: ObservableObject {
     }()
 
     lazy var recoveryRepository: RecoveryRepository = {
-        RecoveryRepositoryImpl(
-            apiClient: apiClient,
-            keyManager: keyManager
-        )
+        RecoveryRepositoryImpl(apiClient: apiClient)
     }()
 
     lazy var tenantRepository: TenantRepository = {
