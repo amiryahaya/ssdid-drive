@@ -154,6 +154,33 @@ public class RedisSessionStore : ISessionStore, ISseNotificationBus
         }
     }
 
+    public void InvalidateSessionsForDid(string did)
+    {
+        try
+        {
+            var server = _redis.GetServers().FirstOrDefault();
+            if (server is null) return;
+
+            var db = _redis.GetDatabase();
+            foreach (var key in server.Keys(pattern: $"{SessionPrefix}*"))
+            {
+                var json = db.StringGet(key);
+                if (json.IsNullOrEmpty) continue;
+
+                var data = JsonSerializer.Deserialize<SessionData>(json.ToString());
+                if (data is not null && string.Equals(data.Did, did, StringComparison.Ordinal))
+                {
+                    if (db.KeyDelete(key))
+                        db.StringDecrement(SessionCountKey);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to invalidate sessions for DID {Did}", did);
+        }
+    }
+
     // ── SSE subscriber secrets ──
 
     public string CreateSubscriberSecret(string challengeId)

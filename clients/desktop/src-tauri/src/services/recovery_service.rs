@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sharks::{Share, Sharks};
 use std::sync::Arc;
+use zeroize::Zeroize;
 
 use crate::error::{AppError, AppResult};
 use crate::services::ApiClient;
@@ -76,8 +77,11 @@ impl RecoveryService {
 
         let extract = |s: &Share| -> (u8, Vec<u8>) {
             // Vec::from(&share) gives [x, y[0], y[1], ...]
-            let bytes = Vec::from(s);
-            (bytes[0], bytes[1..].to_vec())
+            let mut bytes = Vec::from(s);
+            let index = bytes[0];
+            let data = bytes[1..].to_vec();
+            bytes.zeroize();
+            (index, data)
         };
 
         Ok((extract(&shares[0]), extract(&shares[1]), extract(&shares[2])))
@@ -93,6 +97,10 @@ impl RecoveryService {
         index2: u8,
         data2: &[u8],
     ) -> AppResult<[u8; 32]> {
+        if index1 == index2 {
+            return Err(AppError::Crypto("Duplicate share indices".to_string()));
+        }
+
         // Reconstruct full share bytes: [x, y[0], y[1], ...]
         let mut s1_bytes = vec![index1];
         s1_bytes.extend_from_slice(data1);
@@ -104,12 +112,17 @@ impl RecoveryService {
         let s2 = Share::try_from(s2_bytes.as_slice())
             .map_err(|e| AppError::Crypto(format!("Invalid share 2: {}", e)))?;
 
+        // Zeroize intermediate buffers
+        s1_bytes.zeroize();
+        s2_bytes.zeroize();
+
         let sharks = Sharks(2);
-        let secret = sharks
+        let mut secret = sharks
             .recover(&[s1, s2])
             .map_err(|e| AppError::Crypto(format!("Reconstruction failed: {}", e)))?;
 
         if secret.len() != 32 {
+            secret.zeroize();
             return Err(AppError::Crypto(format!(
                 "Reconstructed key is {} bytes, expected 32",
                 secret.len()
@@ -118,6 +131,7 @@ impl RecoveryService {
 
         let mut key = [0u8; 32];
         key.copy_from_slice(&secret);
+        secret.zeroize();
         Ok(key)
     }
 
@@ -150,7 +164,7 @@ impl RecoveryService {
         let file: RecoveryFile = serde_json::from_str(contents)
             .map_err(|e| AppError::Crypto(format!("Invalid recovery file: {}", e)))?;
 
-        if file.version > 1 {
+        if file.version != 1 {
             return Err(AppError::Validation(
                 "This recovery file requires a newer version of SSDID Drive".to_string(),
             ));

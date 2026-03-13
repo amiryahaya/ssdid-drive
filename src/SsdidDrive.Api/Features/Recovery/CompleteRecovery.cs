@@ -37,12 +37,23 @@ public static class CompleteRecovery
         if (setup is null)
             return AppError.NotFound("No active recovery setup found").ToProblemResult();
 
-        if (!string.Equals(setup.KeyProof, req.KeyProof, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(setup.KeyProof, req.KeyProof, StringComparison.Ordinal))
             return AppError.Forbidden("Invalid key proof").ToProblemResult();
+
+        // Validate base64 KEM public key
+        byte[] kemKey;
+        try
+        {
+            kemKey = Convert.FromBase64String(req.KemPublicKey);
+        }
+        catch (FormatException)
+        {
+            return AppError.BadRequest("kem_public_key must be valid base64").ToProblemResult();
+        }
 
         // Atomic DID migration
         user.Did = req.NewDid;
-        user.KemPublicKey = Convert.FromBase64String(req.KemPublicKey);
+        user.KemPublicKey = kemKey;
         user.HasRecoverySetup = false;
         user.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -52,6 +63,9 @@ public static class CompleteRecovery
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+
+        // Invalidate all old sessions for the old DID
+        sessionStore.InvalidateSessionsForDid(req.OldDid);
 
         // Create new session for the recovered DID
         var token = sessionStore.CreateSession(req.NewDid);

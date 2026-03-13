@@ -69,6 +69,7 @@ object ShamirSecretSharing {
      */
     fun reconstruct(shares: List<Pair<Int, ByteArray>>): ByteArray {
         require(shares.size >= 2)
+        require(shares.map { it.first }.toSet().size == shares.size) { "Duplicate share indices" }
         val len = shares[0].second.size
         require(shares.all { it.second.size == len })
 

@@ -15,7 +15,7 @@ data class RecoveryFile(
     @SerializedName("created_at") val createdAt: String
 ) {
     fun validate(): Result<ByteArray> {
-        if (version > 1) {
+        if (version != 1) {
             return Result.failure(IllegalArgumentException(
                 "This recovery file requires a newer version of SSDID Drive"))
         }

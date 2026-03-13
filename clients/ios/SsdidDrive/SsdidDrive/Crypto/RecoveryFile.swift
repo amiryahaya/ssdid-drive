@@ -22,7 +22,7 @@ struct RecoveryFile: Codable {
 
     /// Validate the file and return the raw share bytes on success.
     func validate() throws -> Data {
-        guard version <= 1 else {
+        guard version == 1 else {
             throw RecoveryError.unsupportedVersion
         }
 
@@ -41,9 +41,11 @@ struct RecoveryFile: Codable {
     }
 
     /// Create a recovery file from a Shamir share.
+    ///
+    /// The `share_data` field stores only the y-bytes (not the index prefix),
+    /// matching the Desktop and Android implementations for cross-platform compatibility.
     static func create(share: ShamirSecretSharing.Share, userDid: String) -> RecoveryFile {
-        let serialized = share.serialize()
-        let hash = SHA256.hash(data: serialized)
+        let hash = SHA256.hash(data: share.data)
         let checksum = hash.map { String(format: "%02x", $0) }.joined()
 
         return RecoveryFile(
@@ -51,7 +53,7 @@ struct RecoveryFile: Codable {
             scheme: "shamir-gf256",
             threshold: 2,
             shareIndex: Int(share.index),
-            shareData: serialized.base64EncodedString(),
+            shareData: share.data.base64EncodedString(),
             checksum: checksum,
             userDid: userDid,
             createdAt: ISO8601DateFormatter().string(from: Date())
@@ -59,9 +61,15 @@ struct RecoveryFile: Codable {
     }
 
     /// Deserialize and validate, returning the underlying share.
+    ///
+    /// Since `shareData` stores only the y-bytes (not the index prefix),
+    /// we reconstruct the Share from `shareIndex` + validated raw bytes.
     func toShare() throws -> ShamirSecretSharing.Share {
         let raw = try validate()
-        return try ShamirSecretSharing.Share.deserialize(raw)
+        guard shareIndex > 0, shareIndex <= 255 else {
+            throw RecoveryError.invalidShareData
+        }
+        return ShamirSecretSharing.Share(index: UInt8(shareIndex), data: raw)
     }
 }
 

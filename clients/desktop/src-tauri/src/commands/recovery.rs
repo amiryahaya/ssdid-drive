@@ -6,6 +6,7 @@ use crate::error::{AppError, AppResult};
 use crate::services::{RecoveryFile, RecoveryService, RecoveryStatus};
 use crate::state::AppState;
 use tauri::State;
+use zeroize::Zeroize;
 
 /// Setup recovery by uploading the server's share and key proof.
 ///
@@ -52,9 +53,10 @@ pub async fn split_master_key_command(
     state.require_auth()?;
     state.require_unlocked()?;
 
-    let raw = hex::decode(&master_key_hex)
+    let mut raw = hex::decode(&master_key_hex)
         .map_err(|e| AppError::Crypto(format!("Invalid master key hex: {}", e)))?;
     if raw.len() != 32 {
+        raw.zeroize();
         return Err(AppError::Crypto(format!(
             "Master key must be 32 bytes, got {}",
             raw.len()
@@ -62,15 +64,21 @@ pub async fn split_master_key_command(
     }
     let mut key = [0u8; 32];
     key.copy_from_slice(&raw);
+    raw.zeroize();
 
-    let ((i1, d1), (i2, d2), (i3, d3)) = RecoveryService::split_master_key(&key)?;
+    let ((i1, mut d1), (i2, mut d2), (i3, mut d3)) = RecoveryService::split_master_key(&key)?;
+    key.zeroize();
 
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-    Ok(vec![
+    let result = vec![
         (i1, BASE64.encode(&d1)),
         (i2, BASE64.encode(&d2)),
         (i3, BASE64.encode(&d3)),
-    ])
+    ];
+    d1.zeroize();
+    d2.zeroize();
+    d3.zeroize();
+    Ok(result)
 }
 
 /// Reconstruct the master key from two Shamir shares.
@@ -88,15 +96,19 @@ pub async fn reconstruct_master_key_command(
 
     let _ = &state; // state not required for crypto-only operation
 
-    let d1 = BASE64
+    let mut d1 = BASE64
         .decode(&data1_b64)
         .map_err(|e| AppError::Crypto(format!("Invalid share 1 base64: {}", e)))?;
-    let d2 = BASE64
+    let mut d2 = BASE64
         .decode(&data2_b64)
         .map_err(|e| AppError::Crypto(format!("Invalid share 2 base64: {}", e)))?;
 
-    let key = RecoveryService::reconstruct_master_key(index1, &d1, index2, &d2)?;
-    Ok(hex::encode(key))
+    let mut key = RecoveryService::reconstruct_master_key(index1, &d1, index2, &d2)?;
+    d1.zeroize();
+    d2.zeroize();
+    let result = hex::encode(key);
+    key.zeroize();
+    Ok(result)
 }
 
 /// Create a recovery file struct for a given share.
@@ -111,11 +123,13 @@ pub async fn create_recovery_file_command(
 
     let _ = &state; // state not required
 
-    let raw = BASE64
+    let mut raw = BASE64
         .decode(&share_data_b64)
         .map_err(|e| AppError::Crypto(format!("Invalid share base64: {}", e)))?;
 
-    Ok(RecoveryService::create_recovery_file(share_index, &raw, &user_did))
+    let result = RecoveryService::create_recovery_file(share_index, &raw, &user_did);
+    raw.zeroize();
+    Ok(result)
 }
 
 /// Parse and validate a recovery file from its JSON string contents.

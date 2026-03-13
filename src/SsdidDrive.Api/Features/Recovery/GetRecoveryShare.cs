@@ -32,7 +32,7 @@ public static class GetRecoveryShare
         // Constant-time response: pad to minimum 200ms
         var elapsed = sw.ElapsedMilliseconds;
         if (elapsed < 200)
-            await Task.Delay((int)(200 - elapsed), ct);
+            await Task.Delay((int)(200 - elapsed), CancellationToken.None);
 
         if (setup is null)
         {

@@ -16,6 +16,11 @@ public interface ISessionStore
     string? GetSession(string token);
     void DeleteSession(string token);
 
+    /// <summary>
+    /// Invalidate all sessions for a given DID (used during recovery DID migration).
+    /// </summary>
+    void InvalidateSessionsForDid(string did);
+
     int ActiveSessionCount { get; }
     int ActiveChallengeCount { get; }
 }
