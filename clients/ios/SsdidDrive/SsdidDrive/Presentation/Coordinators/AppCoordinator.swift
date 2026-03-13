@@ -222,6 +222,17 @@ final class AppCoordinator: BaseCoordinator {
             if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
                 authCoordinator.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
             }
+
+        case .walletInviteCallback(let sessionToken):
+            // Deliver to active invite accept screen via AuthCoordinator
+            if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                authCoordinator.inviteAcceptViewModel?.handleWalletCallback(sessionToken: sessionToken)
+            }
+
+        case .walletInviteError(let message):
+            if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                authCoordinator.inviteAcceptViewModel?.handleWalletError(message: message)
+            }
         }
     }
 

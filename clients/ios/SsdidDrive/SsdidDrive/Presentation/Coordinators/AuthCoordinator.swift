@@ -21,6 +21,10 @@ final class AuthCoordinator: BaseCoordinator {
     /// deliver auth callback tokens to it.
     private(set) var loginViewModel: LoginViewModel?
 
+    /// Reference to the current invite accept view model so wallet callbacks
+    /// can be delivered to it.
+    private(set) var inviteAcceptViewModel: InviteAcceptViewModel?
+
     // MARK: - Start
 
     override func start() {
@@ -38,12 +42,17 @@ final class AuthCoordinator: BaseCoordinator {
         navigationController.setViewControllers([loginVC], animated: true)
     }
 
-    /// Handle invitation deep link (kept for compatibility)
+    /// Handle invitation deep link — show the wallet-based invite acceptance screen
     func handleInvitation(token: String) {
-        // Invitations now go through the wallet flow as well.
-        // Show the standard QR login screen; the invitation will be
-        // processed after authentication completes.
-        showLogin()
+        let viewModel = InviteAcceptViewModel(
+            authRepository: container.authRepository,
+            token: token
+        )
+        viewModel.coordinatorDelegate = self
+        self.inviteAcceptViewModel = viewModel
+
+        let inviteVC = InviteAcceptViewController(viewModel: viewModel)
+        navigationController.setViewControllers([inviteVC], animated: true)
     }
 
     /// Show the "Join Tenant" screen as a modal from the login screen
@@ -75,6 +84,20 @@ extension AuthCoordinator: LoginViewModelCoordinatorDelegate {
 
     func loginViewModelDidRequestJoinTenant() {
         showJoinTenant()
+    }
+}
+
+// MARK: - InviteAcceptViewModelCoordinatorDelegate
+
+extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
+    func inviteAcceptViewModelDidRegister() {
+        inviteAcceptViewModel = nil
+        delegate?.authDidComplete()
+    }
+
+    func inviteAcceptViewModelDidRequestLogin() {
+        inviteAcceptViewModel = nil
+        showLogin()
     }
 }
 

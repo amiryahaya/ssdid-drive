@@ -21,14 +21,21 @@ enum DeepLinkAction: Equatable, Codable {
     /// SSDID wallet auth callback with session token
     case authCallback(sessionToken: String)
 
+    /// SSDID wallet invite callback with session token
+    case walletInviteCallback(sessionToken: String)
+
+    /// SSDID wallet invite callback with error
+    case walletInviteError(message: String)
+
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case type, shareId, fileId, folderId, token, manifest, sessionToken
+        case type, shareId, fileId, folderId, token, manifest, sessionToken, message
     }
 
     private enum ActionType: String, Codable {
         case openShare, openFile, openFolder, acceptInvitation, importFiles, authCallback
+        case walletInviteCallback, walletInviteError
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +61,12 @@ enum DeepLinkAction: Equatable, Codable {
         case .authCallback:
             let sessionToken = try container.decode(String.self, forKey: .sessionToken)
             self = .authCallback(sessionToken: sessionToken)
+        case .walletInviteCallback:
+            let sessionToken = try container.decode(String.self, forKey: .sessionToken)
+            self = .walletInviteCallback(sessionToken: sessionToken)
+        case .walletInviteError:
+            let message = try container.decode(String.self, forKey: .message)
+            self = .walletInviteError(message: message)
         }
     }
 
@@ -79,6 +92,12 @@ enum DeepLinkAction: Equatable, Codable {
         case .authCallback(let sessionToken):
             try container.encode(ActionType.authCallback, forKey: .type)
             try container.encode(sessionToken, forKey: .sessionToken)
+        case .walletInviteCallback(let sessionToken):
+            try container.encode(ActionType.walletInviteCallback, forKey: .type)
+            try container.encode(sessionToken, forKey: .sessionToken)
+        case .walletInviteError(let message):
+            try container.encode(ActionType.walletInviteError, forKey: .type)
+            try container.encode(message, forKey: .message)
         }
     }
 }

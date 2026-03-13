@@ -97,6 +97,22 @@ final class DeepLinkParser {
             }
 
         case "invite":
+            // Check for wallet invite callback first
+            if pathComponents.first == "callback" ||
+               (url.scheme == "ssdid-drive" && pathComponents.first == "callback") {
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                    let status = components.queryItems?.first(where: { $0.name == "status" })?.value ?? ""
+                    let sessionToken = components.queryItems?.first(where: { $0.name == "session_token" })?.value
+                    if status == "success", let token = sessionToken, !token.isEmpty {
+                        return .walletInviteCallback(sessionToken: token)
+                    } else {
+                        let message = components.queryItems?.first(where: { $0.name == "message" })?.value ?? "Invitation failed"
+                        return .walletInviteError(message: message)
+                    }
+                }
+                return nil
+            }
+            // Existing invitation token handling
             let token = extractResourceId(from: url, pathComponents: pathComponents)
             if let token = token, isValidInvitationToken(token) {
                 return .acceptInvitation(token: token)

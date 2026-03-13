@@ -7,89 +7,89 @@ struct InvitationTestFixtures {
     // MARK: - Valid Invitations
 
     static let validInvitation = TokenInvitation(
-        id: "inv_123456789",
         email: "newuser@example.com",
         role: .member,
         tenantName: "Test Company",
         inviterName: "Admin User",
         message: "Welcome to the team!",
+        status: "pending",
+        shortCode: "ABC123",
         expiresAt: Date().addingTimeInterval(86400 * 7), // 7 days from now
-        valid: true,
-        errorReason: nil
+        createdAt: Date()
     )
 
     static let validInvitationNoMessage = TokenInvitation(
-        id: "inv_987654321",
         email: "another@example.com",
         role: .admin,
         tenantName: "Another Company",
         inviterName: "Owner",
         message: nil,
+        status: "pending",
+        shortCode: "DEF456",
         expiresAt: Date().addingTimeInterval(86400 * 7),
-        valid: true,
-        errorReason: nil
+        createdAt: Date()
     )
 
     static let validInvitationViewer = TokenInvitation(
-        id: "inv_viewer123",
         email: "viewer@example.com",
         role: .viewer,
         tenantName: "View Only Corp",
         inviterName: "Manager",
         message: "You have view-only access",
+        status: "pending",
+        shortCode: "GHI789",
         expiresAt: Date().addingTimeInterval(86400 * 7),
-        valid: true,
-        errorReason: nil
+        createdAt: Date()
     )
 
     // MARK: - Invalid Invitations
 
     static let expiredInvitation = TokenInvitation(
-        id: "inv_expired123",
         email: "expired@example.com",
         role: .member,
         tenantName: "Test Company",
         inviterName: "Admin User",
         message: nil,
+        status: "expired",
+        shortCode: "EXP123",
         expiresAt: Date().addingTimeInterval(-86400), // 1 day ago
-        valid: false,
-        errorReason: .expired
+        createdAt: Date().addingTimeInterval(-86400 * 8)
     )
 
     static let revokedInvitation = TokenInvitation(
-        id: "inv_revoked456",
         email: "revoked@example.com",
         role: .member,
         tenantName: "Test Company",
         inviterName: "Admin User",
         message: nil,
+        status: "revoked",
+        shortCode: "REV456",
         expiresAt: Date().addingTimeInterval(86400 * 7),
-        valid: false,
-        errorReason: .revoked
+        createdAt: Date()
     )
 
     static let alreadyUsedInvitation = TokenInvitation(
-        id: "inv_used789",
         email: "used@example.com",
         role: .member,
         tenantName: "Test Company",
         inviterName: "Admin User",
         message: nil,
+        status: "accepted",
+        shortCode: "USE789",
         expiresAt: Date().addingTimeInterval(86400 * 7),
-        valid: false,
-        errorReason: .alreadyUsed
+        createdAt: Date()
     )
 
     static let notFoundInvitation = TokenInvitation(
-        id: "inv_notfound000",
         email: "notfound@example.com",
         role: .member,
         tenantName: "",
         inviterName: nil,
         message: nil,
+        status: "not_found",
+        shortCode: "",
         expiresAt: Date(),
-        valid: false,
-        errorReason: .notFound
+        createdAt: Date()
     )
 
     // MARK: - Invite User (Result of accepting)
@@ -144,97 +144,85 @@ struct InvitationTestFixtures {
     struct JSON {
         static let validInvitationResponse = """
         {
-            "data": {
-                "id": "inv_123456789",
-                "email": "newuser@example.com",
-                "role": "member",
-                "tenant_name": "Test Company",
-                "inviter_name": "Admin User",
-                "message": "Welcome to the team!",
-                "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
-                "valid": true,
-                "error_reason": null
-            }
+            "email": "newuser@example.com",
+            "role": "member",
+            "tenant_name": "Test Company",
+            "inviter_name": "Admin User",
+            "message": "Welcome to the team!",
+            "status": "pending",
+            "short_code": "ABC123",
+            "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
+            "created_at": "\(iso8601String(for: Date()))"
         }
         """
 
         static let validInvitationNoMessageResponse = """
         {
-            "data": {
-                "id": "inv_987654321",
-                "email": "another@example.com",
-                "role": "admin",
-                "tenant_name": "Another Company",
-                "inviter_name": "Owner",
-                "message": null,
-                "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
-                "valid": true,
-                "error_reason": null
-            }
+            "email": "another@example.com",
+            "role": "admin",
+            "tenant_name": "Another Company",
+            "inviter_name": "Owner",
+            "message": null,
+            "status": "pending",
+            "short_code": "DEF456",
+            "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
+            "created_at": "\(iso8601String(for: Date()))"
         }
         """
 
         static let expiredInvitationResponse = """
         {
-            "data": {
-                "id": "inv_expired123",
-                "email": "expired@example.com",
-                "role": "member",
-                "tenant_name": "Test Company",
-                "inviter_name": "Admin User",
-                "message": null,
-                "expires_at": "\(iso8601String(for: Date().addingTimeInterval(-86400)))",
-                "valid": false,
-                "error_reason": "expired"
-            }
+            "email": "expired@example.com",
+            "role": "member",
+            "tenant_name": "Test Company",
+            "inviter_name": "Admin User",
+            "message": null,
+            "status": "expired",
+            "short_code": "EXP123",
+            "expires_at": "\(iso8601String(for: Date().addingTimeInterval(-86400)))",
+            "created_at": "\(iso8601String(for: Date().addingTimeInterval(-86400 * 8)))"
         }
         """
 
         static let revokedInvitationResponse = """
         {
-            "data": {
-                "id": "inv_revoked456",
-                "email": "revoked@example.com",
-                "role": "member",
-                "tenant_name": "Test Company",
-                "inviter_name": "Admin User",
-                "message": null,
-                "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
-                "valid": false,
-                "error_reason": "revoked"
-            }
+            "email": "revoked@example.com",
+            "role": "member",
+            "tenant_name": "Test Company",
+            "inviter_name": "Admin User",
+            "message": null,
+            "status": "revoked",
+            "short_code": "REV456",
+            "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
+            "created_at": "\(iso8601String(for: Date()))"
         }
         """
 
         static let alreadyUsedInvitationResponse = """
         {
-            "data": {
-                "id": "inv_used789",
-                "email": "used@example.com",
-                "role": "member",
-                "tenant_name": "Test Company",
-                "inviter_name": "Admin User",
-                "message": null,
-                "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
-                "valid": false,
-                "error_reason": "already_used"
-            }
+            "email": "used@example.com",
+            "role": "member",
+            "tenant_name": "Test Company",
+            "inviter_name": "Admin User",
+            "message": null,
+            "status": "accepted",
+            "short_code": "USE789",
+            "expires_at": "\(iso8601String(for: Date().addingTimeInterval(86400 * 7)))",
+            "created_at": "\(iso8601String(for: Date()))"
         }
         """
 
         static let notFoundInvitationResponse = """
         {
-            "data": {
-                "id": "",
-                "email": "",
-                "role": "member",
-                "tenant_name": "",
-                "inviter_name": null,
-                "message": null,
-                "expires_at": "\(iso8601String(for: Date()))",
-                "valid": false,
-                "error_reason": "not_found"
-            }
+            "email": "",
+            "role": "member",
+            "tenant_name": "",
+            "inviter_name": null,
+            "message": null,
+            "status": "not_found",
+            "short_code": "",
+            "expires_at": "\(iso8601String(for: Date()))",
+            "created_at": "\(iso8601String(for: Date()))"
         }
         """
 
@@ -319,26 +307,26 @@ struct InvitationTestFixtures {
 
     /// Creates a TokenInvitation with custom parameters
     static func createInvitation(
-        id: String = "inv_custom",
         email: String = "custom@example.com",
         role: UserRole = .member,
         tenantName: String = "Custom Company",
         inviterName: String? = "Custom Inviter",
         message: String? = nil,
+        status: String = "pending",
+        shortCode: String = "CUS000",
         expiresAt: Date = Date().addingTimeInterval(86400 * 7),
-        valid: Bool = true,
-        errorReason: TokenInvitationError? = nil
+        createdAt: Date = Date()
     ) -> TokenInvitation {
         TokenInvitation(
-            id: id,
             email: email,
             role: role,
             tenantName: tenantName,
             inviterName: inviterName,
             message: message,
+            status: status,
+            shortCode: shortCode,
             expiresAt: expiresAt,
-            valid: valid,
-            errorReason: errorReason
+            createdAt: createdAt
         )
     }
 

@@ -2,7 +2,7 @@ import XCTest
 import Combine
 @testable import SsdidDrive
 
-/// Unit tests for InviteAcceptViewModel
+/// Unit tests for InviteAcceptViewModel (wallet-based flow)
 @MainActor
 final class InviteAcceptViewModelTests: XCTestCase {
 
@@ -39,27 +39,6 @@ final class InviteAcceptViewModelTests: XCTestCase {
         )
         vm.coordinatorDelegate = mockDelegate
         return vm
-    }
-
-    private func waitForPublisher<T: Publisher>(
-        _ publisher: T,
-        timeout: TimeInterval = 1.0,
-        file: StaticString = #file,
-        line: UInt = #line
-    ) where T.Failure == Never {
-        let expectation = expectation(description: "Publisher expectation")
-        var hasReceived = false
-
-        publisher
-            .sink { _ in
-                if !hasReceived {
-                    hasReceived = true
-                    expectation.fulfill()
-                }
-            }
-            .store(in: &cancellables)
-
-        wait(for: [expectation], timeout: timeout)
     }
 
     // MARK: - Initialization Tests
@@ -187,288 +166,125 @@ final class InviteAcceptViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.invitationError?.contains("Network error") == true)
     }
 
-    // MARK: - Form Validation Tests
+    // MARK: - Accept With Wallet Tests
 
-    func testIsFormValid_allFieldsValid_returnsTrue() async throws {
+    func testAcceptWithWallet_callsLaunchWalletInvite() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // Then
-        XCTAssertTrue(viewModel.isFormValid)
-    }
-
-    func testIsFormValid_emptyDisplayName_returnsFalse() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = ""
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // Then
-        XCTAssertFalse(viewModel.isFormValid)
-    }
-
-    func testIsFormValid_displayNameTooLong_returnsFalse() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.longDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // Then
-        XCTAssertFalse(viewModel.isFormValid)
-    }
-
-    func testIsFormValid_passwordTooShort_returnsFalse() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.shortPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.shortPassword
-
-        // Then
-        XCTAssertFalse(viewModel.isFormValid)
-    }
-
-    func testIsFormValid_passwordMismatch_returnsFalse() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = "ValidPassword123"
-        viewModel.confirmPassword = "DifferentPassword456"
-
-        // Then
-        XCTAssertFalse(viewModel.isFormValid)
-    }
-
-    // MARK: - Accept Invitation Tests
-
-    func testAcceptInvitation_success_callsRepository() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .success(InvitationTestFixtures.acceptedUser)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // When
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // Then
-        XCTAssertEqual(mockAuthRepository.acceptInvitationCallCount, 1)
-        XCTAssertEqual(mockAuthRepository.lastAcceptInvitationToken, "test-token")
-        XCTAssertEqual(mockAuthRepository.lastAcceptInvitationDisplayName, InvitationTestFixtures.FormInput.validDisplayName)
-        XCTAssertEqual(mockAuthRepository.lastAcceptInvitationPassword, InvitationTestFixtures.FormInput.validPassword)
+        XCTAssertEqual(mockAuthRepository.launchWalletInviteCallCount, 1)
+        XCTAssertEqual(mockAuthRepository.lastLaunchWalletInviteToken, "test-token")
     }
 
-    func testAcceptInvitation_success_callsCoordinatorDelegate() async throws {
+    func testAcceptWithWallet_setsWaitingForWallet() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .success(InvitationTestFixtures.acceptedUser)
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
 
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
         // When
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // Then
-        XCTAssertTrue(mockDelegate.didRegisterCalled)
+        XCTAssertTrue(viewModel.isWaitingForWallet)
     }
 
-    func testAcceptInvitation_success_clearsPasswordFields() async throws {
+    func testAcceptWithWallet_failure_setsRegistrationError() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .success(InvitationTestFixtures.acceptedUser)
+        mockAuthRepository.launchWalletInviteResult = .failure(MockError.testError("Wallet not installed"))
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
 
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
         // When
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // Then
-        XCTAssertTrue(viewModel.password.isEmpty)
-        XCTAssertTrue(viewModel.confirmPassword.isEmpty)
+        XCTAssertNotNil(viewModel.registrationError)
+        XCTAssertTrue(viewModel.registrationError?.contains("Wallet not installed") == true)
+        XCTAssertFalse(viewModel.isWaitingForWallet)
     }
 
-    func testAcceptInvitation_invalidForm_doesNotCallRepository() async throws {
+    func testAcceptWithWallet_preventsDoubleCall() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
 
-        viewModel.displayName = "" // Invalid
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
+        // When - First call
+        viewModel.acceptWithWallet()
+        try await Task.sleep(nanoseconds: 200_000_000)
 
-        // When
-        viewModel.acceptInvitation()
+        // Then - Already waiting, second call should not launch again
+        viewModel.acceptWithWallet()
         try await Task.sleep(nanoseconds: 100_000_000)
-
-        // Then
-        XCTAssertEqual(mockAuthRepository.acceptInvitationCallCount, 0)
-        XCTAssertNotNil(viewModel.registrationError)
+        XCTAssertEqual(mockAuthRepository.launchWalletInviteCallCount, 1)
     }
 
-    func testAcceptInvitation_invalidForm_emptyDisplayName_setsError() async throws {
+    // MARK: - Wallet Callback Tests
+
+    func testHandleWalletCallback_success_savesSession() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = ""
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
+        viewModel.acceptWithWallet()
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         // When
-        viewModel.acceptInvitation()
+        viewModel.handleWalletCallback(sessionToken: "test-session-token")
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         // Then
-        XCTAssertEqual(viewModel.registrationError, "Name is required")
+        XCTAssertEqual(mockAuthRepository.saveSessionFromWalletCallCount, 1)
+        XCTAssertEqual(mockAuthRepository.lastSaveSessionFromWalletToken, "test-session-token")
+        XCTAssertTrue(mockDelegate.didRegisterCalled)
+        XCTAssertFalse(viewModel.isWaitingForWallet)
     }
 
-    func testAcceptInvitation_invalidForm_displayNameTooLong_setsError() async throws {
+    func testHandleWalletCallback_failure_setsError() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
+        mockAuthRepository.saveSessionFromWalletResult = .failure(MockError.testError("Save failed"))
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
 
-        viewModel.displayName = InvitationTestFixtures.FormInput.longDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
         // When
-        viewModel.acceptInvitation()
-
-        // Then
-        XCTAssertEqual(viewModel.registrationError, "Name is too long")
-    }
-
-    func testAcceptInvitation_invalidForm_passwordTooShort_setsError() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.shortPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.shortPassword
-
-        // When
-        viewModel.acceptInvitation()
-
-        // Then
-        XCTAssertEqual(viewModel.registrationError, "Password must be at least 8 characters")
-    }
-
-    func testAcceptInvitation_invalidForm_passwordMismatch_setsError() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = "ValidPassword123"
-        viewModel.confirmPassword = "DifferentPassword456"
-
-        // When
-        viewModel.acceptInvitation()
-
-        // Then
-        XCTAssertEqual(viewModel.registrationError, "Passwords do not match")
-    }
-
-    func testAcceptInvitation_failure_setsRegistrationError() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .failure(MockError.testError("Registration failed"))
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // When
-        viewModel.acceptInvitation()
+        viewModel.handleWalletCallback(sessionToken: "test-session-token")
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // Then
         XCTAssertNotNil(viewModel.registrationError)
-        XCTAssertTrue(viewModel.registrationError?.contains("Registration failed") == true)
+        XCTAssertTrue(viewModel.registrationError?.contains("Save failed") == true)
+        XCTAssertFalse(viewModel.isWaitingForWallet)
+        XCTAssertFalse(mockDelegate.didRegisterCalled)
     }
 
-    func testAcceptInvitation_setsIsRegistering() async throws {
+    // MARK: - Wallet Error Tests
+
+    func testHandleWalletError_setsError() async throws {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .success(InvitationTestFixtures.acceptedUser)
         viewModel = createViewModel()
         try await Task.sleep(nanoseconds: 200_000_000)
-
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // When
-        viewModel.acceptInvitation()
-
-        // Then - Initially registering
-        XCTAssertTrue(viewModel.isRegistering)
-    }
-
-    func testAcceptInvitation_failure_clearsIsRegistering() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        mockAuthRepository.acceptInvitationResult = .failure(MockError.testError("Failed"))
-        viewModel = createViewModel()
+        viewModel.acceptWithWallet()
         try await Task.sleep(nanoseconds: 200_000_000)
 
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
         // When
-        viewModel.acceptInvitation()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        viewModel.handleWalletError(message: "User rejected invitation")
 
         // Then
-        XCTAssertFalse(viewModel.isRegistering)
+        XCTAssertEqual(viewModel.registrationError, "User rejected invitation")
+        XCTAssertFalse(viewModel.isWaitingForWallet)
     }
 
     // MARK: - Navigation Tests
@@ -487,36 +303,6 @@ final class InviteAcceptViewModelTests: XCTestCase {
     }
 
     // MARK: - Edge Cases
-
-    func testFormValidation_unicodeDisplayName() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.unicodeDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.validPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.validConfirmPassword
-
-        // Then
-        XCTAssertTrue(viewModel.isFormValid)
-    }
-
-    func testFormValidation_specialCharsPassword() async throws {
-        // Given
-        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
-        viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        // When
-        viewModel.displayName = InvitationTestFixtures.FormInput.validDisplayName
-        viewModel.password = InvitationTestFixtures.FormInput.specialCharsPassword
-        viewModel.confirmPassword = InvitationTestFixtures.FormInput.specialCharsPassword
-
-        // Then
-        XCTAssertTrue(viewModel.isFormValid)
-    }
 
     func testEmail_beforeLoadComplete_returnsEmpty() {
         // Given

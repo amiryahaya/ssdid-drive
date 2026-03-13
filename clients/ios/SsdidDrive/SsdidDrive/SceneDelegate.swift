@@ -206,6 +206,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
+        // Handle wallet invite callback: ssdid-drive://invite/callback?...
+        if let action = DeepLinkParser.parse(url) {
+            if case .walletInviteCallback = action {
+                appCoordinator?.handleDeepLinkAction(action)
+                return
+            }
+            if case .walletInviteError = action {
+                appCoordinator?.handleDeepLinkAction(action)
+                return
+            }
+        }
+
         appCoordinator?.handleDeepLink(url)
     }
 

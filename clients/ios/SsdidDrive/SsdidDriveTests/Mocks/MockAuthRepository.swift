@@ -20,6 +20,8 @@ final class MockAuthRepository: AuthRepository {
     var revokeDeviceResult: Result<Void, Error> = .success(())
     var getInvitationInfoResult: Result<TokenInvitation, Error> = .failure(MockError.notImplemented)
     var acceptInvitationResult: Result<InviteUser, Error> = .failure(MockError.notImplemented)
+    var launchWalletInviteResult: Result<Void, Error> = .success(())
+    var saveSessionFromWalletResult: Result<Void, Error> = .success(())
 
     // MARK: - Call Tracking
 
@@ -38,6 +40,8 @@ final class MockAuthRepository: AuthRepository {
     var revokeDeviceCallCount = 0
     var getInvitationInfoCallCount = 0
     var acceptInvitationCallCount = 0
+    var launchWalletInviteCallCount = 0
+    var saveSessionFromWalletCallCount = 0
 
     // MARK: - Last Call Parameters
 
@@ -47,6 +51,8 @@ final class MockAuthRepository: AuthRepository {
     var lastAcceptInvitationToken: String?
     var lastAcceptInvitationDisplayName: String?
     var lastAcceptInvitationPassword: String?
+    var lastLaunchWalletInviteToken: String?
+    var lastSaveSessionFromWalletToken: String?
 
     // MARK: - Properties
 
@@ -153,6 +159,20 @@ final class MockAuthRepository: AuthRepository {
         return try acceptInvitationResult.get()
     }
 
+    // MARK: - Wallet-Based Invitation
+
+    func launchWalletInvite(token: String) async throws {
+        launchWalletInviteCallCount += 1
+        lastLaunchWalletInviteToken = token
+        try launchWalletInviteResult.get()
+    }
+
+    func saveSessionFromWallet(sessionToken: String) async throws {
+        saveSessionFromWalletCallCount += 1
+        lastSaveSessionFromWalletToken = sessionToken
+        try saveSessionFromWalletResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -171,6 +191,8 @@ final class MockAuthRepository: AuthRepository {
         revokeDeviceCallCount = 0
         getInvitationInfoCallCount = 0
         acceptInvitationCallCount = 0
+        launchWalletInviteCallCount = 0
+        saveSessionFromWalletCallCount = 0
 
         lastEnrollDeviceName = nil
         lastRevokeDeviceId = nil
@@ -178,6 +200,8 @@ final class MockAuthRepository: AuthRepository {
         lastAcceptInvitationToken = nil
         lastAcceptInvitationDisplayName = nil
         lastAcceptInvitationPassword = nil
+        lastLaunchWalletInviteToken = nil
+        lastSaveSessionFromWalletToken = nil
     }
 }
 

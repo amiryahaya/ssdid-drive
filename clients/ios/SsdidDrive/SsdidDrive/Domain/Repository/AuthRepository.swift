@@ -71,4 +71,12 @@ protocol AuthRepository: AnyObject {
     /// Generates key pairs and encrypts them with the password.
     /// No authentication required - this creates the account.
     func acceptInvitation(token: String, displayName: String, password: String) async throws -> InviteUser
+
+    // MARK: - Wallet-Based Invitation
+
+    /// Launch SSDID Wallet to accept an invitation.
+    func launchWalletInvite(token: String) async throws
+
+    /// Save session from wallet callback (invitation acceptance).
+    func saveSessionFromWallet(sessionToken: String) async throws
 }

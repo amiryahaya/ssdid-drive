@@ -2,6 +2,7 @@ import Foundation
 import LocalAuthentication
 import CryptoKit
 import Security
+import UIKit
 
 /// Implementation of AuthRepository.
 /// Authentication is SSDID wallet-based (QR challenge-response).
@@ -259,13 +260,13 @@ extension AuthRepositoryImpl {
     func getInvitationInfo(token: String) async throws -> TokenInvitation {
         let endpoint = Constants.API.Endpoints.inviteInfo.replacingOccurrences(of: "{token}", with: token)
 
-        let response: InviteInfoResponse = try await apiClient.request(
+        let response: TokenInvitation = try await apiClient.request(
             endpoint,
             method: .get,
             requiresAuth: false
         )
 
-        return response.data
+        return response
     }
 
     func acceptInvitation(token: String, displayName: String, password: String) async throws -> InviteUser {
@@ -346,6 +347,43 @@ extension AuthRepositoryImpl {
         return response.data.user
     }
 
+    // MARK: - Wallet-Based Invitation
+
+    func launchWalletInvite(token: String) async throws {
+        let serverUrl = Constants.API.baseURL
+        let callbackUrl = "ssdid-drive://invite/callback"
+
+        var components = URLComponents()
+        components.scheme = "ssdid"
+        components.host = "invite"
+        components.queryItems = [
+            URLQueryItem(name: "server_url", value: serverUrl),
+            URLQueryItem(name: "token", value: token),
+            URLQueryItem(name: "callback_url", value: callbackUrl)
+        ]
+
+        guard let url = components.url else {
+            throw AuthError.invalidURL
+        }
+
+        await MainActor.run {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    func saveSessionFromWallet(sessionToken: String) async throws {
+        keychainManager.accessToken = sessionToken
+
+        // Write to shared keychain for File Provider extension
+        if let tokenData = sessionToken.data(using: .utf8) {
+            try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
+        }
+
+        // Update shared defaults for menu bar helper
+        SharedDefaults.shared.writeIsAuthenticated(true)
+        SharedDefaults.shared.notifyHelper()
+    }
+
     // MARK: - Private Helpers for Invitation
 
     private func generateMasterKey() -> Data {
@@ -393,6 +431,7 @@ enum AuthError: Error, LocalizedError {
     case registrationFailed
     case invitationExpired
     case invitationInvalid
+    case invalidURL
 
     var errorDescription: String? {
         switch self {
@@ -410,6 +449,8 @@ enum AuthError: Error, LocalizedError {
             return "Invitation has expired"
         case .invitationInvalid:
             return "Invalid invitation"
+        case .invalidURL:
+            return "Invalid URL"
         }
     }
 }
