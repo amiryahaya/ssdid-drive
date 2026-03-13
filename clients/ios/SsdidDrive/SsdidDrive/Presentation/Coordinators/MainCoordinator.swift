@@ -55,6 +55,20 @@ final class MainCoordinator: BaseCoordinator {
         addChild(sharesCoordinator)
         sharesCoordinator.start()
 
+        // Activity tab
+        let activityNav = UINavigationController()
+        activityNav.tabBarItem = UITabBarItem(
+            title: "Activity",
+            image: UIImage(systemName: "clock.arrow.circlepath"),
+            selectedImage: UIImage(systemName: "clock.arrow.circlepath")
+        )
+        let activityCoordinator = ActivityCoordinator(
+            navigationController: activityNav,
+            container: container
+        )
+        addChild(activityCoordinator)
+        activityCoordinator.start()
+
         // Notifications tab
         let notificationsNav = UINavigationController()
         notificationsNav.tabBarItem = UITabBarItem(
@@ -107,7 +121,7 @@ final class MainCoordinator: BaseCoordinator {
         addChild(settingsCoordinator)
         settingsCoordinator.start()
 
-        tabBar.viewControllers = [filesNav, sharesNav, notificationsNav, piiChatNav, settingsNav]
+        tabBar.viewControllers = [filesNav, sharesNav, activityNav, notificationsNav, piiChatNav, settingsNav]
         tabBarController = tabBar
 
         navigationController.setNavigationBarHidden(true, animated: false)
@@ -192,12 +206,12 @@ extension MainCoordinator: NotificationsCoordinatorDelegate {
 
     func notificationsCoordinatorDidRequestOpenRecovery() {
         // Navigate to settings where recovery is handled
-        // Tab order: Files(0), Shares(1), Notifications(2), AI Chat(3), Settings(4)
-        tabBarController?.selectedIndex = 4
+        // Tab order: Files(0), Shares(1), Activity(2), Notifications(3), AI Chat(4), Settings(5)
+        tabBarController?.selectedIndex = 5
     }
 
     func notificationsCoordinatorDidRequestOpenSettings() {
-        tabBarController?.selectedIndex = 4
+        tabBarController?.selectedIndex = 5
     }
 }
 
@@ -206,6 +220,11 @@ extension MainCoordinator: NotificationsCoordinatorDelegate {
 extension MainCoordinator {
     /// Show notifications tab and optionally navigate to a specific notification
     func showNotifications() {
+        tabBarController?.selectedIndex = 3
+    }
+
+    /// Show activity tab
+    func showActivity() {
         tabBarController?.selectedIndex = 2
     }
 }

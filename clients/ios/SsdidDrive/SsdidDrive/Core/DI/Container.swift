@@ -98,6 +98,10 @@ final class DependencyContainer: ObservableObject {
         )
     }()
 
+    lazy var activityRepository: ActivityRepository = {
+        ActivityRepositoryImpl(apiClient: apiClient)
+    }()
+
     lazy var piiRepository: PiiRepository = {
         PiiRepositoryImpl(keychainManager: keychainManager)
     }()
