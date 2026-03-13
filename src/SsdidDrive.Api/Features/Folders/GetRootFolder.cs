@@ -15,7 +15,28 @@ public static class GetRootFolder
         var user = accessor.User!;
 
         if (user.TenantId is null)
-            return AppError.BadRequest("User does not belong to a tenant").ToProblemResult();
+        {
+            // Auto-create a personal tenant for users without one (e.g. superadmins)
+            var tenant = new Tenant
+            {
+                Id = Guid.NewGuid(),
+                Name = "Personal",
+                Slug = $"personal-{Guid.NewGuid():N}"
+            };
+            db.Tenants.Add(tenant);
+
+            user.TenantId = tenant.Id;
+
+            db.UserTenants.Add(new UserTenant
+            {
+                UserId = user.Id,
+                TenantId = tenant.Id,
+                Role = TenantRole.Owner,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await db.SaveChangesAsync(ct);
+        }
 
         var tenantId = user.TenantId.Value;
 
