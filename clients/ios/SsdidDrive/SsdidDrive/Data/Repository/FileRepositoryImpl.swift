@@ -34,7 +34,7 @@ final class FileRepositoryImpl: FileRepository {
         if let folderId = folderId {
             endpoint = "/folders/\(folderId)/contents"
         } else {
-            endpoint = "/files"
+            endpoint = "/folders/root/contents"
         }
 
         do {

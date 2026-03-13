@@ -1,15 +1,18 @@
 package my.ssdid.drive.presentation.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import my.ssdid.drive.R
 import my.ssdid.drive.util.WalletCallbackHolder
 
 @Composable
@@ -41,6 +44,14 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Image(
+            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+            contentDescription = "SSDID Drive",
+            modifier = Modifier.size(120.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = "SSDID Drive",
             style = MaterialTheme.typography.headlineLarge,
@@ -101,6 +112,10 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .padding(top = 8.dp)
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = { viewModel.cancelWaiting() }) {
+                Text("Cancel")
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

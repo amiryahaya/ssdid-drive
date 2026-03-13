@@ -64,6 +64,13 @@ class LoginViewModel @Inject constructor(
      * Called when the wallet redirects back to the app via deep link:
      * ssdid-drive://auth/callback?session_token=<token>
      */
+    /**
+     * Cancel waiting for wallet callback, allowing the user to retry.
+     */
+    fun cancelWaiting() {
+        _uiState.update { it.copy(isWaitingForWallet = false, error = null) }
+    }
+
     fun handleWalletCallback(sessionToken: String) {
         viewModelScope.launch {
             try {

@@ -146,7 +146,7 @@ impl FileService {
     pub async fn list_files(&self, folder_id: Option<&str>) -> AppResult<FileListResponse> {
         let endpoint = match folder_id {
             Some(id) => format!("/files?folder_id={}", id),
-            None => "/files".to_string(),
+            None => "/folders/root/contents".to_string(),
         };
 
         let response: FileListResponse = self.api_client.get(&endpoint).await?;

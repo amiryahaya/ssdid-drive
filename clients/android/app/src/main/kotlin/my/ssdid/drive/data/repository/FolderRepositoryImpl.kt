@@ -31,7 +31,25 @@ class FolderRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful) {
                 val folderDto = response.body()!!.data
-                val folder = decryptFolder(folderDto)
+                val folder = try {
+                    decryptFolder(folderDto)
+                } catch (_: Exception) {
+                    // Root folder may not have encryption keys yet (e.g. auto-created for new tenants)
+                    if (folderDto.isRoot) {
+                        Folder(
+                            id = folderDto.id,
+                            parentId = folderDto.parentId,
+                            ownerId = folderDto.ownerId,
+                            tenantId = folderDto.tenantId,
+                            isRoot = true,
+                            name = "My Files",
+                            createdAt = java.time.Instant.parse(folderDto.createdAt),
+                            updatedAt = java.time.Instant.parse(folderDto.updatedAt)
+                        )
+                    } else {
+                        return Result.error(AppException.CryptoError("Failed to decrypt folder"))
+                    }
+                }
                 Result.success(folder)
             } else {
                 Result.error(AppException.Unknown("Failed to get root folder"))

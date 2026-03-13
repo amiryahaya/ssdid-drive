@@ -8,6 +8,8 @@ public static class FolderFeature
 
         CreateFolder.Map(group);
         ListFolders.Map(group);
+        GetRootFolder.Map(group);
+        GetRootFolderContents.Map(group);
         GetFolder.Map(group);
         RenameFolder.Map(group);
         DeleteFolder.Map(group);
