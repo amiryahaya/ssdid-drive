@@ -21,6 +21,7 @@ public static class UploadFile
         AppDbContext db,
         CurrentUserAccessor accessor,
         IStorageService storage,
+        FileActivityService activity,
         CancellationToken ct)
     {
         var user = accessor.User!;
@@ -87,6 +88,10 @@ public static class UploadFile
 
         db.Files.Add(fileItem);
         await db.SaveChangesAsync(ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FileUploaded,
+            "file", fileItem.Id, fileItem.Name, user.Id,
+            new { size = fileItem.Size, content_type = fileItem.ContentType, folder_name = folder.Name }, ct);
 
         return Results.Created($"/api/files/{fileItem.Id}", new
         {

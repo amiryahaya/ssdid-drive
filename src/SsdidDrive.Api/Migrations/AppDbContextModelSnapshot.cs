@@ -129,6 +129,72 @@ namespace SsdidDrive.Api.Migrations
                     b.ToTable("devices", (string)null);
                 });
 
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("ResourceOwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_file_activities_cleanup");
+
+                    b.HasIndex("ActorId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_activities_actor");
+
+                    b.HasIndex("ResourceId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_activities_resource");
+
+                    b.HasIndex("ResourceOwnerId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_activities_owner");
+
+                    b.HasIndex("TenantId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_file_activities_tenant");
+
+                    b.ToTable("file_activities", (string)null);
+                });
+
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -442,151 +508,41 @@ namespace SsdidDrive.Api.Migrations
                     b.ToTable("notifications", (string)null);
                 });
 
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryApproval", b =>
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoverySetup", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset>("ApprovedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<byte[]>("EncryptedShare")
-                        .HasColumnType("bytea");
-
-                    b.Property<Guid>("RecoveryRequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TrusteeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TrusteeId");
-
-                    b.HasIndex("RecoveryRequestId", "TrusteeId")
-                        .IsUnique();
-
-                    b.ToTable("recovery_approvals", (string)null);
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<int>("Threshold")
-                        .HasColumnType("integer");
+                    b.Property<string>("KeyProof")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
-                    b.Property<int>("TotalShares")
-                        .HasColumnType("integer");
+                    b.Property<string>("ServerShare")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ShareCreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
-
-                    b.ToTable("recovery_configs", (string)null);
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<int>("ApprovalsReceived")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid>("RecoveryConfigId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("RequesterId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasDefaultValue("pending");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecoveryConfigId");
-
-                    b.HasIndex("RequesterId");
-
-                    b.ToTable("recovery_requests", (string)null);
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryShare", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<byte[]>("EncryptedShare")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<Guid>("RecoveryConfigId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasDefaultValue("pending");
-
-                    b.Property<Guid>("TrusteeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecoveryConfigId");
-
-                    b.HasIndex("TrusteeId");
-
-                    b.HasIndex("RecoveryConfigId", "TrusteeId")
+                    b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("recovery_shares", (string)null);
+                    b.ToTable("recovery_setups", (string)null);
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Share", b =>
@@ -716,6 +672,11 @@ namespace SsdidDrive.Api.Migrations
 
                     b.Property<byte[]>("EncryptedPrivateKeys")
                         .HasColumnType("bytea");
+
+                    b.Property<bool>("HasRecoverySetup")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("KemAlgorithm")
                         .HasColumnType("text");
@@ -856,6 +817,17 @@ namespace SsdidDrive.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileActivity", b =>
+                {
+                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Actor");
+                });
+
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.FileItem", b =>
                 {
                     b.HasOne("SsdidDrive.Api.Data.Entities.Folder", "Folder")
@@ -938,72 +910,15 @@ namespace SsdidDrive.Api.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryApproval", b =>
-                {
-                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryRequest", "RecoveryRequest")
-                        .WithMany("Approvals")
-                        .HasForeignKey("RecoveryRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Trustee")
-                        .WithMany()
-                        .HasForeignKey("TrusteeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RecoveryRequest");
-
-                    b.Navigation("Trustee");
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
+            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoverySetup", b =>
                 {
                     b.HasOne("SsdidDrive.Api.Data.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
+                        .WithOne()
+                        .HasForeignKey("SsdidDrive.Api.Data.Entities.RecoverySetup", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
-                {
-                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryConfig", "Config")
-                        .WithMany()
-                        .HasForeignKey("RecoveryConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Requester")
-                        .WithMany()
-                        .HasForeignKey("RequesterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Config");
-
-                    b.Navigation("Requester");
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryShare", b =>
-                {
-                    b.HasOne("SsdidDrive.Api.Data.Entities.RecoveryConfig", "Config")
-                        .WithMany("Shares")
-                        .HasForeignKey("RecoveryConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SsdidDrive.Api.Data.Entities.User", "Trustee")
-                        .WithMany()
-                        .HasForeignKey("TrusteeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Config");
-
-                    b.Navigation("Trustee");
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Share", b =>
@@ -1070,16 +985,6 @@ namespace SsdidDrive.Api.Migrations
                     b.Navigation("Files");
 
                     b.Navigation("SubFolders");
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryConfig", b =>
-                {
-                    b.Navigation("Shares");
-                });
-
-            modelBuilder.Entity("SsdidDrive.Api.Data.Entities.RecoveryRequest", b =>
-                {
-                    b.Navigation("Approvals");
                 });
 
             modelBuilder.Entity("SsdidDrive.Api.Data.Entities.Tenant", b =>

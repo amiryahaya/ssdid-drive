@@ -36,12 +36,16 @@ sealed class Screen(val route: String) {
     }
 
     // Recovery screens
+    data object Recovery : Screen("recovery")
     data object RecoverySetup : Screen("recovery/setup")
     data object RecoveryTrustees : Screen("recovery/trustees/{totalShares}") {
         fun createRoute(totalShares: Int) = "recovery/trustees/$totalShares"
     }
     data object TrusteeDashboard : Screen("recovery/trustee-dashboard")
     data object InitiateRecovery : Screen("recovery/initiate")
+
+    // Activity
+    data object Activity : Screen("activity")
 
     // Settings screens
     data object Settings : Screen("settings")

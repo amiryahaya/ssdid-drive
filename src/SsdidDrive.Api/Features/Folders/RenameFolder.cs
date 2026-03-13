@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Folders;
 
@@ -11,7 +13,7 @@ public static class RenameFolder
     public static void Map(RouteGroupBuilder group) =>
         group.MapPatch("/{id:guid}", Handle);
 
-    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, FileActivityService activity, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 512)
             return AppError.BadRequest("Folder name is required (max 512 chars)").ToProblemResult();
@@ -26,9 +28,14 @@ public static class RenameFolder
         if (folder.OwnerId != user.Id)
             return AppError.Forbidden("Only the folder owner can rename it").ToProblemResult();
 
+        var oldName = folder.Name;
         folder.Name = req.Name.Trim();
         folder.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FolderRenamed,
+            "folder", folder.Id, folder.Name, folder.OwnerId,
+            new { old_name = oldName, new_name = folder.Name }, ct);
 
         return Results.Ok(new
         {

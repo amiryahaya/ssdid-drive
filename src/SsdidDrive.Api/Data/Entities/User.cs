@@ -22,6 +22,7 @@ public class User
     public DateTimeOffset? LastLoginAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public bool HasRecoverySetup { get; set; }
 
     // TenantId is the user's default/primary tenant.
     // UserTenants is the full membership list (a user can belong to multiple tenants).

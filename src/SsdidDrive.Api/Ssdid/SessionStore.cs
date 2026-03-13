@@ -111,6 +111,18 @@ public class SessionStore : ISessionStore, ISseNotificationBus, IHostedService
             Interlocked.Decrement(ref _sessionCount);
     }
 
+    public void InvalidateSessionsForDid(string did)
+    {
+        foreach (var (token, entry) in _sessions)
+        {
+            if (string.Equals(entry.Did, did, StringComparison.Ordinal))
+            {
+                if (_sessions.TryRemove(token, out _))
+                    Interlocked.Decrement(ref _sessionCount);
+            }
+        }
+    }
+
     public int ActiveSessionCount => _sessions.Count;
     public int ActiveChallengeCount => _challenges.Count;
 

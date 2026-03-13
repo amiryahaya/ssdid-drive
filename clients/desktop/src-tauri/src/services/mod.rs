@@ -27,7 +27,9 @@ pub use pii_service::{
     PiiServiceClient, CreateConversationRequest, Conversation,
     RegisterKemKeysResponse, DecryptedAskResponse,
 };
-pub use recovery_service::RecoveryService;
+pub use recovery_service::{
+    RecoveryService, RecoveryFile, RecoveryStatus, ServerShareResponse, CompleteRecoveryResponse,
+};
 pub use sharing_service::SharingService;
 pub use sync_service::{SyncService, SyncStatus, OfflineOperation, CachedFile};
 pub use tenant_service::TenantService;

@@ -1,0 +1,67 @@
+{
+  "description": "Shamir Secret Sharing GF(256) test vectors. Irreducible polynomial: x^8+x^4+x^3+x+1 (0x11B). Threshold: 2, Total: 3.",
+  "gf256_notes": {
+    "polynomial": "0x11B",
+    "multiply_by_2": "xtime(a) = (a < 0x80) ? (a << 1) : ((a << 1) ^ 0x1B)",
+    "multiply_by_3": "gfMul(a, 3) = xtime(a) XOR a",
+    "share_formula": "share[i] at x=n: secret[i] XOR gfMul(coeff[i], n)",
+    "reconstruction": "Lagrange interpolation in GF(256); for 2-of-3: secret = gfMul(y1, gfMul(x2, inv(x1 XOR x2))) XOR gfMul(y2, gfMul(x1, inv(x1 XOR x2)))"
+  },
+  "vectors": [
+    {
+      "name": "all-zeros",
+      "master_key_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "coefficients_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "shares": {
+        "1": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "2": "020406080a0c0e10121416181a1c1e20222426282a2c2e30323436383a3c3e40",
+        "3": "0306050c0f0a09181b1e1d14171211303336353c3f3a39282b2e2d2427222160"
+      },
+      "note": "With all-zero secret, share at x=n equals gfMul(coeff, n) for each byte. x=1 equals coeff directly. x=2 uses xtime (all coeff bytes < 0x80 here, so just left-shift). x=3 uses xtime(c) XOR c."
+    },
+    {
+      "name": "simple-key",
+      "master_key_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+      "coefficients_hex": "ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00",
+      "shares": {
+        "1": "fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01fe01",
+        "2": "e401e401e401e401e401e401e401e401e401e401e401e401e401e401e401e401",
+        "3": "1b011b011b011b011b011b011b011b011b011b011b011b011b011b011b011b01"
+      },
+      "computation_notes": {
+        "x1_coeff_ff": "gfMul(0xff,1)=0xff; 0x01 XOR 0xff=0xfe",
+        "x1_coeff_00": "gfMul(0x00,1)=0x00; 0x01 XOR 0x00=0x01",
+        "x2_coeff_ff": "xtime(0xff): 0xff>=0x80 so (0xfe XOR 0x1b)=0xe5; 0x01 XOR 0xe5=0xe4",
+        "x2_coeff_00": "xtime(0x00)=0x00; 0x01 XOR 0x00=0x01",
+        "x3_coeff_ff": "gfMul(0xff,3)=0xe5 XOR 0xff=0x1a; 0x01 XOR 0x1a=0x1b",
+        "x3_coeff_00": "gfMul(0x00,3)=0x00; 0x01 XOR 0x00=0x01"
+      },
+      "reconstruction_tests": [
+        {"shares": [1, 2], "expected": "0101010101010101010101010101010101010101010101010101010101010101"},
+        {"shares": [1, 3], "expected": "0101010101010101010101010101010101010101010101010101010101010101"},
+        {"shares": [2, 3], "expected": "0101010101010101010101010101010101010101010101010101010101010101"}
+      ]
+    },
+    {
+      "name": "random-key",
+      "master_key_hex": "deadbeefcafebabe0123456789abcdef0011223344556677fedcba9876543210",
+      "coefficients_hex": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "shares": {
+        "1": "7f1f7d3b2f08bda628190e3be4d5427fa1a3e1e7a1a3616fd7e6f1c41b2abde9",
+        "2": "87d2235c1b09b48e5357d3df5357c8d4596ebf8095a26847aca82c20aca837f9",
+        "3": "2660e088feffb3967a6d98833e294744f8dc7c5470546f5f8592677cc1d6b800"
+      },
+      "computation_notes": {
+        "x1": "share[i] = secret[i] XOR coeff[i]",
+        "x2": "share[i] = secret[i] XOR xtime(coeff[i])",
+        "x3": "share[i] = secret[i] XOR (xtime(coeff[i]) XOR coeff[i])",
+        "coeff_note": "32-byte coefficient (64 hex chars). The plan example had a 66-char string; the trailing extra nibble was dropped to match the 32-byte key length."
+      },
+      "reconstruction_tests": [
+        {"shares": [1, 2], "expected": "deadbeefcafebabe0123456789abcdef0011223344556677fedcba9876543210"},
+        {"shares": [1, 3], "expected": "deadbeefcafebabe0123456789abcdef0011223344556677fedcba9876543210"},
+        {"shares": [2, 3], "expected": "deadbeefcafebabe0123456789abcdef0011223344556677fedcba9876543210"}
+      ]
+    }
+  ]
+}

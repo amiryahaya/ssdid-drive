@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Folders;
 
@@ -23,7 +24,7 @@ public static class CreateFolder
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, FileActivityService activity, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -65,6 +66,14 @@ public static class CreateFolder
 
         db.Folders.Add(folder);
         await db.SaveChangesAsync(ct);
+
+        var parentFolderName = parentId.HasValue
+            ? (await db.Folders.Where(f => f.Id == parentId).Select(f => f.Name).FirstOrDefaultAsync(ct) ?? "unknown")
+            : "root";
+
+        _ = activity.LogAsync(user.Id, user.TenantId.Value, FileActivityEventType.FolderCreated,
+            "folder", folder.Id, folder.Name, user.Id,
+            new { parent_folder = parentFolderName }, ct);
 
         return Results.Created($"/api/folders/{folder.Id}", new
         {

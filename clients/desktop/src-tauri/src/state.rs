@@ -93,11 +93,7 @@ impl AppState {
         ));
 
         // Initialize recovery service
-        let recovery_service = Arc::new(RecoveryService::new(
-            api_client.clone(),
-            crypto_service.clone(),
-            database.clone(),
-        ));
+        let recovery_service = Arc::new(RecoveryService::new(api_client.clone()));
 
         // Initialize notification service
         let notification_service = Arc::new(NotificationService::new(api_client.clone()));

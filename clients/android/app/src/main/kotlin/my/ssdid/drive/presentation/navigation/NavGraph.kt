@@ -21,6 +21,7 @@ import my.ssdid.drive.presentation.auth.RegisterScreen
 import my.ssdid.drive.presentation.files.FileBrowserScreen
 import my.ssdid.drive.presentation.recovery.InitiateRecoveryScreen
 import my.ssdid.drive.presentation.recovery.PendingRequestsScreen
+import my.ssdid.drive.presentation.recovery.RecoveryScreen
 import my.ssdid.drive.presentation.recovery.RecoverySetupScreen
 import my.ssdid.drive.presentation.recovery.TrusteeSelectionScreen
 import my.ssdid.drive.presentation.files.upload.ShareIntentScreen
@@ -35,6 +36,7 @@ import my.ssdid.drive.presentation.sharing.CreatedSharesScreen
 import my.ssdid.drive.presentation.sharing.ShareFileScreen
 import my.ssdid.drive.presentation.sharing.ShareFolderScreen
 import my.ssdid.drive.presentation.files.preview.FilePreviewScreen
+import my.ssdid.drive.presentation.activity.ActivityScreen
 import my.ssdid.drive.presentation.onboarding.OnboardingScreen
 import my.ssdid.drive.presentation.piichat.ConversationsScreen
 
@@ -99,6 +101,9 @@ fun NavGraph(
                 },
                 onNavigateToRegister = {
                     navController.navigate(Screen.Register.route)
+                },
+                onNavigateToRecovery = {
+                    navController.navigate(Screen.Recovery.route)
                 }
             )
         }
@@ -230,6 +235,13 @@ fun NavGraph(
             )
         }
 
+        // Activity
+        composable(Screen.Activity.route) {
+            ActivityScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // Settings
         composable(Screen.Settings.route) {
             SettingsScreen(
@@ -316,12 +328,20 @@ fun NavGraph(
         }
 
         // Recovery screens
+        composable(Screen.Recovery.route) {
+            RecoveryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onRecoveryComplete = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Recovery.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.RecoverySetup.route) {
             RecoverySetupScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToTrusteeSelection = { totalShares ->
-                    navController.navigate(Screen.RecoveryTrustees.createRoute(totalShares))
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

@@ -81,6 +81,15 @@ export function LoginPage() {
           </p>
         </div>
 
+        {/* Recovery link */}
+        <div className="mt-2 text-center text-sm">
+          <p className="text-muted-foreground">
+            <Link to="/recover" className="text-muted-foreground hover:text-foreground">
+              Lost your device? Recover your account
+            </Link>
+          </p>
+        </div>
+
         {/* Footer */}
         <div className="mt-4 text-center text-sm text-muted-foreground">
           <p>Protected with post-quantum cryptography</p>

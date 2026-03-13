@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace SsdidDrive.Api.Features.Recovery;
 
@@ -15,31 +15,15 @@ public static class GetRecoveryStatus
         CancellationToken ct)
     {
         var user = accessor.User!;
-
-        var config = await db.RecoveryConfigs
-            .Where(rc => rc.UserId == user.Id && rc.IsActive)
-            .Select(rc => new
-            {
-                rc.Id,
-                rc.UserId,
-                rc.Threshold,
-                rc.TotalShares,
-                rc.IsActive,
-                rc.CreatedAt,
-                Shares = rc.Shares.Select(s => new
-                {
-                    s.Id,
-                    s.TrusteeId,
-                    TrusteeDisplayName = s.Trustee.DisplayName,
-                    Status = s.Status.ToString().ToLowerInvariant(),
-                    s.CreatedAt
-                }).ToList()
-            })
+        var setup = await db.RecoverySetups
+            .Where(rs => rs.UserId == user.Id && rs.IsActive)
+            .Select(rs => new { rs.ShareCreatedAt })
             .FirstOrDefaultAsync(ct);
 
-        if (config is null)
-            return AppError.NotFound("No active recovery config found").ToProblemResult();
-
-        return Results.Ok(config);
+        return Results.Ok(new
+        {
+            is_active = setup is not null,
+            created_at = setup?.ShareCreatedAt
+        });
     }
 }

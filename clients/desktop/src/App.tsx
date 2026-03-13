@@ -14,10 +14,12 @@ import { FavoritesPage } from '@/pages/FavoritesPage';
 import { SharedWithMePage } from '@/pages/SharedWithMePage';
 import { MySharesPage } from '@/pages/MySharesPage';
 import { PiiChatPage } from '@/pages/PiiChatPage';
+import { ActivityPage } from '@/pages/ActivityPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { InvitationsPage } from '@/pages/InvitationsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { JoinTenantPage } from '@/pages/JoinTenantPage';
+import { RecoveryPage } from '@/pages/RecoveryPage';
 import { UnlockScreen } from '@/components/auth/UnlockScreen';
 import { Toaster } from '@/components/ui/toaster';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
@@ -139,6 +141,10 @@ function App() {
           }
         />
         <Route
+          path="/recover"
+          element={<RecoveryPage />}
+        />
+        <Route
           path="/join"
           element={<JoinTenantRoute />}
         />
@@ -161,6 +167,7 @@ function App() {
                     <Route path="/" element={<Navigate to="/files" replace />} />
                     <Route path="/files" element={<FilesPage />} />
                     <Route path="/files/:folderId" element={<FilesPage />} />
+                    <Route path="/activity" element={<ActivityPage />} />
                     <Route path="/favorites" element={<FavoritesPage />} />
                     <Route path="/shared-with-me" element={<SharedWithMePage />} />
                     <Route path="/my-shares" element={<MySharesPage />} />

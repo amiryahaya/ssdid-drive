@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Files;
 
@@ -11,7 +13,7 @@ public static class RenameFile
     public static void Map(RouteGroupBuilder group) =>
         group.MapPatch("/files/{id:guid}", Handle);
 
-    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, Request req, AppDbContext db, CurrentUserAccessor accessor, FileActivityService activity, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 512)
             return AppError.BadRequest("File name is required (max 512 chars)").ToProblemResult();
@@ -28,9 +30,14 @@ public static class RenameFile
         if (file.UploadedById != user.Id)
             return AppError.Forbidden("Only the file uploader can rename it").ToProblemResult();
 
+        var oldName = file.Name;
         file.Name = req.Name.Trim();
         file.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FileRenamed,
+            "file", file.Id, file.Name, file.UploadedById,
+            new { old_name = oldName, new_name = file.Name }, ct);
 
         return Results.Ok(new
         {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  Activity,
   Files,
   Share2,
   FolderInput,
@@ -28,6 +29,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'My Files', href: '/files', icon: Files },
+  { name: 'Activity', href: '/activity', icon: Activity },
   { name: 'Favorites', href: '/favorites', icon: Star },
   { name: 'Shared with Me', href: '/shared-with-me', icon: FolderInput },
   { name: 'My Shares', href: '/my-shares', icon: Share2 },

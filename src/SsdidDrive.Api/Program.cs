@@ -14,6 +14,7 @@ using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Tenants;
 using SsdidDrive.Api.Features.Notifications;
 using SsdidDrive.Api.Features.Credentials;
+using SsdidDrive.Api.Features.Activity;
 using SsdidDrive.Api.Features.Admin;
 using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
@@ -155,6 +156,8 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 builder.Services.AddScoped<SsdidAuthService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddSingleton<FileActivityService>();
+builder.Services.AddHostedService<FileActivityCleanupService>();
 
 // ── Email (Resend) ──
 var resendApiKey = builder.Configuration["Email:ApiKey"];
@@ -183,6 +186,37 @@ builder.Services.AddRateLimiter(options =>
         limiter.PermitLimit = isTesting ? 10_000 : 20;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
+    });
+
+    // GET /api/recovery/share — partitioned by DID (query string), 5 req/DID/hour
+    options.AddPolicy("recovery-share", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var did = httpContext.Request.Query["did"].ToString();
+        var key = string.IsNullOrEmpty(did) ? "anonymous" : did;
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
+    // POST /api/recovery/complete — partitioned by IP, 10 req/IP/hour
+    options.AddPolicy("recovery-complete", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
     });
 });
 
@@ -274,6 +308,7 @@ app.MapNotificationFeature();
 app.MapRecoveryFeature();
 app.MapCredentialFeature();
 app.MapAdminFeature();
+app.MapActivityFeature();
 
 // ── Serve admin SPA ──
 var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");

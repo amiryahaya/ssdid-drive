@@ -1,127 +1,200 @@
 //! Recovery commands
 //!
-//! Handles key recovery using Shamir secret sharing with trustees.
+//! Handles key recovery using Shamir secret sharing with server-held share.
 
 use crate::error::{AppError, AppResult};
-use crate::models::{
-    InitiateRecoveryRequest, RecoveryRequest, RecoverySetup, SetupRecoveryRequest,
-};
+use crate::services::{RecoveryFile, RecoveryService, RecoveryStatus};
 use crate::state::AppState;
 use tauri::State;
+use zeroize::Zeroize;
 
-/// Setup recovery with trustees
+/// Setup recovery by uploading the server's share and key proof.
 ///
-/// Splits the master key using Shamir's secret sharing scheme and distributes
-/// encrypted shares to the specified trustees.
+/// Splits the master key into 3 Shamir shares (threshold 2), stores shares
+/// 1 and 2 as recovery files for the user, and uploads share 3 to the server
+/// along with a key proof.
 #[tauri::command]
 pub async fn setup_recovery(
-    threshold: u32,
-    trustee_emails: Vec<String>,
+    server_share: String,
+    key_proof: String,
     state: State<'_, AppState>,
-) -> AppResult<RecoverySetup> {
+) -> AppResult<()> {
     state.require_auth()?;
     state.require_unlocked()?;
 
-    tracing::info!(
-        "Setting up recovery with {} trustees, threshold: {}",
-        trustee_emails.len(),
-        threshold
-    );
-
-    let request = SetupRecoveryRequest {
-        threshold,
-        trustee_emails,
-    };
-
-    // Get the actual master key from crypto service
-    let master_key = state.crypto_service().get_master_key()?;
+    tracing::info!("Setting up recovery: uploading server share");
 
     state
         .recovery_service()
-        .setup_recovery(request, &master_key)
+        .setup(&server_share, &key_proof)
         .await
 }
 
-/// Get the current recovery configuration status
+/// Get the current recovery setup status.
 #[tauri::command]
-pub async fn get_recovery_status(state: State<'_, AppState>) -> AppResult<RecoverySetup> {
+pub async fn get_recovery_status(state: State<'_, AppState>) -> AppResult<RecoveryStatus> {
     state.require_auth()?;
     state.require_unlocked()?;
 
     tracing::debug!("Getting recovery status");
 
-    state.recovery_service().get_recovery_status().await
+    state.recovery_service().get_status().await
 }
 
-/// Initiate account recovery
+/// Split the master key into Shamir shares.
 ///
-/// Starts the recovery process for a user who has lost their password.
-/// Trustees will be notified to approve the request.
+/// Returns three `(index, share_data_base64)` tuples. The caller is responsible
+/// for wrapping each share into a `RecoveryFile` and persisting/distributing them.
 #[tauri::command]
-pub async fn initiate_recovery(
-    email: String,
-    new_password: String,
+pub async fn split_master_key_command(
+    master_key_hex: String,
     state: State<'_, AppState>,
-) -> AppResult<RecoveryRequest> {
-    tracing::info!("Initiating recovery for: {}", email);
-
-    let request = InitiateRecoveryRequest {
-        email,
-        new_password,
-    };
-
-    state.recovery_service().initiate_recovery(request).await
-}
-
-/// Approve a recovery request (as a trustee)
-///
-/// Called by a trustee to submit their decrypted share for recovery.
-#[tauri::command]
-pub async fn approve_recovery_request(
-    recovery_id: String,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
+) -> AppResult<Vec<(u8, String)>> {
     state.require_auth()?;
     state.require_unlocked()?;
 
-    tracing::info!("Approving recovery request: {}", recovery_id);
+    let mut raw = hex::decode(&master_key_hex)
+        .map_err(|e| AppError::Crypto(format!("Invalid master key hex: {}", e)))?;
+    if raw.len() != 32 {
+        raw.zeroize();
+        return Err(AppError::Crypto(format!(
+            "Master key must be 32 bytes, got {}",
+            raw.len()
+        )));
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&raw);
+    raw.zeroize();
 
-    // In the SSDID model, KEM operations are handled by the wallet.
-    // Pass empty strings as placeholders; the recovery service will
-    // need to be updated to use wallet-based decapsulation.
-    state
-        .recovery_service()
-        .approve_recovery_request(&recovery_id, "", "")
-        .await
+    let ((i1, mut d1), (i2, mut d2), (i3, mut d3)) = RecoveryService::split_master_key(&key)?;
+    key.zeroize();
+
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    let result = vec![
+        (i1, BASE64.encode(&d1)),
+        (i2, BASE64.encode(&d2)),
+        (i3, BASE64.encode(&d3)),
+    ];
+    d1.zeroize();
+    d2.zeroize();
+    d3.zeroize();
+    Ok(result)
 }
 
-/// Complete the recovery process (after sufficient approvals)
+/// Reconstruct the master key from two Shamir shares.
 ///
-/// Reconstructs the master key from submitted shares and re-encrypts
-/// with the new password.
+/// Returns the reconstructed key as a hex string.
+#[tauri::command]
+pub async fn reconstruct_master_key_command(
+    index1: u8,
+    data1_b64: String,
+    index2: u8,
+    data2_b64: String,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+    let _ = &state; // state not required for crypto-only operation
+
+    let mut d1 = BASE64
+        .decode(&data1_b64)
+        .map_err(|e| AppError::Crypto(format!("Invalid share 1 base64: {}", e)))?;
+    let mut d2 = BASE64
+        .decode(&data2_b64)
+        .map_err(|e| AppError::Crypto(format!("Invalid share 2 base64: {}", e)))?;
+
+    let mut key = RecoveryService::reconstruct_master_key(index1, &d1, index2, &d2)?;
+    d1.zeroize();
+    d2.zeroize();
+    let result = hex::encode(key);
+    key.zeroize();
+    Ok(result)
+}
+
+/// Create a recovery file struct for a given share.
+#[tauri::command]
+pub async fn create_recovery_file_command(
+    share_index: u8,
+    share_data_b64: String,
+    user_did: String,
+    state: State<'_, AppState>,
+) -> AppResult<RecoveryFile> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+    let _ = &state; // state not required
+
+    let mut raw = BASE64
+        .decode(&share_data_b64)
+        .map_err(|e| AppError::Crypto(format!("Invalid share base64: {}", e)))?;
+
+    let result = RecoveryService::create_recovery_file(share_index, &raw, &user_did);
+    raw.zeroize();
+    Ok(result)
+}
+
+/// Parse and validate a recovery file from its JSON string contents.
+#[tauri::command]
+pub async fn parse_recovery_file_command(
+    contents: String,
+    state: State<'_, AppState>,
+) -> AppResult<RecoveryFile> {
+    let _ = &state; // state not required
+
+    RecoveryService::parse_recovery_file(&contents)
+}
+
+/// Retrieve the server-held share for recovery (unauthenticated — DID-based).
+#[tauri::command]
+pub async fn get_server_share(
+    did: String,
+    state: State<'_, AppState>,
+) -> AppResult<crate::services::ServerShareResponse> {
+    tracing::info!("Getting server share for DID recovery");
+
+    state.recovery_service().get_server_share(&did).await
+}
+
+/// Complete the recovery process with a new DID and key material.
 #[tauri::command]
 pub async fn complete_recovery(
-    recovery_id: String,
-    new_password: String,
+    old_did: String,
+    new_did: String,
+    key_proof: String,
+    kem_public_key: String,
     state: State<'_, AppState>,
-) -> AppResult<()> {
-    tracing::info!("Completing recovery: {}", recovery_id);
+) -> AppResult<crate::services::CompleteRecoveryResponse> {
+    tracing::info!("Completing recovery: old_did={}", old_did);
 
     state
         .recovery_service()
-        .complete_recovery(&recovery_id, &new_password)
+        .complete_recovery(&old_did, &new_did, &key_proof, &kem_public_key)
         .await
 }
 
-/// Get pending recovery requests where the current user is a trustee
+/// Delete the recovery setup from the server.
 #[tauri::command]
-pub async fn get_pending_recovery_requests(
-    state: State<'_, AppState>,
-) -> AppResult<Vec<RecoveryRequest>> {
+pub async fn delete_recovery_setup(state: State<'_, AppState>) -> AppResult<()> {
     state.require_auth()?;
     state.require_unlocked()?;
 
-    tracing::debug!("Getting pending recovery requests");
+    tracing::info!("Deleting recovery setup");
 
-    state.recovery_service().get_pending_requests().await
+    state.recovery_service().delete_setup().await
+}
+
+/// Compute a key proof (SHA-256 hex of a KEM public key).
+#[tauri::command]
+pub async fn compute_key_proof_command(
+    kem_public_key_b64: String,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+
+    let _ = &state; // state not required
+
+    let raw = BASE64
+        .decode(&kem_public_key_b64)
+        .map_err(|e| AppError::Crypto(format!("Invalid KEM public key base64: {}", e)))?;
+
+    Ok(RecoveryService::compute_key_proof(&raw))
 }
