@@ -36,6 +36,7 @@ sealed class Screen(val route: String) {
     }
 
     // Recovery screens
+    data object Recovery : Screen("recovery")
     data object RecoverySetup : Screen("recovery/setup")
     data object RecoveryTrustees : Screen("recovery/trustees/{totalShares}") {
         fun createRoute(totalShares: Int) = "recovery/trustees/$totalShares"

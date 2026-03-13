@@ -19,6 +19,7 @@ import my.ssdid.drive.util.WalletCallbackHolder
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit = {},
+    onNavigateToRecovery: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,6 +123,10 @@ fun LoginScreen(
 
         TextButton(onClick = onNavigateToRegister) {
             Text("Don't have an account? Register")
+        }
+
+        TextButton(onClick = onNavigateToRecovery) {
+            Text("Lost your device? Recover your account")
         }
     }
 }

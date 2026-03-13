@@ -21,6 +21,7 @@ import my.ssdid.drive.presentation.auth.RegisterScreen
 import my.ssdid.drive.presentation.files.FileBrowserScreen
 import my.ssdid.drive.presentation.recovery.InitiateRecoveryScreen
 import my.ssdid.drive.presentation.recovery.PendingRequestsScreen
+import my.ssdid.drive.presentation.recovery.RecoveryScreen
 import my.ssdid.drive.presentation.recovery.RecoverySetupScreen
 import my.ssdid.drive.presentation.recovery.TrusteeSelectionScreen
 import my.ssdid.drive.presentation.files.upload.ShareIntentScreen
@@ -100,6 +101,9 @@ fun NavGraph(
                 },
                 onNavigateToRegister = {
                     navController.navigate(Screen.Register.route)
+                },
+                onNavigateToRecovery = {
+                    navController.navigate(Screen.Recovery.route)
                 }
             )
         }
@@ -324,6 +328,17 @@ fun NavGraph(
         }
 
         // Recovery screens
+        composable(Screen.Recovery.route) {
+            RecoveryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onRecoveryComplete = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Recovery.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.RecoverySetup.route) {
             RecoverySetupScreen(
                 onNavigateBack = { navController.popBackStack() }
