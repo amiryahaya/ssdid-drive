@@ -30,7 +30,7 @@ public class FileActivityService(AppDbContext db, ILogger<FileActivityService> l
                 ResourceName = resourceName,
                 ResourceOwnerId = resourceOwnerId,
                 Details = details is not null
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(details))
+                    ? JsonSerializer.Serialize(details)
                     : null,
                 CreatedAt = DateTimeOffset.UtcNow
             };

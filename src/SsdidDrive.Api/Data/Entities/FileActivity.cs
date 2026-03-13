@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace SsdidDrive.Api.Data.Entities;
 
 public static class FileActivityEventType
@@ -28,7 +26,7 @@ public class FileActivity
     public Guid ResourceId { get; set; }
     public string ResourceName { get; set; } = string.Empty;
     public Guid ResourceOwnerId { get; set; }
-    public JsonDocument? Details { get; set; }
+    public string? Details { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     public User Actor { get; set; } = null!;

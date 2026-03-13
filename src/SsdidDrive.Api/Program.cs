@@ -14,6 +14,7 @@ using SsdidDrive.Api.Features.Shares;
 using SsdidDrive.Api.Features.Tenants;
 using SsdidDrive.Api.Features.Notifications;
 using SsdidDrive.Api.Features.Credentials;
+using SsdidDrive.Api.Features.Activity;
 using SsdidDrive.Api.Features.Admin;
 using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
@@ -276,6 +277,7 @@ app.MapNotificationFeature();
 app.MapRecoveryFeature();
 app.MapCredentialFeature();
 app.MapAdminFeature();
+app.MapActivityFeature();
 
 // ── Serve admin SPA ──
 var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");
