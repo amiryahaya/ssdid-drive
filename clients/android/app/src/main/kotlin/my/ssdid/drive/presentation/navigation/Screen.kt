@@ -43,6 +43,9 @@ sealed class Screen(val route: String) {
     data object TrusteeDashboard : Screen("recovery/trustee-dashboard")
     data object InitiateRecovery : Screen("recovery/initiate")
 
+    // Activity
+    data object Activity : Screen("activity")
+
     // Settings screens
     data object Settings : Screen("settings")
     data object Profile : Screen("settings/profile")

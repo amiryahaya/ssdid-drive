@@ -1,6 +1,7 @@
 package my.ssdid.drive.data.remote
 
 import com.google.gson.annotations.SerializedName
+import my.ssdid.drive.data.remote.dto.ActivityResponseDto
 import my.ssdid.drive.data.remote.dto.AcceptInviteRequest
 import my.ssdid.drive.data.remote.dto.AcceptInviteResponse
 import my.ssdid.drive.data.remote.dto.ApproveRecoveryRequest
@@ -442,6 +443,29 @@ interface ApiService {
      */
     @DELETE("devices/{id}")
     suspend fun revokeDeviceEnrollment(@Path("id") enrollmentId: String): Response<Unit>
+
+    // ==================== Activity Logs ====================
+
+    /**
+     * Get activity log entries with optional filtering and pagination.
+     */
+    @GET("activity")
+    suspend fun getActivity(
+        @Query("page") page: Int? = null,
+        @Query("page_size") pageSize: Int? = null,
+        @Query("event_type") eventType: String? = null,
+        @Query("resource_type") resourceType: String? = null
+    ): Response<ActivityResponseDto>
+
+    /**
+     * Get activity log entries for a specific resource.
+     */
+    @GET("activity/resource/{id}")
+    suspend fun getResourceActivity(
+        @Path("id") resourceId: String,
+        @Query("page") page: Int? = null,
+        @Query("page_size") pageSize: Int? = null
+    ): Response<ActivityResponseDto>
 
     // ==================== Push Notifications (OneSignal) ====================
 

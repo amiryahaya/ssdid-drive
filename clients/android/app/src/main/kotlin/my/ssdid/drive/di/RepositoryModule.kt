@@ -1,5 +1,6 @@
 package my.ssdid.drive.di
 
+import my.ssdid.drive.data.repository.ActivityRepositoryImpl
 import my.ssdid.drive.data.repository.AuthRepositoryImpl
 import my.ssdid.drive.data.repository.DeviceRepositoryImpl
 import my.ssdid.drive.data.repository.FileRepositoryImpl
@@ -9,6 +10,7 @@ import my.ssdid.drive.data.repository.PiiChatRepositoryImpl
 import my.ssdid.drive.data.repository.RecoveryRepositoryImpl
 import my.ssdid.drive.data.repository.ShareRepositoryImpl
 import my.ssdid.drive.data.repository.TenantRepositoryImpl
+import my.ssdid.drive.domain.repository.ActivityRepository
 import my.ssdid.drive.domain.repository.AuthRepository
 import my.ssdid.drive.domain.repository.DeviceRepository
 import my.ssdid.drive.domain.repository.FileRepository
@@ -27,6 +29,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindActivityRepository(
+        activityRepositoryImpl: ActivityRepositoryImpl
+    ): ActivityRepository
 
     @Binds
     @Singleton

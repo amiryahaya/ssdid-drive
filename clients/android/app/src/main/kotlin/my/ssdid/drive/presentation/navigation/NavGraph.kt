@@ -35,6 +35,7 @@ import my.ssdid.drive.presentation.sharing.CreatedSharesScreen
 import my.ssdid.drive.presentation.sharing.ShareFileScreen
 import my.ssdid.drive.presentation.sharing.ShareFolderScreen
 import my.ssdid.drive.presentation.files.preview.FilePreviewScreen
+import my.ssdid.drive.presentation.activity.ActivityScreen
 import my.ssdid.drive.presentation.onboarding.OnboardingScreen
 import my.ssdid.drive.presentation.piichat.ConversationsScreen
 
@@ -226,6 +227,13 @@ fun NavGraph(
 
         composable(Screen.CreatedShares.route) {
             CreatedSharesScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Activity
+        composable(Screen.Activity.route) {
+            ActivityScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
