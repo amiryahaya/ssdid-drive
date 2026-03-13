@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecoveryApproval> RecoveryApprovals => Set<RecoveryApproval>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
+    public DbSet<FileActivity> FileActivities => Set<FileActivity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -378,6 +379,38 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(a => a.CreatedAt).HasDefaultValueSql("now()");
 
             e.HasIndex(a => a.CreatedAt).IsDescending();
+
+            e.HasOne(a => a.Actor)
+                .WithMany()
+                .HasForeignKey(a => a.ActorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FileActivity>(e =>
+        {
+            e.ToTable("file_activities");
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(a => a.EventType).HasMaxLength(64).IsRequired();
+            e.Property(a => a.ResourceType).HasMaxLength(16).IsRequired();
+            e.Property(a => a.ResourceName).HasMaxLength(512).IsRequired();
+            e.Property(a => a.Details).HasColumnType("jsonb");
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(a => new { a.ResourceId, a.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("ix_file_activities_resource");
+            e.HasIndex(a => new { a.ActorId, a.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("ix_file_activities_actor");
+            e.HasIndex(a => new { a.ResourceOwnerId, a.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("ix_file_activities_owner");
+            e.HasIndex(a => new { a.TenantId, a.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("ix_file_activities_tenant");
+            e.HasIndex(a => a.CreatedAt)
+                .HasDatabaseName("ix_file_activities_cleanup");
 
             e.HasOne(a => a.Actor)
                 .WithMany()
