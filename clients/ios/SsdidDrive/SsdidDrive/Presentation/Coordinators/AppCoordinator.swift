@@ -27,10 +27,14 @@ final class AppCoordinator: BaseCoordinator {
     /// Active async task for cancellation on dealloc
     private var activeTask: Task<Void, Never>?
 
+    /// Separate task for deep link processing to avoid racing with startup
+    private var deepLinkTask: Task<Void, Never>?
+
     // MARK: - Deinit
 
     deinit {
         activeTask?.cancel()
+        deepLinkTask?.cancel()
     }
 
     // MARK: - Start
@@ -166,8 +170,8 @@ final class AppCoordinator: BaseCoordinator {
     /// - Parameter action: The action to handle
     func handleDeepLinkAction(_ action: DeepLinkAction) {
         // Check if user is authenticated
-        activeTask?.cancel()
-        activeTask = Task {
+        deepLinkTask?.cancel()
+        deepLinkTask = Task {
             guard !Task.isCancelled else { return }
 
             let isAuthenticated = await container.authRepository.isAuthenticated()
@@ -182,9 +186,19 @@ final class AppCoordinator: BaseCoordinator {
                     // Save for later processing after auth (except import which expires)
                     savePendingDeepLinkIfAppropriate(action)
 
-                    // If it's an invitation, still show auth flow with invitation
-                    if case .acceptInvitation(let token) = action {
+                    switch action {
+                    case .acceptInvitation(let token):
                         handleInvitationDeepLink(token: token)
+                    case .walletInviteCallback(let sessionToken):
+                        if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                            authCoordinator.inviteAcceptViewModel?.handleWalletCallback(sessionToken: sessionToken)
+                        }
+                    case .walletInviteError(let message):
+                        if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                            authCoordinator.inviteAcceptViewModel?.handleWalletError(message: message)
+                        }
+                    default:
+                        break
                     }
                 }
             }

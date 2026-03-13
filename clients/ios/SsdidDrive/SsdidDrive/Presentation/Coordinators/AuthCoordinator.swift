@@ -71,8 +71,6 @@ final class AuthCoordinator: BaseCoordinator {
         navigationController.present(hostingController, animated: true)
     }
 
-    /// Pending invite code to process after authentication
-    private(set) var pendingInviteCode: String?
 }
 
 // MARK: - LoginViewModelCoordinatorDelegate
@@ -109,7 +107,6 @@ extension AuthCoordinator: JoinTenantViewModelDelegate {
     }
 
     func joinTenantDidRequestLogin(inviteCode: String) {
-        pendingInviteCode = inviteCode
         navigationController.dismiss(animated: true) { [weak self] in
             // The user needs to authenticate first, then the invite will be auto-accepted.
             // Store the pending code for the app coordinator to process after auth.

@@ -280,7 +280,7 @@ extension AuthRepositoryImpl {
         let passwordKey = try TieredKdf.deriveKey(password: password, saltWithProfile: salt)
 
         // Encrypt master key with password-derived key
-        let masterKey = generateMasterKey()
+        let masterKey = try generateMasterKey()
         let encryptedMasterKey = try encryptWithKey(data: masterKey, key: passwordKey)
 
         // Serialize and encrypt private keys with master key
@@ -366,6 +366,10 @@ extension AuthRepositoryImpl {
             throw AuthError.invalidURL
         }
 
+        guard await MainActor.run(body: { UIApplication.shared.canOpenURL(url) }) else {
+            throw AuthError.walletNotInstalled
+        }
+
         await MainActor.run {
             UIApplication.shared.open(url)
         }
@@ -374,9 +378,20 @@ extension AuthRepositoryImpl {
     func saveSessionFromWallet(sessionToken: String) async throws {
         keychainManager.accessToken = sessionToken
 
-        // Write to shared keychain for File Provider extension
+        // Sync to shared keychain for File Provider extension
         if let tokenData = sessionToken.data(using: .utf8) {
             try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
+        }
+
+        // Fetch user profile to populate userId
+        do {
+            let user = try await getCurrentUser()
+            keychainManager.userId = user.id
+            if let userIdData = user.id.data(using: .utf8) {
+                try? keychainManager.saveToSharedKeychain(userIdData, for: Constants.Keychain.userId)
+            }
+        } catch {
+            // Non-fatal: userId will be populated on next app launch
         }
 
         // Update shared defaults for menu bar helper
@@ -386,9 +401,15 @@ extension AuthRepositoryImpl {
 
     // MARK: - Private Helpers for Invitation
 
-    private func generateMasterKey() -> Data {
+    private func generateMasterKey() throws -> Data {
         var masterKey = Data(count: Constants.Crypto.masterKeySize)
-        _ = masterKey.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, Constants.Crypto.masterKeySize, $0.baseAddress!) }
+        let status = masterKey.withUnsafeMutableBytes { ptr -> OSStatus in
+            guard let base = ptr.baseAddress else { return errSecParam }
+            return SecRandomCopyBytes(kSecRandomDefault, Constants.Crypto.masterKeySize, base)
+        }
+        guard status == errSecSuccess else {
+            throw AuthError.registrationFailed
+        }
         return masterKey
     }
 
@@ -432,6 +453,7 @@ enum AuthError: Error, LocalizedError {
     case invitationExpired
     case invitationInvalid
     case invalidURL
+    case walletNotInstalled
 
     var errorDescription: String? {
         switch self {
@@ -451,6 +473,8 @@ enum AuthError: Error, LocalizedError {
             return "Invalid invitation"
         case .invalidURL:
             return "Invalid URL"
+        case .walletNotInstalled:
+            return "SSDID Wallet is not installed"
         }
     }
 }

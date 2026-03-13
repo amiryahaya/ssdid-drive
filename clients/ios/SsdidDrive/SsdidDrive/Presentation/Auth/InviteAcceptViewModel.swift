@@ -27,6 +27,10 @@ final class InviteAcceptViewModel: BaseViewModel {
     private let token: String
     weak var coordinatorDelegate: InviteAcceptViewModelCoordinatorDelegate?
 
+    private var loadTask: Task<Void, Never>?
+    private var acceptTask: Task<Void, Never>?
+    private var callbackTask: Task<Void, Never>?
+
     // MARK: - Computed Properties
 
     var email: String { invitation?.email ?? "" }
@@ -44,12 +48,15 @@ final class InviteAcceptViewModel: BaseViewModel {
     // MARK: - Actions
 
     func loadInvitationInfo() {
+        loadTask?.cancel()
         isLoadingInvitation = true
         invitationError = nil
 
-        Task {
+        loadTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 let info = try await authRepository.getInvitationInfo(token: token)
+                guard !Task.isCancelled else { return }
                 self.invitation = info
                 self.isLoadingInvitation = false
 
@@ -57,6 +64,7 @@ final class InviteAcceptViewModel: BaseViewModel {
                     self.invitationError = info.errorReason?.displayMessage ?? "This invitation is no longer valid"
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 self.isLoadingInvitation = false
                 self.invitationError = error.localizedDescription
             }
@@ -64,16 +72,20 @@ final class InviteAcceptViewModel: BaseViewModel {
     }
 
     func acceptWithWallet() {
-        guard !isWaitingForWallet else { return }
+        guard !isWaitingForWallet, !isLoading else { return }
+        isLoading = true
         registrationError = nil
 
-        Task {
+        acceptTask?.cancel()
+        acceptTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                isLoading = true
                 try await authRepository.launchWalletInvite(token: token)
+                guard !Task.isCancelled else { return }
                 isLoading = false
                 isWaitingForWallet = true
             } catch {
+                guard !Task.isCancelled else { return }
                 isLoading = false
                 registrationError = error.localizedDescription
             }
@@ -81,12 +93,16 @@ final class InviteAcceptViewModel: BaseViewModel {
     }
 
     func handleWalletCallback(sessionToken: String) {
-        Task {
+        callbackTask?.cancel()
+        callbackTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try await authRepository.saveSessionFromWallet(sessionToken: sessionToken)
+                guard !Task.isCancelled else { return }
                 isWaitingForWallet = false
                 coordinatorDelegate?.inviteAcceptViewModelDidRegister()
             } catch {
+                guard !Task.isCancelled else { return }
                 isWaitingForWallet = false
                 registrationError = error.localizedDescription
             }

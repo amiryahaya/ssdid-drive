@@ -224,16 +224,19 @@ final class InviteAcceptViewController: BaseViewController {
         return indicator
     }()
 
-    private lazy var waitingStack: UIStackView = {
+    private lazy var waitingActivityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .medium)
-        indicator.startAnimating()
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
 
+    private lazy var waitingStack: UIStackView = {
         let label = UILabel()
         label.text = "Waiting for SSDID Wallet..."
         label.font = .systemFont(ofSize: 13)
         label.textColor = .secondaryLabel
 
-        let stack = UIStackView(arrangedSubviews: [indicator, label])
+        let stack = UIStackView(arrangedSubviews: [waitingActivityIndicator, label])
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
         stack.spacing = 8
@@ -480,6 +483,11 @@ final class InviteAcceptViewController: BaseViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isWaiting in
                 self?.waitingStack.isHidden = !isWaiting
+                if isWaiting {
+                    self?.waitingActivityIndicator.startAnimating()
+                } else {
+                    self?.waitingActivityIndicator.stopAnimating()
+                }
             }
             .store(in: &cancellables)
 

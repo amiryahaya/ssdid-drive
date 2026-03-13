@@ -24,10 +24,10 @@ struct TokenInvitation: Codable, Equatable {
         case createdAt = "created_at"
     }
 
-    var valid: Bool { status == "pending" }
+    var valid: Bool { status.lowercased() == "pending" }
 
     var errorReason: TokenInvitationError? {
-        switch status {
+        switch status.lowercased() {
         case "pending": return nil
         case "expired": return .expired
         case "revoked": return .revoked

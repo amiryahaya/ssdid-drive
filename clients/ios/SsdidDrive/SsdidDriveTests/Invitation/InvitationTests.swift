@@ -429,6 +429,27 @@ final class InvitationTests: XCTestCase {
         XCTAssertNotEqual(TokenInvitationError.expired, TokenInvitationError.revoked)
     }
 
+    // MARK: - Unknown Status Tests
+
+    func testTokenInvitation_unknownStatus_mapsToNotFound() throws {
+        let json = """
+        {
+            "email": "test@example.com",
+            "role": "member",
+            "tenant_name": "Test Tenant",
+            "inviter_name": null,
+            "message": null,
+            "status": "cancelled",
+            "short_code": "UNKNOWN1",
+            "expires_at": "2025-01-01T00:00:00Z",
+            "created_at": "2024-01-01T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let invitation = try decoder.decode(TokenInvitation.self, from: json)
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .notFound)
+    }
+
     // MARK: - Edge Cases
 
     func testTokenInvitation_decodesWithMissingOptionalFields() throws {

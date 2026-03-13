@@ -97,9 +97,8 @@ final class DeepLinkParser {
             }
 
         case "invite":
-            // Check for wallet invite callback first
-            if pathComponents.first == "callback" ||
-               (url.scheme == "ssdid-drive" && pathComponents.first == "callback") {
+            // Check for wallet invite callback first (custom scheme only)
+            if url.scheme == "ssdid-drive", pathComponents.first == "callback" {
                 if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
                     let status = components.queryItems?.first(where: { $0.name == "status" })?.value ?? ""
                     let sessionToken = components.queryItems?.first(where: { $0.name == "session_token" })?.value
@@ -177,9 +176,10 @@ final class DeepLinkParser {
                 }
 
                 // SECURITY: Validate path is within the shared container
-                // Normalize the path to prevent path traversal attacks
-                let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-                guard normalizedPath.hasPrefix(sharedDir.path) else {
+                // Resolve symlinks to prevent path traversal attacks
+                let normalizedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+                let sharedDirPath = sharedDir.resolvingSymlinksInPath().path + "/"
+                guard normalizedPath.hasPrefix(sharedDirPath) else {
                     #if DEBUG
                     print("DeepLinkParser: Rejected path outside shared container: \(path)")
                     #endif

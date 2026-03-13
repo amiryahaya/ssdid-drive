@@ -176,6 +176,25 @@ final class MockAuthRepository: AuthRepository {
     // MARK: - Reset
 
     func reset() {
+        // Reset stub results
+        logoutResult = .success(())
+        refreshTokenResult = .success(())
+        getCurrentUserResult = .failure(MockError.notImplemented)
+        isAuthenticatedResult = false
+        isBiometricAvailableResult = false
+        isBiometricUnlockEnabledResult = false
+        disableBiometricUnlockResult = .success(())
+        authenticateWithBiometricResult = .success(false)
+        areKeysUnlockedResult = false
+        enrollDeviceResult = .failure(MockError.notImplemented)
+        getDevicesResult = .success([])
+        revokeDeviceResult = .success(())
+        getInvitationInfoResult = .failure(MockError.notImplemented)
+        acceptInvitationResult = .failure(MockError.notImplemented)
+        launchWalletInviteResult = .success(())
+        saveSessionFromWalletResult = .success(())
+
+        // Reset call counts
         logoutCallCount = 0
         refreshTokenCallCount = 0
         getCurrentUserCallCount = 0
@@ -194,6 +213,7 @@ final class MockAuthRepository: AuthRepository {
         launchWalletInviteCallCount = 0
         saveSessionFromWalletCallCount = 0
 
+        // Reset last call parameters
         lastEnrollDeviceName = nil
         lastRevokeDeviceId = nil
         lastGetInvitationInfoToken = nil
@@ -202,6 +222,10 @@ final class MockAuthRepository: AuthRepository {
         lastAcceptInvitationPassword = nil
         lastLaunchWalletInviteToken = nil
         lastSaveSessionFromWalletToken = nil
+
+        // Reset properties
+        stubbedCurrentUserId = nil
+        stubbedCurrentDeviceId = nil
     }
 }
 

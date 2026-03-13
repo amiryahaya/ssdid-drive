@@ -116,11 +116,6 @@ struct InvitationTestFixtures {
 
     struct FormInput {
         static let validDisplayName = "John Doe"
-        static let validPassword = "SecurePass123!"
-        static let validConfirmPassword = "SecurePass123!"
-
-        static let shortPassword = "short"
-        static let longPassword = String(repeating: "a", count: 100)
 
         static let emptyDisplayName = ""
         static let longDisplayName = String(repeating: "a", count: 150)
@@ -128,8 +123,6 @@ struct InvitationTestFixtures {
 
         static let unicodeDisplayName = "Jean-Pierre Dubuisson"
         static let emojiDisplayName = "John Doe"
-        static let specialCharsPassword = "P@ssw0rd!#$%^&*()"
-        static let unicodePassword = "secret123"
     }
 
     // MARK: - Tokens

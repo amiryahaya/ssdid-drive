@@ -51,7 +51,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
         viewModel = createViewModel()
 
         // Wait for async load
-        try await Task.sleep(nanoseconds: 100_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(mockAuthRepository.getInvitationInfoCallCount, 1)
@@ -78,7 +82,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitation != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(viewModel.invitation, expectedInvitation)
@@ -92,7 +100,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitation != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(viewModel.email, "newuser@example.com")
@@ -104,7 +116,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.invitation)
@@ -119,7 +135,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.invitationError)
@@ -132,7 +152,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.invitationError)
@@ -145,7 +169,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.invitationError)
@@ -158,7 +186,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
 
         // When
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [expectation], timeout: 2.0)
 
         // Then
         XCTAssertFalse(viewModel.isLoadingInvitation)
@@ -172,11 +204,19 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let walletExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.isWaitingForWallet },
+            object: nil
+        )
+        await fulfillment(of: [walletExpectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(mockAuthRepository.launchWalletInviteCallCount, 1)
@@ -187,11 +227,19 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let walletExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.isWaitingForWallet },
+            object: nil
+        )
+        await fulfillment(of: [walletExpectation], timeout: 2.0)
 
         // Then
         XCTAssertTrue(viewModel.isWaitingForWallet)
@@ -202,11 +250,19 @@ final class InviteAcceptViewModelTests: XCTestCase {
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         mockAuthRepository.launchWalletInviteResult = .failure(MockError.testError("Wallet not installed"))
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let errorExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.registrationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [errorExpectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.registrationError)
@@ -218,15 +274,28 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When - First call
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let walletExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.isWaitingForWallet },
+            object: nil
+        )
+        await fulfillment(of: [walletExpectation], timeout: 2.0)
 
         // Then - Already waiting, second call should not launch again
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // Give a brief moment for any potential second call to process
+        let stableExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.mockAuthRepository.launchWalletInviteCallCount == 1 },
+            object: nil
+        )
+        await fulfillment(of: [stableExpectation], timeout: 2.0)
         XCTAssertEqual(mockAuthRepository.launchWalletInviteCallCount, 1)
     }
 
@@ -236,13 +305,25 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let walletExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.isWaitingForWallet },
+            object: nil
+        )
+        await fulfillment(of: [walletExpectation], timeout: 2.0)
 
         // When
         viewModel.handleWalletCallback(sessionToken: "test-session-token")
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let doneExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.mockDelegate.didRegisterCalled },
+            object: nil
+        )
+        await fulfillment(of: [doneExpectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(mockAuthRepository.saveSessionFromWalletCallCount, 1)
@@ -256,11 +337,19 @@ final class InviteAcceptViewModelTests: XCTestCase {
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         mockAuthRepository.saveSessionFromWalletResult = .failure(MockError.testError("Save failed"))
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When
         viewModel.handleWalletCallback(sessionToken: "test-session-token")
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let errorExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.registrationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [errorExpectation], timeout: 2.0)
 
         // Then
         XCTAssertNotNil(viewModel.registrationError)
@@ -275,9 +364,17 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
         viewModel.acceptWithWallet()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let walletExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.isWaitingForWallet },
+            object: nil
+        )
+        await fulfillment(of: [walletExpectation], timeout: 2.0)
 
         // When
         viewModel.handleWalletError(message: "User rejected invitation")
@@ -293,7 +390,11 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When
         viewModel.requestLogin()
@@ -319,16 +420,104 @@ final class InviteAcceptViewModelTests: XCTestCase {
         // Given
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
         viewModel = createViewModel()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
 
         // When - Call load again (retry scenario)
         mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitationNoMessage)
         viewModel.loadInvitationInfo()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let reloadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.invitation?.message == nil && !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [reloadExpectation], timeout: 2.0)
 
         // Then
         XCTAssertEqual(mockAuthRepository.getInvitationInfoCallCount, 2)
         XCTAssertNil(viewModel.invitation?.message)
+    }
+
+    // MARK: - isLoading Transition Tests
+
+    func testAcceptWithWallet_success_isLoadingTransitions() async throws {
+        // Setup
+        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
+        viewModel = createViewModel()
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
+
+        // Act
+        viewModel.acceptWithWallet()
+
+        // Assert isLoading transitions back to false after completion
+        let doneExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoading },
+            object: nil
+        )
+        await fulfillment(of: [doneExpectation], timeout: 2.0)
+        XCTAssertFalse(viewModel.isLoading)
+    }
+
+    // MARK: - Error Clearing Tests
+
+    func testAcceptWithWallet_clearsErrorOnRetry() async throws {
+        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
+        mockAuthRepository.launchWalletInviteResult = .failure(NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "First failure"]))
+        viewModel = createViewModel()
+
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
+
+        // First attempt - should fail
+        viewModel.acceptWithWallet()
+        let errorExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.viewModel.registrationError != nil },
+            object: nil
+        )
+        await fulfillment(of: [errorExpectation], timeout: 2.0)
+        XCTAssertNotNil(viewModel.registrationError)
+
+        // Fix stub and retry
+        mockAuthRepository.launchWalletInviteResult = .success(())
+        viewModel.acceptWithWallet()
+
+        // Error should be cleared immediately
+        XCTAssertNil(viewModel.registrationError)
+    }
+
+    // MARK: - Cold Callback Tests
+
+    func testHandleWalletCallback_coldCallback_savesSession() async throws {
+        mockAuthRepository.getInvitationInfoResult = .success(InvitationTestFixtures.validInvitation)
+        viewModel = createViewModel()
+
+        let loadExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !self.viewModel.isLoadingInvitation },
+            object: nil
+        )
+        await fulfillment(of: [loadExpectation], timeout: 2.0)
+
+        // Call handleWalletCallback directly without acceptWithWallet
+        viewModel.handleWalletCallback(sessionToken: "cold-session-token")
+
+        let doneExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.mockDelegate.didRegisterCalled },
+            object: nil
+        )
+        await fulfillment(of: [doneExpectation], timeout: 2.0)
+
+        XCTAssertEqual(mockAuthRepository.saveSessionFromWalletCallCount, 1)
+        XCTAssertEqual(mockAuthRepository.lastSaveSessionFromWalletToken, "cold-session-token")
+        XCTAssertTrue(mockDelegate.didRegisterCalled)
     }
 }
 

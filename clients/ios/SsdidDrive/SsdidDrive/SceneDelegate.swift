@@ -87,24 +87,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         // Handle deep links from launch (custom scheme)
+        // Defer deep link processing to allow startup to complete
         if let urlContext = connectionOptions.urlContexts.first {
-            handleDeepLink(urlContext.url)
+            DispatchQueue.main.async { [weak self] in
+                self?.handleDeepLink(urlContext.url)
+            }
         }
 
         // D6: Iterate all user activities, not just the first one
-        for userActivity in connectionOptions.userActivities {
-            // Handle Spotlight search result from launch (app was killed)
-            if userActivity.activityType == CSSearchableItemActionType,
-               let uniqueIdentifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-               uniqueIdentifier.hasPrefix("file_") {
-                let fileId = String(uniqueIdentifier.dropFirst(5))
-                appCoordinator?.handleDeepLinkAction(.openFile(fileId: fileId))
-            }
+        // Defer processing to allow startup to complete
+        let launchActivities = Array(connectionOptions.userActivities)
+        if !launchActivities.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                for userActivity in launchActivities {
+                    // Handle Spotlight search result from launch (app was killed)
+                    if userActivity.activityType == CSSearchableItemActionType,
+                       let uniqueIdentifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                       uniqueIdentifier.hasPrefix("file_") {
+                        let fileId = String(uniqueIdentifier.dropFirst(5))
+                        self?.appCoordinator?.handleDeepLinkAction(.openFile(fileId: fileId))
+                    }
 
-            // Handle Universal Links from launch
-            if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
-               let url = userActivity.webpageURL {
-                handleDeepLink(url)
+                    // Handle Universal Links from launch
+                    if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+                       let url = userActivity.webpageURL {
+                        self?.handleDeepLink(url)
+                    }
+                }
             }
         }
     }
