@@ -30,7 +30,7 @@ fun localProp(key: String, default: String = ""): String =
 
 android {
     namespace = "my.ssdid.drive"
-    compileSdk = 34
+    compileSdk = 35
 
     // ==================== Signing Configurations ====================
     signingConfigs {
@@ -47,7 +47,7 @@ android {
     defaultConfig {
         applicationId = "my.ssdid.drive"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -77,7 +77,7 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "SSDID Drive Dev")
+            resValue("string", "app_name", "SSDID Drive")
 
             // Development server
             buildConfigField("String", "API_BASE_URL", "\"https://drive.ssdid.my/api/\"")
@@ -201,7 +201,7 @@ android {
     }
 
     // 64-bit only for PQC libraries
-    ndkVersion = "25.2.9519653"
+    ndkVersion = "27.0.12077973"
 
     splits {
         abi {
@@ -318,9 +318,9 @@ dependencies {
     implementation("io.github.grizzi91:bouquet:1.1.2")
 
     // Sentry - Crash Reporting & Performance Monitoring
-    implementation("io.sentry:sentry-android:7.3.0")
-    implementation("io.sentry:sentry-android-okhttp:7.3.0")
-    implementation("io.sentry:sentry-android-timber:7.3.0")
+    implementation("io.sentry:sentry-android:7.19.1")
+    implementation("io.sentry:sentry-android-okhttp:7.19.1")
+    implementation("io.sentry:sentry-android-timber:7.19.1")
 
     // OneSignal - Push Notifications (cross-platform)
     implementation("com.onesignal:OneSignal:5.1.6")
