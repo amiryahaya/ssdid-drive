@@ -326,10 +326,7 @@ fun NavGraph(
         // Recovery screens
         composable(Screen.RecoverySetup.route) {
             RecoverySetupScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToTrusteeSelection = { totalShares ->
-                    navController.navigate(Screen.RecoveryTrustees.createRoute(totalShares))
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

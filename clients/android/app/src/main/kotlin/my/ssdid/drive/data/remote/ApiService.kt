@@ -4,11 +4,11 @@ import com.google.gson.annotations.SerializedName
 import my.ssdid.drive.data.remote.dto.ActivityResponseDto
 import my.ssdid.drive.data.remote.dto.AcceptInviteRequest
 import my.ssdid.drive.data.remote.dto.AcceptInviteResponse
-import my.ssdid.drive.data.remote.dto.ApproveRecoveryRequest
 import my.ssdid.drive.data.remote.dto.CompleteRecoveryRequest
+import my.ssdid.drive.data.remote.dto.CompleteRecoveryResponse
+import my.ssdid.drive.data.remote.dto.RecoveryStatusResponse
+import my.ssdid.drive.data.remote.dto.ServerShareResponse
 import my.ssdid.drive.data.remote.dto.CreateFolderRequest
-import my.ssdid.drive.data.remote.dto.CreateRecoveryRequestRequest
-import my.ssdid.drive.data.remote.dto.CreateRecoveryShareRequest
 import my.ssdid.drive.data.remote.dto.DeviceEnrollmentResponse
 import my.ssdid.drive.data.remote.dto.DeviceEnrollmentsResponse
 import my.ssdid.drive.data.remote.dto.DownloadUrlResponse
@@ -28,13 +28,6 @@ import my.ssdid.drive.data.remote.dto.MembersResponse
 import my.ssdid.drive.data.remote.dto.MoveFileRequest
 import my.ssdid.drive.data.remote.dto.MoveFolderRequest
 import my.ssdid.drive.data.remote.dto.PublicKeyResponse
-import my.ssdid.drive.data.remote.dto.RecoveryApprovalResponse
-import my.ssdid.drive.data.remote.dto.RecoveryConfigResponse
-import my.ssdid.drive.data.remote.dto.RecoveryRequestDetailResponse
-import my.ssdid.drive.data.remote.dto.RecoveryRequestResponse
-import my.ssdid.drive.data.remote.dto.RecoveryRequestsResponse
-import my.ssdid.drive.data.remote.dto.RecoveryShareResponse
-import my.ssdid.drive.data.remote.dto.RecoverySharesResponse
 import my.ssdid.drive.data.remote.dto.RegisterPushRequest
 import my.ssdid.drive.data.remote.dto.SetExpiryRequest
 import my.ssdid.drive.data.remote.dto.SetupRecoveryRequest
@@ -343,71 +336,20 @@ interface ApiService {
 
     // ==================== Recovery ====================
 
-    @GET("recovery/config")
-    suspend fun getRecoveryConfig(): Response<RecoveryConfigResponse>
-
     @POST("recovery/setup")
-    suspend fun setupRecovery(@Body request: SetupRecoveryRequest): Response<RecoveryConfigResponse>
+    suspend fun setupRecovery(@Body request: SetupRecoveryRequest): Response<Unit>
 
-    /**
-     * Disable recovery - deletes config and all shares.
-     */
-    @DELETE("recovery/config")
-    suspend fun disableRecovery(): Response<Unit>
+    @GET("recovery/status")
+    suspend fun getRecoveryStatus(): Response<RecoveryStatusResponse>
 
-    @POST("recovery/shares")
-    suspend fun createRecoveryShare(@Body request: CreateRecoveryShareRequest): Response<RecoveryShareResponse>
+    @GET("recovery/share")
+    suspend fun getRecoveryShare(@Query("did") did: String): Response<ServerShareResponse>
 
-    @GET("recovery/shares/trustee")
-    suspend fun getTrusteeShares(): Response<RecoverySharesResponse>
+    @POST("recovery/complete")
+    suspend fun completeRecovery(@Body request: CompleteRecoveryRequest): Response<CompleteRecoveryResponse>
 
-    @GET("recovery/shares/created")
-    suspend fun getCreatedRecoveryShares(): Response<RecoverySharesResponse>
-
-    @POST("recovery/shares/{id}/accept")
-    suspend fun acceptRecoveryShare(@Path("id") shareId: String): Response<RecoveryShareResponse>
-
-    /**
-     * Reject a recovery share (as trustee).
-     */
-    @POST("recovery/shares/{id}/reject")
-    suspend fun rejectRecoveryShare(@Path("id") shareId: String): Response<Unit>
-
-    /**
-     * Revoke a recovery share (as grantor/owner).
-     */
-    @DELETE("recovery/shares/{id}")
-    suspend fun revokeRecoveryShare(@Path("id") shareId: String): Response<Unit>
-
-    @POST("recovery/request")
-    suspend fun createRecoveryRequest(@Body request: CreateRecoveryRequestRequest): Response<RecoveryRequestResponse>
-
-    @GET("recovery/requests")
-    suspend fun getRecoveryRequests(): Response<RecoveryRequestsResponse>
-
-    @GET("recovery/requests/pending")
-    suspend fun getPendingRecoveryRequests(): Response<RecoveryRequestsResponse>
-
-    @GET("recovery/requests/{id}")
-    suspend fun getRecoveryRequest(@Path("id") requestId: String): Response<RecoveryRequestDetailResponse>
-
-    @POST("recovery/requests/{id}/approve")
-    suspend fun approveRecoveryRequest(
-        @Path("id") requestId: String,
-        @Body request: ApproveRecoveryRequest
-    ): Response<RecoveryApprovalResponse>
-
-    @POST("recovery/requests/{id}/complete")
-    suspend fun completeRecovery(
-        @Path("id") requestId: String,
-        @Body request: CompleteRecoveryRequest
-    ): Response<UserResponse>
-
-    /**
-     * Cancel a pending recovery request.
-     */
-    @DELETE("recovery/requests/{id}")
-    suspend fun cancelRecoveryRequest(@Path("id") requestId: String): Response<Unit>
+    @DELETE("recovery/setup")
+    suspend fun deleteRecoverySetup(): Response<Unit>
 
     // ==================== Device Enrollment ====================
 

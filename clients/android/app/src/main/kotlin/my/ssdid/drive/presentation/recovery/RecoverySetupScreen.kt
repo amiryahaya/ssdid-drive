@@ -11,22 +11,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import my.ssdid.drive.domain.model.RecoveryConfigStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecoverySetupScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToTrusteeSelection: (Int) -> Unit,
     viewModel: RecoverySetupViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(uiState.isSetupComplete) {
-        if (uiState.isSetupComplete && uiState.config != null) {
-            onNavigateToTrusteeSelection(uiState.config!!.totalShares)
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -52,23 +44,15 @@ fun RecoverySetupScreen(
                     )
                 }
 
-                uiState.config?.status == RecoveryConfigStatus.ACTIVE -> {
-                    // Recovery already configured
-                    RecoveryConfiguredContent(
-                        config = uiState.config!!,
-                        onDisable = { viewModel.disableRecovery() },
-                        onViewShares = { onNavigateToTrusteeSelection(uiState.config!!.totalShares) }
+                uiState.isSetupComplete -> {
+                    RecoveryActiveContent(
+                        createdAt = uiState.status?.createdAt,
+                        onDelete = { viewModel.deleteSetup() }
                     )
                 }
 
                 else -> {
-                    // Setup new recovery
                     RecoverySetupContent(
-                        threshold = uiState.threshold,
-                        totalShares = uiState.totalShares,
-                        onThresholdChange = { viewModel.setThreshold(it) },
-                        onTotalSharesChange = { viewModel.setTotalShares(it) },
-                        onSetup = { viewModel.setupRecovery() },
                         error = uiState.error,
                         onDismissError = { viewModel.clearError() }
                     )
@@ -80,11 +64,6 @@ fun RecoverySetupScreen(
 
 @Composable
 private fun RecoverySetupContent(
-    threshold: Int,
-    totalShares: Int,
-    onThresholdChange: (Int) -> Unit,
-    onTotalSharesChange: (Int) -> Unit,
-    onSetup: () -> Unit,
     error: String?,
     onDismissError: () -> Unit
 ) {
@@ -92,7 +71,8 @@ private fun RecoverySetupContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Icon(
             Icons.Default.Security,
@@ -111,135 +91,14 @@ private fun RecoverySetupContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Set up recovery by distributing encrypted shares of your master key to trusted colleagues. You'll need a minimum number of shares to recover your account.",
+            text = "Recovery is managed through the SSDID Wallet. Use the wallet app to configure account recovery.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Total shares slider
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Total Shares",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "$totalShares",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Slider(
-                    value = totalShares.toFloat(),
-                    onValueChange = { onTotalSharesChange(it.toInt()) },
-                    valueRange = 2f..10f,
-                    steps = 7,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "Number of trusted people who will hold shares",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Threshold slider
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Required Shares",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "$threshold",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Slider(
-                    value = threshold.toFloat(),
-                    onValueChange = { onThresholdChange(it.toInt()) },
-                    valueRange = 2f..totalShares.toFloat(),
-                    steps = (totalShares - 3).coerceAtLeast(0),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "Minimum shares needed for recovery",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Summary
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "You'll need $threshold out of $totalShares trustees to approve your recovery request.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = onSetup,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Key, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Setup Recovery")
-        }
-
-        // Error snackbar
         if (error != null) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Snackbar(
                 action = {
                     TextButton(onClick = onDismissError) {
@@ -254,10 +113,9 @@ private fun RecoverySetupContent(
 }
 
 @Composable
-private fun RecoveryConfiguredContent(
-    config: my.ssdid.drive.domain.model.RecoveryConfig,
-    onDisable: () -> Unit,
-    onViewShares: () -> Unit
+private fun RecoveryActiveContent(
+    createdAt: String?,
+    onDelete: () -> Unit
 ) {
     var showDisableDialog by remember { mutableStateOf(false) }
 
@@ -265,7 +123,8 @@ private fun RecoveryConfiguredContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Icon(
             Icons.Default.VerifiedUser,
@@ -284,80 +143,22 @@ private fun RecoveryConfiguredContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Your account recovery is configured and active.",
+            text = "Your account recovery is active.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                ListItem(
-                    headlineContent = { Text("Total Shares") },
-                    trailingContent = {
-                        Text(
-                            "${config.totalShares}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    },
-                    leadingContent = {
-                        Icon(Icons.Default.People, contentDescription = null)
-                    }
-                )
-
-                Divider()
-
-                ListItem(
-                    headlineContent = { Text("Required for Recovery") },
-                    trailingContent = {
-                        Text(
-                            "${config.threshold}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    },
-                    leadingContent = {
-                        Icon(Icons.Default.Key, contentDescription = null)
-                    }
-                )
-
-                Divider()
-
-                ListItem(
-                    headlineContent = { Text("Status") },
-                    trailingContent = {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(config.status.name) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        )
-                    },
-                    leadingContent = {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null)
-                    }
-                )
-            }
+        if (createdAt != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Set up: $createdAt",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(modifier = Modifier.weight(1f))
-
-        OutlinedButton(
-            onClick = onViewShares,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Visibility, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("View Shares")
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         TextButton(
             onClick = { showDisableDialog = true },
@@ -368,28 +169,28 @@ private fun RecoveryConfiguredContent(
         ) {
             Icon(Icons.Default.RemoveCircle, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Disable Recovery")
+            Text("Remove Recovery Setup")
         }
     }
 
     if (showDisableDialog) {
         AlertDialog(
             onDismissRequest = { showDisableDialog = false },
-            title = { Text("Disable Recovery?") },
+            title = { Text("Remove Recovery Setup?") },
             text = {
-                Text("This will revoke all recovery shares. You won't be able to recover your account if you lose access. This action cannot be undone.")
+                Text("This will remove your server-side recovery share. You won't be able to use server-assisted recovery. This action cannot be undone.")
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showDisableDialog = false
-                        onDisable()
+                        onDelete()
                     },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Disable")
+                    Text("Remove")
                 }
             },
             dismissButton = {
