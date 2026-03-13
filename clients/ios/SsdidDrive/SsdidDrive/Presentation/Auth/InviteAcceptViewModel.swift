@@ -7,7 +7,10 @@ protocol InviteAcceptViewModelCoordinatorDelegate: AnyObject {
     func inviteAcceptViewModelDidRequestLogin()
 }
 
-/// View model for invitation acceptance screen
+/// View model for invitation acceptance screen.
+/// Uses wallet-based flow: loads invitation info, launches SSDID Wallet,
+/// and handles the wallet callback with a session token.
+@MainActor
 final class InviteAcceptViewModel: BaseViewModel {
 
     // MARK: - Published Properties
@@ -15,13 +18,7 @@ final class InviteAcceptViewModel: BaseViewModel {
     @Published var invitation: TokenInvitation?
     @Published var isLoadingInvitation = true
     @Published var invitationError: String?
-
-    @Published var displayName = ""
-    @Published var password = ""
-    @Published var confirmPassword = ""
-
-    @Published var isRegistering = false
-    @Published var isGeneratingKeys = false
+    @Published var isWaitingForWallet = false
     @Published var registrationError: String?
 
     // MARK: - Properties
@@ -30,18 +27,19 @@ final class InviteAcceptViewModel: BaseViewModel {
     private let token: String
     weak var coordinatorDelegate: InviteAcceptViewModelCoordinatorDelegate?
 
+    private var loadTask: Task<Void, Never>?
+    private var acceptTask: Task<Void, Never>?
+    private var callbackTask: Task<Void, Never>?
+
+    deinit {
+        loadTask?.cancel()
+        acceptTask?.cancel()
+        callbackTask?.cancel()
+    }
+
     // MARK: - Computed Properties
 
-    var isFormValid: Bool {
-        !displayName.isEmpty &&
-        displayName.count <= 100 &&
-        password.count >= 8 &&
-        password == confirmPassword
-    }
-
-    var email: String {
-        invitation?.email ?? ""
-    }
+    var email: String { invitation?.email ?? "" }
 
     // MARK: - Initialization
 
@@ -56,70 +54,70 @@ final class InviteAcceptViewModel: BaseViewModel {
     // MARK: - Actions
 
     func loadInvitationInfo() {
+        loadTask?.cancel()
         isLoadingInvitation = true
         invitationError = nil
 
-        Task {
+        loadTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 let info = try await authRepository.getInvitationInfo(token: token)
-                await MainActor.run {
-                    self.invitation = info
-                    self.isLoadingInvitation = false
+                guard !Task.isCancelled else { return }
+                self.invitation = info
+                self.isLoadingInvitation = false
 
-                    if !info.valid {
-                        self.invitationError = info.errorReason?.displayMessage ?? "This invitation is no longer valid"
-                    }
+                if !info.valid {
+                    self.invitationError = info.errorReason?.displayMessage ?? "This invitation is no longer valid"
                 }
             } catch {
-                await MainActor.run {
-                    self.isLoadingInvitation = false
-                    self.invitationError = error.localizedDescription
-                }
+                guard !Task.isCancelled else { return }
+                self.isLoadingInvitation = false
+                self.invitationError = error.localizedDescription
             }
         }
     }
 
-    func acceptInvitation() {
-        guard isFormValid else {
-            if displayName.isEmpty {
-                registrationError = "Name is required"
-            } else if displayName.count > 100 {
-                registrationError = "Name is too long"
-            } else if password.count < 8 {
-                registrationError = "Password must be at least 8 characters"
-            } else if password != confirmPassword {
-                registrationError = "Passwords do not match"
-            }
-            return
-        }
-
+    func acceptWithWallet() {
+        guard !isWaitingForWallet, !isLoading else { return }
+        isLoading = true
         registrationError = nil
-        isRegistering = true
-        isGeneratingKeys = true
 
-        Task {
+        acceptTask?.cancel()
+        acceptTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                _ = try await authRepository.acceptInvitation(
-                    token: token,
-                    displayName: displayName,
-                    password: password
-                )
-
-                await MainActor.run {
-                    self.isRegistering = false
-                    self.isGeneratingKeys = false
-                    self.password = ""
-                    self.confirmPassword = ""
-                    self.coordinatorDelegate?.inviteAcceptViewModelDidRegister()
-                }
+                try await authRepository.launchWalletInvite(token: token)
+                guard !Task.isCancelled else { return }
+                isWaitingForWallet = true
+                isLoading = false
             } catch {
-                await MainActor.run {
-                    self.isRegistering = false
-                    self.isGeneratingKeys = false
-                    self.registrationError = error.localizedDescription
-                }
+                guard !Task.isCancelled else { return }
+                isLoading = false
+                registrationError = error.localizedDescription
             }
         }
+    }
+
+    func handleWalletCallback(sessionToken: String) {
+        guard isWaitingForWallet, callbackTask == nil else { return }
+        callbackTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await authRepository.saveSessionFromWallet(sessionToken: sessionToken)
+                guard !Task.isCancelled else { return }
+                isWaitingForWallet = false
+                coordinatorDelegate?.inviteAcceptViewModelDidRegister()
+            } catch {
+                guard !Task.isCancelled else { return }
+                isWaitingForWallet = false
+                registrationError = error.localizedDescription
+            }
+        }
+    }
+
+    func handleWalletError(message: String) {
+        isWaitingForWallet = false
+        registrationError = message
     }
 
     func requestLogin() {

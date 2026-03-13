@@ -14,7 +14,7 @@ public static class CreateInvitation
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, EmailService? emailService, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, IEmailService emailService, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -99,14 +99,11 @@ public static class CreateInvitation
 
         await db.SaveChangesAsync(ct);
 
-        // Send invitation email (fire-and-forget, won't block the response)
-        if (emailService is not null && !string.IsNullOrWhiteSpace(req.Email))
+        // Send invitation email (EmailService handles errors internally, won't throw)
+        if (!string.IsNullOrWhiteSpace(req.Email))
         {
-            var email = req.Email;
-            var tenantName = tenant!.Name;
-            var roleName = role.Value.ToString().ToLowerInvariant();
-            var msg = req.Message;
-            _ = Task.Run(() => emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg));
+            await emailService.SendInvitationAsync(
+                req.Email, tenant!.Name, role.Value.ToString().ToLowerInvariant(), shortCode, req.Message);
         }
 
         return Results.Created($"/api/invitations/{invitation.Id}", new

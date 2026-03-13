@@ -38,6 +38,68 @@ class DeepLinkHandlerTest {
         unmockkAll()
     }
 
+    // ==================== Custom Scheme - Invite Callback Tests ====================
+
+    @Test
+    fun `parseIntent with invite callback success returns WalletInviteCallback action`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "invite",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("session_token" to "tok-xyz", "status" to "success")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletInviteCallback)
+        assertEquals("tok-xyz", (action as DeepLinkAction.WalletInviteCallback).sessionToken)
+    }
+
+    @Test
+    fun `parseIntent with invite callback error status returns WalletInviteError action`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "invite",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("status" to "error", "message" to "User cancelled")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletInviteError)
+        assertEquals("User cancelled", (action as DeepLinkAction.WalletInviteError).message)
+    }
+
+    @Test
+    fun `parseIntent with invite callback missing status returns WalletInviteError action`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "invite",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("session_token" to "tok-xyz") // no status
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        // status defaults to "" so not "success" — treated as error
+        assertTrue(action is DeepLinkAction.WalletInviteError)
+        assertEquals("Invitation failed", (action as DeepLinkAction.WalletInviteError).message)
+    }
+
+    @Test
+    fun `parseIntent with invite callback success missing session_token returns WalletInviteError`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "invite",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("status" to "success") // no session_token
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletInviteError)
+    }
+
     // ==================== Custom Scheme - Invite Tests ====================
 
     @Test
@@ -393,7 +455,8 @@ class DeepLinkHandlerTest {
     private fun createMockViewIntent(
         scheme: String,
         host: String,
-        pathSegments: List<String>
+        pathSegments: List<String>,
+        queryParams: Map<String, String> = emptyMap()
     ): Intent {
         val uri = mockk<Uri>()
         every { uri.scheme } returns scheme
@@ -401,6 +464,8 @@ class DeepLinkHandlerTest {
         every { uri.pathSegments } returns pathSegments
         every { uri.lastPathSegment } returns pathSegments.lastOrNull()
         every { uri.toString() } returns buildUriString(scheme, host, pathSegments)
+        // Support query parameter lookups
+        every { uri.getQueryParameter(any()) } answers { queryParams[firstArg()] }
 
         val intent = mockk<Intent>()
         every { intent.action } returns Intent.ACTION_VIEW

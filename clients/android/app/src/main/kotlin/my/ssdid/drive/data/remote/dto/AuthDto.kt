@@ -364,17 +364,19 @@ data class InviteInfoResponse(
 /**
  * Public invitation information.
  * Shown to users before they accept an invitation.
+ * Note: Backend returns flat response (no "data" wrapper) from GET /api/invitations/token/{token}.
+ * The id field was removed from the backend response to avoid PII exposure on public endpoints.
  */
 data class InviteInfoDto(
-    @SerializedName("id") val id: String,
-    @SerializedName("email") val email: String,
-    @SerializedName("role") val role: String,
-    @SerializedName("tenant_name") val tenantName: String,
-    @SerializedName("inviter_name") val inviterName: String?,
-    @SerializedName("message") val message: String?,
-    @SerializedName("expires_at") val expiresAt: String,
-    @SerializedName("valid") val valid: Boolean,
-    @SerializedName("error_reason") val errorReason: String? = null
+    @SerializedName("email") val email: String = "",
+    @SerializedName("role") val role: String = "",
+    @SerializedName("tenant_name") val tenantName: String = "",
+    @SerializedName("inviter_name") val inviterName: String? = null,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("short_code") val shortCode: String? = null,
+    @SerializedName("expires_at") val expiresAt: String = "",
+    @SerializedName("status") val status: String = "pending",
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 /**

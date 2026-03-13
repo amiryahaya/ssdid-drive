@@ -27,10 +27,21 @@ final class AppCoordinator: BaseCoordinator {
     /// Active async task for cancellation on dealloc
     private var activeTask: Task<Void, Never>?
 
+    /// Separate task for deep link processing to avoid racing with startup
+    private var deepLinkTask: Task<Void, Never>?
+
+    /// Task for background notification cleanup
+    private var cleanupTask: Task<Void, Never>?
+
+    /// URL received at launch before startup completes
+    var pendingStartupURL: URL?
+
     // MARK: - Deinit
 
     deinit {
         activeTask?.cancel()
+        deepLinkTask?.cancel()
+        cleanupTask?.cancel()
     }
 
     // MARK: - Start
@@ -43,15 +54,23 @@ final class AppCoordinator: BaseCoordinator {
 
     private func determineInitialFlow() {
         activeTask?.cancel()
-        activeTask = Task {
+        activeTask = Task { [weak self] in
+            guard let self else { return }
             guard !Task.isCancelled else { return }
 
             let settings = container.userDefaultsManager
 
             // Check onboarding
             if !settings.hasCompletedOnboarding {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     showOnboarding()
+                    if let startupURL = pendingStartupURL {
+                        pendingStartupURL = nil
+                        if let action = DeepLinkParser.parse(startupURL) {
+                            handleDeepLinkAction(action)
+                        }
+                    }
                 }
                 return
             }
@@ -61,8 +80,15 @@ final class AppCoordinator: BaseCoordinator {
             // Check authentication
             let isAuthenticated = await container.authRepository.isAuthenticated()
             if !isAuthenticated {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     showAuth()
+                    if let startupURL = pendingStartupURL {
+                        pendingStartupURL = nil
+                        if let action = DeepLinkParser.parse(startupURL) {
+                            handleDeepLinkAction(action)
+                        }
+                    }
                 }
                 return
             }
@@ -75,11 +101,18 @@ final class AppCoordinator: BaseCoordinator {
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 if biometricEnabled && !keysUnlocked {
                     showLockScreen()
                 } else {
                     showMain()
+                }
+                if let startupURL = pendingStartupURL {
+                    pendingStartupURL = nil
+                    if let action = DeepLinkParser.parse(startupURL) {
+                        handleDeepLinkAction(action)
+                    }
                 }
             }
         }
@@ -139,7 +172,8 @@ final class AppCoordinator: BaseCoordinator {
         coordinator.start()
 
         // Cleanup old notifications (runs in background)
-        Task {
+        cleanupTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try await container.notificationRepository.cleanupOldNotifications(daysOld: 30)
             } catch {
@@ -166,15 +200,17 @@ final class AppCoordinator: BaseCoordinator {
     /// - Parameter action: The action to handle
     func handleDeepLinkAction(_ action: DeepLinkAction) {
         // Check if user is authenticated
-        activeTask?.cancel()
-        activeTask = Task {
+        deepLinkTask?.cancel()
+        deepLinkTask = Task { [weak self] in
+            guard let self else { return }
             guard !Task.isCancelled else { return }
 
             let isAuthenticated = await container.authRepository.isAuthenticated()
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 if isAuthenticated {
                     // User is authenticated, process immediately
                     processDeepLinkAction(action)
@@ -182,9 +218,19 @@ final class AppCoordinator: BaseCoordinator {
                     // Save for later processing after auth (except import which expires)
                     savePendingDeepLinkIfAppropriate(action)
 
-                    // If it's an invitation, still show auth flow with invitation
-                    if case .acceptInvitation(let token) = action {
+                    switch action {
+                    case .acceptInvitation(let token):
                         handleInvitationDeepLink(token: token)
+                    case .walletInviteCallback(let sessionToken):
+                        if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                            authCoordinator.inviteAcceptViewModel?.handleWalletCallback(sessionToken: sessionToken)
+                        }
+                    case .walletInviteError(let message):
+                        if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                            authCoordinator.inviteAcceptViewModel?.handleWalletError(message: message)
+                        }
+                    default:
+                        break
                     }
                 }
             }
@@ -221,6 +267,17 @@ final class AppCoordinator: BaseCoordinator {
             // Deliver to the active AuthCoordinator's login view model
             if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
                 authCoordinator.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+            }
+
+        case .walletInviteCallback(let sessionToken):
+            // Deliver to active invite accept screen via AuthCoordinator
+            if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                authCoordinator.inviteAcceptViewModel?.handleWalletCallback(sessionToken: sessionToken)
+            }
+
+        case .walletInviteError(let message):
+            if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator {
+                authCoordinator.inviteAcceptViewModel?.handleWalletError(message: message)
             }
         }
     }

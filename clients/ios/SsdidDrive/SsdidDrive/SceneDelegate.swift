@@ -87,24 +87,28 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         // Handle deep links from launch (custom scheme)
+        // Set as pending so the coordinator processes it after startup completes
         if let urlContext = connectionOptions.urlContexts.first {
-            handleDeepLink(urlContext.url)
+            appCoordinator?.pendingStartupURL = urlContext.url
         }
 
         // D6: Iterate all user activities, not just the first one
+        // Set as pending so the coordinator processes after startup completes
         for userActivity in connectionOptions.userActivities {
             // Handle Spotlight search result from launch (app was killed)
             if userActivity.activityType == CSSearchableItemActionType,
                let uniqueIdentifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
                uniqueIdentifier.hasPrefix("file_") {
                 let fileId = String(uniqueIdentifier.dropFirst(5))
-                appCoordinator?.handleDeepLinkAction(.openFile(fileId: fileId))
+                if let url = URL(string: "ssdid-drive://file/\(fileId)") {
+                    appCoordinator?.pendingStartupURL = url
+                }
             }
 
             // Handle Universal Links from launch
             if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
                let url = userActivity.webpageURL {
-                handleDeepLink(url)
+                appCoordinator?.pendingStartupURL = url
             }
         }
     }
@@ -206,6 +210,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
+        // Handle wallet invite callback: ssdid-drive://invite/callback?...
+        if let action = DeepLinkParser.parse(url) {
+            if case .walletInviteCallback = action {
+                appCoordinator?.handleDeepLinkAction(action)
+                return
+            }
+            if case .walletInviteError = action {
+                appCoordinator?.handleDeepLinkAction(action)
+                return
+            }
+        }
+
         appCoordinator?.handleDeepLink(url)
     }
 
@@ -265,10 +281,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func handleLockAppRequest() {
         let container = DependencyContainer.shared
-        Task {
+        Task { [weak self] in
             await container.authRepository.lockKeys()
-            await MainActor.run {
-                appCoordinator?.showLockScreen()
+            await MainActor.run { [weak self] in
+                self?.appCoordinator?.showLockScreen()
             }
         }
     }
@@ -290,10 +306,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         if timeout.minutes >= 0 && elapsed >= timeoutSeconds {
             // Lock the app
-            Task {
+            Task { [weak self] in
                 await container.authRepository.lockKeys()
-                await MainActor.run {
-                    appCoordinator?.showLockScreen()
+                await MainActor.run { [weak self] in
+                    self?.appCoordinator?.showLockScreen()
                 }
             }
         }

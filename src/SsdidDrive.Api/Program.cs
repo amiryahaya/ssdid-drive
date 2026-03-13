@@ -164,7 +164,11 @@ if (!string.IsNullOrEmpty(resendApiKey))
     builder.Services.AddHttpClient<ResendClient>();
     builder.Services.Configure<ResendClientOptions>(o => o.ApiToken = resendApiKey);
     builder.Services.AddTransient<IResend, ResendClient>();
-    builder.Services.AddScoped<EmailService>();
+    builder.Services.AddScoped<IEmailService, EmailService>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailService, NullEmailService>();
 }
 builder.Services.AddSingleton<WebAuthnChallengeStore>();
 builder.Services.AddHostedService<ServerRegistrationService>();

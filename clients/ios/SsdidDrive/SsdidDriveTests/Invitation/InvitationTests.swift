@@ -32,16 +32,17 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.validInvitationResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertEqual(response.data.email, "newuser@example.com")
-        XCTAssertEqual(response.data.role, .member)
-        XCTAssertEqual(response.data.tenantName, "Test Company")
-        XCTAssertEqual(response.data.inviterName, "Admin User")
-        XCTAssertEqual(response.data.message, "Welcome to the team!")
-        XCTAssertTrue(response.data.valid)
-        XCTAssertNil(response.data.errorReason)
+        XCTAssertEqual(invitation.email, "newuser@example.com")
+        XCTAssertEqual(invitation.role, .member)
+        XCTAssertEqual(invitation.tenantName, "Test Company")
+        XCTAssertEqual(invitation.inviterName, "Admin User")
+        XCTAssertEqual(invitation.message, "Welcome to the team!")
+        XCTAssertEqual(invitation.status, "pending")
+        XCTAssertTrue(invitation.valid)
+        XCTAssertNil(invitation.errorReason)
     }
 
     func testTokenInvitation_decodesInvitationWithNullMessage() throws {
@@ -49,13 +50,13 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.validInvitationNoMessageResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertEqual(response.data.email, "another@example.com")
-        XCTAssertEqual(response.data.role, .admin)
-        XCTAssertNil(response.data.message)
-        XCTAssertTrue(response.data.valid)
+        XCTAssertEqual(invitation.email, "another@example.com")
+        XCTAssertEqual(invitation.role, .admin)
+        XCTAssertNil(invitation.message)
+        XCTAssertTrue(invitation.valid)
     }
 
     func testTokenInvitation_decodesExpiredInvitation() throws {
@@ -63,12 +64,12 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.expiredInvitationResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertEqual(response.data.email, "expired@example.com")
-        XCTAssertFalse(response.data.valid)
-        XCTAssertEqual(response.data.errorReason, .expired)
+        XCTAssertEqual(invitation.email, "expired@example.com")
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .expired)
     }
 
     func testTokenInvitation_decodesRevokedInvitation() throws {
@@ -76,11 +77,11 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.revokedInvitationResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertFalse(response.data.valid)
-        XCTAssertEqual(response.data.errorReason, .revoked)
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .revoked)
     }
 
     func testTokenInvitation_decodesAlreadyUsedInvitation() throws {
@@ -88,11 +89,11 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.alreadyUsedInvitationResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertFalse(response.data.valid)
-        XCTAssertEqual(response.data.errorReason, .alreadyUsed)
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .alreadyUsed)
     }
 
     func testTokenInvitation_decodesNotFoundInvitation() throws {
@@ -100,11 +101,11 @@ final class InvitationTests: XCTestCase {
         let json = InvitationTestFixtures.JSON.notFoundInvitationResponse
 
         // When
-        let response = try decoder.decode(InviteInfoResponse.self, from: json.data(using: .utf8)!)
+        let invitation = try decoder.decode(TokenInvitation.self, from: json.data(using: .utf8)!)
 
         // Then
-        XCTAssertFalse(response.data.valid)
-        XCTAssertEqual(response.data.errorReason, .notFound)
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .notFound)
     }
 
     // MARK: - TokenInvitationError Tests
@@ -409,9 +410,9 @@ final class InvitationTests: XCTestCase {
         XCTAssertEqual(invitation1, invitation2)
     }
 
-    func testTokenInvitation_notEquatable_differentId() {
-        let invitation1 = InvitationTestFixtures.createInvitation(id: "inv_1")
-        let invitation2 = InvitationTestFixtures.createInvitation(id: "inv_2")
+    func testTokenInvitation_notEquatable_differentEmail() {
+        let invitation1 = InvitationTestFixtures.createInvitation(email: "user1@example.com")
+        let invitation2 = InvitationTestFixtures.createInvitation(email: "user2@example.com")
 
         XCTAssertNotEqual(invitation1, invitation2)
     }
@@ -428,21 +429,42 @@ final class InvitationTests: XCTestCase {
         XCTAssertNotEqual(TokenInvitationError.expired, TokenInvitationError.revoked)
     }
 
+    // MARK: - Unknown Status Tests
+
+    func testTokenInvitation_unknownStatus_mapsToNotFound() throws {
+        let json = """
+        {
+            "email": "test@example.com",
+            "role": "member",
+            "tenant_name": "Test Tenant",
+            "inviter_name": null,
+            "message": null,
+            "status": "cancelled",
+            "short_code": "UNKNOWN1",
+            "expires_at": "2025-01-01T00:00:00Z",
+            "created_at": "2024-01-01T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let invitation = try decoder.decode(TokenInvitation.self, from: json)
+        XCTAssertFalse(invitation.valid)
+        XCTAssertEqual(invitation.errorReason, .notFound)
+    }
+
     // MARK: - Edge Cases
 
     func testTokenInvitation_decodesWithMissingOptionalFields() throws {
         // Given - JSON with minimal required fields
         let json = """
         {
-            "id": "inv_minimal",
             "email": "minimal@example.com",
             "role": "member",
             "tenant_name": "Minimal Co",
             "inviter_name": null,
             "message": null,
+            "status": "pending",
+            "short_code": "MIN000",
             "expires_at": "2024-02-15T00:00:00Z",
-            "valid": true,
-            "error_reason": null
+            "created_at": "2024-01-15T00:00:00Z"
         }
         """.data(using: .utf8)!
 
@@ -450,7 +472,6 @@ final class InvitationTests: XCTestCase {
         let invitation = try decoder.decode(TokenInvitation.self, from: json)
 
         // Then
-        XCTAssertEqual(invitation.id, "inv_minimal")
         XCTAssertNil(invitation.inviterName)
         XCTAssertNil(invitation.message)
         XCTAssertTrue(invitation.valid)

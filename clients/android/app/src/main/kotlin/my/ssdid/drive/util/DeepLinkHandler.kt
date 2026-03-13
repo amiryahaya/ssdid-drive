@@ -70,8 +70,22 @@ class DeepLinkHandler @Inject constructor() {
                 folderId?.let { DeepLinkAction.OpenFolder(it) }
             }
             "invite" -> {
-                val token = pathSegments.firstOrNull() ?: uri.lastPathSegment
-                token?.let { DeepLinkAction.AcceptInvitation(it) }
+                val segment = pathSegments.firstOrNull()
+                if (segment == "callback") {
+                    // ssdiddrive://invite/callback?session_token=...&status=...
+                    val sessionToken = uri.getQueryParameter("session_token")
+                    val status = uri.getQueryParameter("status") ?: ""
+                    if (status == "success" && sessionToken != null) {
+                        DeepLinkAction.WalletInviteCallback(sessionToken)
+                    } else {
+                        val errorMessage = uri.getQueryParameter("message") ?: "Invitation failed"
+                        DeepLinkAction.WalletInviteError(errorMessage)
+                    }
+                } else {
+                    // ssdiddrive://invite/{token} — open invitation acceptance screen
+                    val token = segment ?: uri.lastPathSegment
+                    token?.let { DeepLinkAction.AcceptInvitation(it) }
+                }
             }
             "auth" -> {
                 // ssdiddrive://auth/callback?session_token=...
@@ -189,4 +203,14 @@ sealed class DeepLinkAction {
      * Contains the session token from the wallet after successful authentication.
      */
     data class WalletAuthCallback(val sessionToken: String) : DeepLinkAction()
+
+    /**
+     * Handle SSDID Wallet invitation callback with session token.
+     */
+    data class WalletInviteCallback(val sessionToken: String) : DeepLinkAction()
+
+    /**
+     * Handle SSDID Wallet invitation callback with error.
+     */
+    data class WalletInviteError(val message: String) : DeepLinkAction()
 }

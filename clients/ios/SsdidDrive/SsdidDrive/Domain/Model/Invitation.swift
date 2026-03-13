@@ -5,26 +5,35 @@ import Foundation
 /// Public invitation info retrieved by token.
 /// Used for invitation-only registration flow.
 struct TokenInvitation: Codable, Equatable {
-    let id: String
     let email: String
     let role: UserRole
     let tenantName: String
     let inviterName: String?
     let message: String?
+    let status: String
+    let shortCode: String
     let expiresAt: Date
-    let valid: Bool
-    let errorReason: TokenInvitationError?
+    let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case email
-        case role
+        case email, role, message, status
         case tenantName = "tenant_name"
         case inviterName = "inviter_name"
-        case message
+        case shortCode = "short_code"
         case expiresAt = "expires_at"
-        case valid
-        case errorReason = "error_reason"
+        case createdAt = "created_at"
+    }
+
+    var valid: Bool { status.lowercased() == "pending" }
+
+    var errorReason: TokenInvitationError? {
+        switch status.lowercased() {
+        case "pending": return nil
+        case "expired": return .expired
+        case "revoked": return .revoked
+        case "accepted": return .alreadyUsed
+        default: return .notFound
+        }
     }
 }
 
@@ -72,10 +81,9 @@ enum UserRole: String, Codable, Equatable {
 
 // MARK: - API Response Types
 
-/// Response from GET /invite/{token}
-struct InviteInfoResponse: Codable {
-    let data: TokenInvitation
-}
+/// Response from GET /api/invitations/token/{token}
+/// The backend returns the invitation fields directly without a `data` wrapper.
+typealias InviteInfoResponse = TokenInvitation
 
 /// Request to accept an invitation and register
 struct AcceptInviteRequest: Codable {

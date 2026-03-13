@@ -3,7 +3,6 @@ package my.ssdid.drive.invitation.presentation
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import my.ssdid.drive.domain.repository.AuthRepository
-import my.ssdid.drive.domain.repository.ChallengeInfo
 import my.ssdid.drive.invitation.fixtures.InvitationTestFixtures
 import my.ssdid.drive.presentation.auth.InviteAcceptViewModel
 import my.ssdid.drive.util.AppException
@@ -23,12 +22,6 @@ class InviteAcceptViewModelTest {
     private lateinit var authRepository: AuthRepository
     private lateinit var viewModel: InviteAcceptViewModel
     private val testDispatcher = StandardTestDispatcher()
-
-    private val testChallengeInfo = ChallengeInfo(
-        challengeId = "challenge-456",
-        subscriberSecret = "secret-456",
-        walletDeepLink = "ssdid://login?challenge_id=challenge-456"
-    )
 
     @Before
     fun setup() {
@@ -217,28 +210,25 @@ class InviteAcceptViewModelTest {
     // ==================== Accept With Wallet Tests ====================
 
     @Test
-    fun `acceptWithWallet creates challenge and launches wallet`() = runTest {
+    fun `acceptWithWallet launches wallet invite deep link`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
+        coEvery { authRepository.launchWalletInvite(any()) } just Runs
 
-        viewModel = createViewModel()
+        viewModel = createViewModel("test-token-123")
         advanceUntilIdle()
 
         viewModel.acceptWithWallet()
         advanceUntilIdle()
 
-        coVerify { authRepository.createChallenge("register") }
-        coVerify { authRepository.launchWalletAuth(testChallengeInfo) }
+        coVerify { authRepository.launchWalletInvite("test-token-123") }
     }
 
     @Test
     fun `acceptWithWallet sets isWaitingForWallet on success`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
+        coEvery { authRepository.launchWalletInvite(any()) } just Runs
 
         viewModel = createViewModel()
         advanceUntilIdle()
@@ -259,7 +249,7 @@ class InviteAcceptViewModelTest {
     fun `acceptWithWallet failure shows registration error`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.createChallenge("register") } throws
+        coEvery { authRepository.launchWalletInvite(any()) } throws
             RuntimeException("Wallet not installed")
 
         viewModel = createViewModel()
@@ -283,8 +273,7 @@ class InviteAcceptViewModelTest {
     fun `handleWalletCallback saves session and sets isRegistered`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.createChallenge("register") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
+        coEvery { authRepository.launchWalletInvite(any()) } just Runs
         coEvery { authRepository.saveSession("session-token-abc") } just Runs
 
         viewModel = createViewModel()

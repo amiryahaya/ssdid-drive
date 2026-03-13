@@ -21,6 +21,13 @@ final class AuthCoordinator: BaseCoordinator {
     /// deliver auth callback tokens to it.
     private(set) var loginViewModel: LoginViewModel?
 
+    /// Reference to the current invite accept view model so wallet callbacks
+    /// can be delivered to it.
+    private(set) var inviteAcceptViewModel: InviteAcceptViewModel?
+
+    /// Navigation delegate adapter for cleaning up invite ViewModel on back-swipe
+    private var navDelegateAdapter: NavigationDelegateAdapter?
+
     // MARK: - Start
 
     override func start() {
@@ -38,12 +45,23 @@ final class AuthCoordinator: BaseCoordinator {
         navigationController.setViewControllers([loginVC], animated: true)
     }
 
-    /// Handle invitation deep link (kept for compatibility)
+    /// Handle invitation deep link — show the wallet-based invite acceptance screen
     func handleInvitation(token: String) {
-        // Invitations now go through the wallet flow as well.
-        // Show the standard QR login screen; the invitation will be
-        // processed after authentication completes.
-        showLogin()
+        let viewModel = InviteAcceptViewModel(
+            authRepository: container.authRepository,
+            token: token
+        )
+        viewModel.coordinatorDelegate = self
+        self.inviteAcceptViewModel = viewModel
+
+        let inviteVC = InviteAcceptViewController(viewModel: viewModel)
+        navDelegateAdapter = NavigationDelegateAdapter { [weak self] vc in
+            if !(vc is InviteAcceptViewController) {
+                self?.inviteAcceptViewModel = nil
+            }
+        }
+        navigationController.delegate = navDelegateAdapter
+        navigationController.setViewControllers([inviteVC], animated: true)
     }
 
     /// Show the "Join Tenant" screen as a modal from the login screen
@@ -62,8 +80,6 @@ final class AuthCoordinator: BaseCoordinator {
         navigationController.present(hostingController, animated: true)
     }
 
-    /// Pending invite code to process after authentication
-    private(set) var pendingInviteCode: String?
 }
 
 // MARK: - LoginViewModelCoordinatorDelegate
@@ -78,6 +94,20 @@ extension AuthCoordinator: LoginViewModelCoordinatorDelegate {
     }
 }
 
+// MARK: - InviteAcceptViewModelCoordinatorDelegate
+
+extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
+    func inviteAcceptViewModelDidRegister() {
+        inviteAcceptViewModel = nil
+        delegate?.authDidComplete()
+    }
+
+    func inviteAcceptViewModelDidRequestLogin() {
+        inviteAcceptViewModel = nil
+        showLogin()
+    }
+}
+
 // MARK: - JoinTenantViewModelDelegate
 
 extension AuthCoordinator: JoinTenantViewModelDelegate {
@@ -86,11 +116,30 @@ extension AuthCoordinator: JoinTenantViewModelDelegate {
     }
 
     func joinTenantDidRequestLogin(inviteCode: String) {
-        pendingInviteCode = inviteCode
         navigationController.dismiss(animated: true) { [weak self] in
             // The user needs to authenticate first, then the invite will be auto-accepted.
             // Store the pending code for the app coordinator to process after auth.
             self?.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
         }
+    }
+}
+
+// MARK: - Navigation Delegate Adapter
+
+/// NSObject adapter for UINavigationControllerDelegate since BaseCoordinator
+/// does not inherit from NSObject.
+private final class NavigationDelegateAdapter: NSObject, UINavigationControllerDelegate {
+    private let onDidShow: (UIViewController) -> Void
+
+    init(onDidShow: @escaping (UIViewController) -> Void) {
+        self.onDidShow = onDidShow
+    }
+
+    func navigationController(
+        _ navigationController: UINavigationController,
+        didShow viewController: UIViewController,
+        animated: Bool
+    ) {
+        onDidShow(viewController)
     }
 }

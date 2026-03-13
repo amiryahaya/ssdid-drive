@@ -1,7 +1,7 @@
 import UIKit
 import Combine
 
-/// View controller for accepting invitations and registering
+/// View controller for accepting invitations via SSDID Wallet
 final class InviteAcceptViewController: BaseViewController {
 
     // MARK: - Properties
@@ -168,81 +168,32 @@ final class InviteAcceptViewController: BaseViewController {
         return button
     }()
 
-    // Registration form
-    private lazy var formContainer: UIView = {
+    // Wallet action container
+    private lazy var walletContainer: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.isHidden = true
         return view
     }()
 
-    private lazy var createAccountLabel: UILabel = {
+    private lazy var walletIcon: UIImageView = {
+        let imageView = UIImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.image = UIImage(systemName: "wallet.pass")
+        imageView.tintColor = .systemBlue
+        imageView.contentMode = .scaleAspectFit
+        return imageView
+    }()
+
+    private lazy var walletDescriptionLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Create your account"
-        label.font = .systemFont(ofSize: 17, weight: .semibold)
-        return label
-    }()
-
-    private lazy var emailTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Email"
-        textField.keyboardType = .emailAddress
-        textField.isEnabled = false
-        textField.applySsdidDriveStyle()
-        return textField
-    }()
-
-    private lazy var displayNameTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Your Name"
-        textField.autocapitalizationType = .words
-        textField.textContentType = .name
-        textField.applySsdidDriveStyle()
-        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        return textField
-    }()
-
-    private lazy var passwordTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Password"
-        textField.isSecureTextEntry = true
-        textField.textContentType = .newPassword
-        textField.applySsdidDriveStyle()
-        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        return textField
-    }()
-
-    private lazy var passwordHintLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "At least 8 characters"
-        label.font = .systemFont(ofSize: 12)
+        label.text = "Accept this invitation using your SSDID Wallet. Your identity and encryption keys will be managed securely by the wallet."
+        label.font = .systemFont(ofSize: 15)
         label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.numberOfLines = 0
         return label
-    }()
-
-    private lazy var confirmPasswordTextField: UITextField = {
-        let textField = UITextField()
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.placeholder = "Confirm Password"
-        textField.isSecureTextEntry = true
-        textField.textContentType = .newPassword
-        textField.applySsdidDriveStyle()
-        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
-        return textField
-    }()
-
-    private lazy var showPasswordButton: UIButton = {
-        let button = UIButton(type: .system)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.setImage(UIImage(systemName: "eye"), for: .normal)
-        button.tintColor = .secondaryLabel
-        button.addTarget(self, action: #selector(togglePasswordVisibility), for: .touchUpInside)
-        return button
     }()
 
     private lazy var registrationErrorLabel: UILabel = {
@@ -256,32 +207,12 @@ final class InviteAcceptViewController: BaseViewController {
         return label
     }()
 
-    private lazy var keyGenProgressStack: UIStackView = {
-        let indicator = UIActivityIndicatorView(style: .medium)
-        indicator.startAnimating()
-
-        let label = UILabel()
-        label.text = "Generating secure encryption keys..."
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .secondaryLabel
-
-        let stack = UIStackView(arrangedSubviews: [indicator, label])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.spacing = 8
-        stack.alignment = .center
-        stack.isHidden = true
-        return stack
-    }()
-
-    private lazy var createAccountButton: UIButton = {
+    private lazy var acceptWithWalletButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setTitle("Create Account", for: .normal)
+        button.setTitle("Accept with SSDID Wallet", for: .normal)
         button.applyPrimaryStyle()
-        button.addTarget(self, action: #selector(createAccountTapped), for: .touchUpInside)
-        button.isEnabled = false
-        button.alpha = 0.5
+        button.addTarget(self, action: #selector(acceptWithWalletTapped), for: .touchUpInside)
         return button
     }()
 
@@ -291,6 +222,27 @@ final class InviteAcceptViewController: BaseViewController {
         indicator.hidesWhenStopped = true
         indicator.color = .white
         return indicator
+    }()
+
+    private lazy var waitingActivityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+
+    private lazy var waitingStack: UIStackView = {
+        let label = UILabel()
+        label.text = "Waiting for SSDID Wallet..."
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = .secondaryLabel
+
+        let stack = UIStackView(arrangedSubviews: [waitingActivityIndicator, label])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .horizontal
+        stack.spacing = 8
+        stack.alignment = .center
+        stack.isHidden = true
+        return stack
     }()
 
     private lazy var loginLinkButton: UIButton = {
@@ -324,8 +276,6 @@ final class InviteAcceptViewController: BaseViewController {
     // MARK: - Setup
 
     override func setupUI() {
-        setupKeyboardDismissOnTap()
-
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
 
@@ -353,21 +303,16 @@ final class InviteAcceptViewController: BaseViewController {
         errorCard.addSubview(retryButton)
         errorCard.addSubview(goToLoginButton)
 
-        // Form
-        contentView.addSubview(formContainer)
-        formContainer.addSubview(createAccountLabel)
-        formContainer.addSubview(emailTextField)
-        formContainer.addSubview(displayNameTextField)
-        formContainer.addSubview(passwordTextField)
-        formContainer.addSubview(passwordHintLabel)
-        formContainer.addSubview(showPasswordButton)
-        formContainer.addSubview(confirmPasswordTextField)
-        formContainer.addSubview(registrationErrorLabel)
-        formContainer.addSubview(keyGenProgressStack)
-        formContainer.addSubview(createAccountButton)
-        formContainer.addSubview(loginLinkButton)
+        // Wallet action
+        contentView.addSubview(walletContainer)
+        walletContainer.addSubview(walletIcon)
+        walletContainer.addSubview(walletDescriptionLabel)
+        walletContainer.addSubview(registrationErrorLabel)
+        walletContainer.addSubview(acceptWithWalletButton)
+        walletContainer.addSubview(waitingStack)
+        walletContainer.addSubview(loginLinkButton)
 
-        createAccountButton.addSubview(buttonActivityIndicator)
+        acceptWithWalletButton.addSubview(buttonActivityIndicator)
 
         setupConstraints()
     }
@@ -458,61 +403,39 @@ final class InviteAcceptViewController: BaseViewController {
             goToLoginButton.widthAnchor.constraint(equalToConstant: 120),
             goToLoginButton.heightAnchor.constraint(equalToConstant: 44),
 
-            // Form container
-            formContainer.topAnchor.constraint(equalTo: invitationCard.bottomAnchor, constant: 24),
-            formContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            formContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            formContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
+            // Wallet container
+            walletContainer.topAnchor.constraint(equalTo: invitationCard.bottomAnchor, constant: 24),
+            walletContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            walletContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            walletContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
 
-            createAccountLabel.topAnchor.constraint(equalTo: formContainer.topAnchor),
-            createAccountLabel.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
+            walletIcon.topAnchor.constraint(equalTo: walletContainer.topAnchor),
+            walletIcon.centerXAnchor.constraint(equalTo: walletContainer.centerXAnchor),
+            walletIcon.widthAnchor.constraint(equalToConstant: 48),
+            walletIcon.heightAnchor.constraint(equalToConstant: 48),
 
-            emailTextField.topAnchor.constraint(equalTo: createAccountLabel.bottomAnchor, constant: 16),
-            emailTextField.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            emailTextField.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-            emailTextField.heightAnchor.constraint(equalToConstant: 52),
+            walletDescriptionLabel.topAnchor.constraint(equalTo: walletIcon.bottomAnchor, constant: 16),
+            walletDescriptionLabel.leadingAnchor.constraint(equalTo: walletContainer.leadingAnchor),
+            walletDescriptionLabel.trailingAnchor.constraint(equalTo: walletContainer.trailingAnchor),
 
-            displayNameTextField.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 16),
-            displayNameTextField.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            displayNameTextField.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-            displayNameTextField.heightAnchor.constraint(equalToConstant: 52),
+            registrationErrorLabel.topAnchor.constraint(equalTo: walletDescriptionLabel.bottomAnchor, constant: 16),
+            registrationErrorLabel.leadingAnchor.constraint(equalTo: walletContainer.leadingAnchor),
+            registrationErrorLabel.trailingAnchor.constraint(equalTo: walletContainer.trailingAnchor),
 
-            passwordTextField.topAnchor.constraint(equalTo: displayNameTextField.bottomAnchor, constant: 16),
-            passwordTextField.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            passwordTextField.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-            passwordTextField.heightAnchor.constraint(equalToConstant: 52),
+            acceptWithWalletButton.topAnchor.constraint(equalTo: registrationErrorLabel.bottomAnchor, constant: 24),
+            acceptWithWalletButton.leadingAnchor.constraint(equalTo: walletContainer.leadingAnchor),
+            acceptWithWalletButton.trailingAnchor.constraint(equalTo: walletContainer.trailingAnchor),
+            acceptWithWalletButton.heightAnchor.constraint(equalToConstant: 52),
 
-            showPasswordButton.centerYAnchor.constraint(equalTo: passwordTextField.centerYAnchor),
-            showPasswordButton.trailingAnchor.constraint(equalTo: passwordTextField.trailingAnchor, constant: -12),
-            showPasswordButton.widthAnchor.constraint(equalToConstant: 44),
-            showPasswordButton.heightAnchor.constraint(equalToConstant: 44),
+            buttonActivityIndicator.centerXAnchor.constraint(equalTo: acceptWithWalletButton.centerXAnchor),
+            buttonActivityIndicator.centerYAnchor.constraint(equalTo: acceptWithWalletButton.centerYAnchor),
 
-            passwordHintLabel.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 4),
-            passwordHintLabel.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor, constant: 4),
+            waitingStack.topAnchor.constraint(equalTo: acceptWithWalletButton.bottomAnchor, constant: 16),
+            waitingStack.centerXAnchor.constraint(equalTo: walletContainer.centerXAnchor),
 
-            confirmPasswordTextField.topAnchor.constraint(equalTo: passwordHintLabel.bottomAnchor, constant: 12),
-            confirmPasswordTextField.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            confirmPasswordTextField.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-            confirmPasswordTextField.heightAnchor.constraint(equalToConstant: 52),
-
-            registrationErrorLabel.topAnchor.constraint(equalTo: confirmPasswordTextField.bottomAnchor, constant: 16),
-            registrationErrorLabel.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            registrationErrorLabel.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-
-            keyGenProgressStack.topAnchor.constraint(equalTo: registrationErrorLabel.bottomAnchor, constant: 12),
-            keyGenProgressStack.centerXAnchor.constraint(equalTo: formContainer.centerXAnchor),
-
-            createAccountButton.topAnchor.constraint(equalTo: keyGenProgressStack.bottomAnchor, constant: 24),
-            createAccountButton.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            createAccountButton.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
-            createAccountButton.heightAnchor.constraint(equalToConstant: 52),
-
-            buttonActivityIndicator.centerXAnchor.constraint(equalTo: createAccountButton.centerXAnchor),
-            buttonActivityIndicator.centerYAnchor.constraint(equalTo: createAccountButton.centerYAnchor),
-
-            loginLinkButton.topAnchor.constraint(equalTo: createAccountButton.bottomAnchor, constant: 24),
-            loginLinkButton.centerXAnchor.constraint(equalTo: formContainer.centerXAnchor),
-            loginLinkButton.bottomAnchor.constraint(equalTo: formContainer.bottomAnchor)
+            loginLinkButton.topAnchor.constraint(equalTo: waitingStack.bottomAnchor, constant: 24),
+            loginLinkButton.centerXAnchor.constraint(equalTo: walletContainer.centerXAnchor),
+            loginLinkButton.bottomAnchor.constraint(equalTo: walletContainer.bottomAnchor)
         ])
     }
 
@@ -547,19 +470,24 @@ final class InviteAcceptViewController: BaseViewController {
             }
             .store(in: &cancellables)
 
-        // Registration state
-        viewModel.$isRegistering
+        // Loading (launching wallet)
+        viewModel.$isLoading
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isRegistering in
-                self?.updateRegistrationState(isRegistering)
+            .sink { [weak self] isLoading in
+                self?.updateLaunchingState(isLoading)
             }
             .store(in: &cancellables)
 
-        // Key generation
-        viewModel.$isGeneratingKeys
+        // Waiting for wallet
+        viewModel.$isWaitingForWallet
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isGenerating in
-                self?.keyGenProgressStack.isHidden = !isGenerating
+            .sink { [weak self] isWaiting in
+                self?.waitingStack.isHidden = !isWaiting
+                if isWaiting {
+                    self?.waitingActivityIndicator.startAnimating()
+                } else {
+                    self?.waitingActivityIndicator.stopAnimating()
+                }
             }
             .store(in: &cancellables)
 
@@ -578,12 +506,12 @@ final class InviteAcceptViewController: BaseViewController {
     private func updateInvitationUI(_ invitation: TokenInvitation?) {
         guard let invitation = invitation, invitation.valid else {
             invitationCard.isHidden = true
-            formContainer.isHidden = true
+            walletContainer.isHidden = true
             return
         }
 
         invitationCard.isHidden = false
-        formContainer.isHidden = false
+        walletContainer.isHidden = false
         errorCard.isHidden = true
 
         tenantNameLabel.text = invitation.tenantName
@@ -596,7 +524,6 @@ final class InviteAcceptViewController: BaseViewController {
         }
 
         emailInfoLabel.text = "Your email: \(invitation.email)"
-        emailTextField.text = invitation.email
 
         if let message = invitation.message, !message.isEmpty {
             messageLabel.text = "\"\(message)\""
@@ -613,45 +540,28 @@ final class InviteAcceptViewController: BaseViewController {
         }
 
         invitationCard.isHidden = true
-        formContainer.isHidden = true
+        walletContainer.isHidden = true
         errorCard.isHidden = false
         errorMessageLabel.text = error
     }
 
-    private func updateRegistrationState(_ isRegistering: Bool) {
-        if isRegistering {
-            createAccountButton.setTitle("", for: .normal)
+    private func updateLaunchingState(_ isLaunching: Bool) {
+        if isLaunching {
+            acceptWithWalletButton.setTitle("", for: .normal)
             buttonActivityIndicator.startAnimating()
-            createAccountButton.isEnabled = false
+            acceptWithWalletButton.isEnabled = false
         } else {
-            createAccountButton.setTitle("Create Account", for: .normal)
+            acceptWithWalletButton.setTitle("Accept with SSDID Wallet", for: .normal)
             buttonActivityIndicator.stopAnimating()
-            textFieldDidChange()
+            acceptWithWalletButton.isEnabled = true
         }
     }
 
     // MARK: - Actions
 
-    @objc private func textFieldDidChange() {
-        viewModel.displayName = displayNameTextField.text ?? ""
-        viewModel.password = passwordTextField.text ?? ""
-        viewModel.confirmPassword = confirmPasswordTextField.text ?? ""
-
-        let isValid = viewModel.isFormValid
-        createAccountButton.isEnabled = isValid
-        createAccountButton.alpha = isValid ? 1.0 : 0.5
-    }
-
-    @objc private func togglePasswordVisibility() {
-        passwordTextField.isSecureTextEntry.toggle()
-        confirmPasswordTextField.isSecureTextEntry = passwordTextField.isSecureTextEntry
-        let imageName = passwordTextField.isSecureTextEntry ? "eye" : "eye.slash"
-        showPasswordButton.setImage(UIImage(systemName: imageName), for: .normal)
-    }
-
-    @objc private func createAccountTapped() {
+    @objc private func acceptWithWalletTapped() {
         triggerHapticFeedback()
-        viewModel.acceptInvitation()
+        viewModel.acceptWithWallet()
     }
 
     @objc private func retryTapped() {

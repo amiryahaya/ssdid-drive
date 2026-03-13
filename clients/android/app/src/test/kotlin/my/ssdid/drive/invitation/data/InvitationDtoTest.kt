@@ -36,15 +36,13 @@ class InvitationDtoTest {
         )
 
         val dto = response.data
-        assertEquals("inv-123", dto.id)
         assertEquals("user@example.com", dto.email)
         assertEquals("member", dto.role)
         assertEquals("Test Organization", dto.tenantName)
         assertEquals("John Doe", dto.inviterName)
         assertEquals("Welcome to our team!", dto.message)
         assertEquals("2030-12-31T23:59:59Z", dto.expiresAt)
-        assertTrue(dto.valid)
-        assertNull(dto.errorReason)
+        assertEquals("pending", dto.status)
     }
 
     @Test
@@ -55,8 +53,7 @@ class InvitationDtoTest {
         )
 
         val dto = response.data
-        assertFalse(dto.valid)
-        assertEquals("expired", dto.errorReason)
+        assertEquals("expired", dto.status)
     }
 
     @Test
@@ -64,12 +61,11 @@ class InvitationDtoTest {
         val json = """
             {
                 "data": {
-                    "id": "inv-123",
                     "email": "user@example.com",
                     "role": "member",
                     "tenant_name": "Test Org",
                     "expires_at": "2030-12-31T23:59:59Z",
-                    "valid": true
+                    "status": "pending"
                 }
             }
         """.trimIndent()
@@ -79,7 +75,6 @@ class InvitationDtoTest {
 
         assertNull(dto.inviterName)
         assertNull(dto.message)
-        assertNull(dto.errorReason)
     }
 
     @Test

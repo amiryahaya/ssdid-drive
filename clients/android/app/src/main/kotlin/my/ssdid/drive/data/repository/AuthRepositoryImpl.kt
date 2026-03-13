@@ -377,6 +377,19 @@ class AuthRepositoryImpl @Inject constructor(
 
     // ==================== Invitation Token (Public - for new users) ====================
 
+    override suspend fun launchWalletInvite(token: String) {
+        val serverUrl = BuildConfig.API_BASE_URL.removeSuffix("/api/").removeSuffix("/api")
+        val walletUrl = "ssdid://invite" +
+            "?server_url=${URLEncoder.encode(serverUrl, "UTF-8")}" +
+            "&token=${URLEncoder.encode(token, "UTF-8")}" +
+            "&callback_url=${URLEncoder.encode("ssdiddrive://invite/callback", "UTF-8")}"
+
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(walletUrl)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
     override suspend fun getInvitationInfo(token: String): Result<TokenInvitation> {
         return try {
             val response = apiService.getInviteInfo(token)
@@ -387,15 +400,20 @@ class AuthRepositoryImpl @Inject constructor(
 
                 val dto = body.data
                 val invitation = TokenInvitation(
-                    id = dto.id,
                     email = dto.email,
                     role = UserRole.fromString(dto.role),
                     tenantName = dto.tenantName,
                     inviterName = dto.inviterName,
                     message = dto.message,
                     expiresAt = dto.expiresAt,
-                    valid = dto.valid,
-                    errorReason = TokenInvitationError.fromString(dto.errorReason)
+                    valid = dto.status == "pending",
+                    errorReason = when (dto.status) {
+                        "pending" -> null
+                        "accepted" -> TokenInvitationError.ALREADY_USED
+                        "expired" -> TokenInvitationError.EXPIRED
+                        "revoked" -> TokenInvitationError.REVOKED
+                        else -> TokenInvitationError.NOT_FOUND
+                    }
                 )
                 Result.success(invitation)
             } else {

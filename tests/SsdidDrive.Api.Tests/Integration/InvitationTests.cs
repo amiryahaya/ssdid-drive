@@ -348,6 +348,31 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         Assert.Contains("InvNotifAcceptee", acceptNotif.GetProperty("message").GetString());
     }
 
+    // ── 15. GetInvitationByToken_IncludesInviterName ──────────────────────
+
+    [Fact]
+    public async Task GetInvitationByToken_IncludesInviterName()
+    {
+        var (ownerClient, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "InviterNameOwner");
+
+        var createResp = await ownerClient.PostAsJsonAsync("/api/invitations", new
+        {
+            email = "inviter-name-test@example.com",
+            role = "member"
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var createBody = await createResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var token = createBody.GetProperty("token").GetString()!;
+
+        var anonClient = _factory.CreateClient();
+        var response = await anonClient.GetAsync($"/api/invitations/token/{token}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.True(body.TryGetProperty("inviter_name", out var inviterName));
+        Assert.Equal("InviterNameOwner", inviterName.GetString());
+    }
+
     // ── Helper: Create invitation targeting a specific user ────────────
 
     private static async Task<string> CreateInvitationForUser(
