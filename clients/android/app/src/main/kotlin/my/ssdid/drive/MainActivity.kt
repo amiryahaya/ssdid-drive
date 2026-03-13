@@ -31,6 +31,7 @@ import my.ssdid.drive.util.DeepLinkHandler
 import my.ssdid.drive.util.ShareIntentManager
 import my.ssdid.drive.util.WalletCallbackHolder
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -59,9 +60,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var shareIntentManager: ShareIntentManager
 
-    private var pendingDeepLinkAction: DeepLinkAction? = null
+    // State-driven recomposition: avoids duplicate setContent calls in onNewIntent/onResume
+    private val _deepLinkAction = MutableStateFlow<DeepLinkAction?>(null)
+    private val _shouldLock = MutableStateFlow(false)
     private var backgroundTimestamp: Long = 0L
-    private var shouldLockOnResume: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,35 +80,30 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         // Handle deep link from launch intent
-        pendingDeepLinkAction = deepLinkHandler.parseIntent(intent)
-        handleShareIntent(pendingDeepLinkAction)
+        _deepLinkAction.value = deepLinkHandler.parseIntent(intent)
+        handleShareIntent(_deepLinkAction.value)
 
+        // Single setContent — state changes drive recomposition
         setContent {
+            val deepLinkAction by _deepLinkAction.collectAsState()
+            val shouldLock by _shouldLock.collectAsState()
+
             SsdidDriveApp(
-                deepLinkAction = pendingDeepLinkAction,
-                onDeepLinkHandled = { pendingDeepLinkAction = null },
-                shouldLock = shouldLockOnResume,
-                onLockHandled = { shouldLockOnResume = false }
+                deepLinkAction = deepLinkAction,
+                onDeepLinkHandled = { _deepLinkAction.value = null },
+                shouldLock = shouldLock,
+                onLockHandled = { _shouldLock.value = false }
             )
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Handle deep link from new intent (when app is already running)
-        pendingDeepLinkAction = deepLinkHandler.parseIntent(intent)
         setIntent(intent)
-        handleShareIntent(pendingDeepLinkAction)
-
-        // Re-compose with new deep link
-        setContent {
-            SsdidDriveApp(
-                deepLinkAction = pendingDeepLinkAction,
-                onDeepLinkHandled = { pendingDeepLinkAction = null },
-                shouldLock = shouldLockOnResume,
-                onLockHandled = { shouldLockOnResume = false }
-            )
-        }
+        val action = deepLinkHandler.parseIntent(intent)
+        handleShareIntent(action)
+        // State change triggers recomposition — no second setContent needed
+        _deepLinkAction.value = action
     }
 
     /**
@@ -138,19 +135,9 @@ class MainActivity : ComponentActivity() {
                     val elapsedMinutes = (System.currentTimeMillis() - backgroundTimestamp) / 60000
 
                     if (timeout.minutes >= 0 && elapsedMinutes >= timeout.minutes) {
-                        // Lock the app
                         authRepository.lockKeys()
-                        shouldLockOnResume = true
-
-                        // Re-compose to navigate to lock screen
-                        setContent {
-                            SsdidDriveApp(
-                                deepLinkAction = pendingDeepLinkAction,
-                                onDeepLinkHandled = { pendingDeepLinkAction = null },
-                                shouldLock = shouldLockOnResume,
-                                onLockHandled = { shouldLockOnResume = false }
-                            )
-                        }
+                        // State change triggers recomposition — no setContent needed
+                        _shouldLock.value = true
                     }
                 }
             }

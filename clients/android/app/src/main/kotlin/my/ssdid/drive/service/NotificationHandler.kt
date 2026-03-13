@@ -44,7 +44,8 @@ class NotificationHandler @Inject constructor(
      * D7: Get a stable, collision-free integer notification ID for a UUID string.
      */
     private fun getNotificationId(uuid: String): Int {
-        return notificationIdMap.getOrPut(uuid) {
+        // computeIfAbsent is atomic on ConcurrentHashMap (unlike Kotlin's getOrPut)
+        return notificationIdMap.computeIfAbsent(uuid) {
             notificationIdCounter.getAndIncrement()
         }
     }

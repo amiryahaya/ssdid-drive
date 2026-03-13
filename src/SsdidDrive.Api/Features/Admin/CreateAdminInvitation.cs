@@ -1,6 +1,6 @@
 using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
@@ -19,7 +19,7 @@ public static class CreateAdminInvitation
     private static async Task<IResult> Handle(
         Guid tenantId, Request req, AppDbContext db,
         CurrentUserAccessor accessor, NotificationService notifications,
-        IEmailService emailService, AuditService audit, ILoggerFactory loggerFactory,
+        IEmailService emailService, AuditService audit,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Email))
@@ -127,16 +127,9 @@ public static class CreateAdminInvitation
             "Invitation", invitation.Id,
             $"Invited {normalizedEmail} as {role.Value.ToString().ToLowerInvariant()} to tenant {tenant.Name}", ct);
 
-        var emailToSend = normalizedEmail;
-        var tenantNameForEmail = tenant.Name;
-        var roleNameForEmail = role.Value.ToString().ToLowerInvariant();
-        var msgForEmail = req.Message;
-        var logger = loggerFactory.CreateLogger(typeof(CreateAdminInvitation).FullName!);
-        _ = Task.Run(async () =>
-        {
-            try { await emailService.SendInvitationAsync(emailToSend, tenantNameForEmail, roleNameForEmail, shortCode, msgForEmail); }
-            catch (Exception ex) { logger.LogError(ex, "Failed to send invitation email to {Email}", emailToSend); }
-        });
+        // Send invitation email (EmailService handles errors internally, won't throw)
+        await emailService.SendInvitationAsync(
+            normalizedEmail, tenant.Name, role.Value.ToString().ToLowerInvariant(), shortCode, req.Message);
 
         return Results.Created($"/api/admin/tenants/{tenantId}/invitations/{invitation.Id}", new
         {

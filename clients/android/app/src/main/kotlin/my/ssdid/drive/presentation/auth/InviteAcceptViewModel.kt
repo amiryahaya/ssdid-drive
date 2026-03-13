@@ -45,7 +45,7 @@ data class InviteAcceptUiState(
 @HiltViewModel
 class InviteAcceptViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(InviteAcceptUiState())
@@ -54,7 +54,9 @@ class InviteAcceptViewModel @Inject constructor(
     init {
         // Get token from navigation arguments
         val token = savedStateHandle.get<String>("token") ?: ""
-        _uiState.update { it.copy(token = token) }
+        // Restore isWaitingForWallet across process death
+        val wasWaiting = savedStateHandle.get<Boolean>("isWaitingForWallet") ?: false
+        _uiState.update { it.copy(token = token, isWaitingForWallet = wasWaiting) }
 
         if (token.isNotBlank()) {
             loadInvitationInfo(token)
@@ -136,6 +138,7 @@ class InviteAcceptViewModel @Inject constructor(
                 // Launch wallet with invite deep link — wallet handles email verification + authentication
                 authRepository.launchWalletInvite(_uiState.value.token)
                 _uiState.update { it.copy(isLoading = false, isWaitingForWallet = true) }
+                savedStateHandle["isWaitingForWallet"] = true
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, registrationError = e.message)
@@ -151,6 +154,7 @@ class InviteAcceptViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 authRepository.saveSession(sessionToken)
+                savedStateHandle["isWaitingForWallet"] = false
                 _uiState.update { it.copy(isWaitingForWallet = false, isRegistered = true) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -164,6 +168,7 @@ class InviteAcceptViewModel @Inject constructor(
      * Handle an error returned from SSDID Wallet during invitation acceptance.
      */
     fun handleWalletError(message: String) {
+        savedStateHandle["isWaitingForWallet"] = false
         _uiState.update { it.copy(isWaitingForWallet = false, registrationError = message) }
     }
 }

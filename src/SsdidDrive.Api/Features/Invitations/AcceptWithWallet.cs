@@ -67,15 +67,13 @@ public static class AcceptWithWallet
         return await verifyResult.Match(
             async did =>
             {
-                // 7. Begin transaction for all DB changes
-                await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-                // 8. Find or create user
+                // 7. Find or create user BEFORE transaction to avoid Npgsql aborted-transaction state
+                //    on DbUpdateException (concurrent DID collision).
                 var user = await db.Users
                     .FirstOrDefaultAsync(u => u.Did == did, ct);
 
-                var isNewUser = false;
-                if (user is null)
+                var isNewUser = user is null;
+                if (isNewUser)
                 {
                     user = new User
                     {
@@ -87,35 +85,33 @@ public static class AcceptWithWallet
                         CreatedAt = DateTimeOffset.UtcNow,
                         UpdatedAt = DateTimeOffset.UtcNow
                     };
-                    isNewUser = true;
-                }
-
-                // 9. Check not already a member (direct DB query)
-                if (!isNewUser)
-                {
-                    var existingMembership = await db.UserTenants
-                        .AnyAsync(ut => ut.UserId == user.Id && ut.TenantId == invitation.TenantId, ct);
-                    if (existingMembership)
-                        return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
-                }
-
-                // 10. Persist new user (deferred from step 8)
-                if (isNewUser)
-                {
                     db.Users.Add(user);
                     try
                     {
                         await db.SaveChangesAsync(ct);
                     }
-                    catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+                    catch (DbUpdateException)
                     {
                         // Concurrent request created the same DID — re-fetch
                         db.ChangeTracker.Clear();
                         user = await db.Users.FirstAsync(u => u.Did == did, ct);
+                        isNewUser = false;
                     }
                 }
 
-                // 11. Accept invitation atomically
+                // 8. Check not already a member
+                if (!isNewUser)
+                {
+                    var existingMembership = await db.UserTenants
+                        .AnyAsync(ut => ut.UserId == user!.Id && ut.TenantId == invitation.TenantId, ct);
+                    if (existingMembership)
+                        return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
+                }
+
+                // 9. Begin transaction for invitation acceptance + membership creation
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+                // 10. Accept invitation atomically
                 var updated = await db.Invitations
                     .Where(i => i.Id == invitation.Id && i.Status == InvitationStatus.Pending)
                     .ExecuteUpdateAsync(s => s
@@ -128,7 +124,7 @@ public static class AcceptWithWallet
                 if (updated == 0)
                     return AppError.Conflict("Invitation has already been processed").ToProblemResult();
 
-                // 12. Create UserTenant
+                // 11. Create UserTenant (handle concurrent duplicate)
                 db.UserTenants.Add(new UserTenant
                 {
                     UserId = user.Id,
@@ -137,7 +133,7 @@ public static class AcceptWithWallet
                     CreatedAt = DateTimeOffset.UtcNow
                 });
 
-                // 13. Notify inviter
+                // 12. Notify inviter
                 await notifications.CreateAsync(
                     invitation.InvitedById,
                     "invitation_accepted",
@@ -147,7 +143,15 @@ public static class AcceptWithWallet
                     actionResourceId: invitation.Id.ToString(),
                     ct: ct);
 
-                await db.SaveChangesAsync(ct);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    // Duplicate UserTenant from concurrent request
+                    return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
+                }
                 await transaction.CommitAsync(ct);
 
                 // 14. Create session

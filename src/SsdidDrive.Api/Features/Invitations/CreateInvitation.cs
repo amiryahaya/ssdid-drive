@@ -99,14 +99,11 @@ public static class CreateInvitation
 
         await db.SaveChangesAsync(ct);
 
-        // Send invitation email (fire-and-forget, won't block the response)
+        // Send invitation email (EmailService handles errors internally, won't throw)
         if (!string.IsNullOrWhiteSpace(req.Email))
         {
-            var email = req.Email;
-            var tenantName = tenant!.Name;
-            var roleName = role.Value.ToString().ToLowerInvariant();
-            var msg = req.Message;
-            _ = Task.Run(() => emailService.SendInvitationAsync(email, tenantName, roleName, shortCode, msg));
+            await emailService.SendInvitationAsync(
+                req.Email, tenant!.Name, role.Value.ToString().ToLowerInvariant(), shortCode, req.Message);
         }
 
         return Results.Created($"/api/invitations/{invitation.Id}", new
