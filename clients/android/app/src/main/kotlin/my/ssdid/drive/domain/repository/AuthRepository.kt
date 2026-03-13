@@ -131,6 +131,14 @@ interface AuthRepository {
      * @return Result containing TokenInvitation or an error
      */
     suspend fun getInvitationInfo(token: String): Result<TokenInvitation>
+
+    /**
+     * Launch the SSDID Wallet app via the ssdid://invite deep link.
+     * The wallet handles email verification and authentication for new users.
+     *
+     * @param token The invitation token
+     */
+    suspend fun launchWalletInvite(token: String)
 }
 
 /**

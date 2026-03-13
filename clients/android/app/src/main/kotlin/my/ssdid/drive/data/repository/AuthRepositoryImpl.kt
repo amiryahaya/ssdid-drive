@@ -377,6 +377,19 @@ class AuthRepositoryImpl @Inject constructor(
 
     // ==================== Invitation Token (Public - for new users) ====================
 
+    override suspend fun launchWalletInvite(token: String) {
+        val serverUrl = BuildConfig.API_BASE_URL.removeSuffix("/api/").removeSuffix("/api")
+        val walletUrl = "ssdid://invite" +
+            "?server_url=${URLEncoder.encode(serverUrl, "UTF-8")}" +
+            "&token=${URLEncoder.encode(token, "UTF-8")}" +
+            "&callback_url=${URLEncoder.encode("ssdiddrive://invite/callback", "UTF-8")}"
+
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(walletUrl)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
     override suspend fun getInvitationInfo(token: String): Result<TokenInvitation> {
         return try {
             val response = apiService.getInviteInfo(token)

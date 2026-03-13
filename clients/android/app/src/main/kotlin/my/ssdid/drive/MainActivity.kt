@@ -272,5 +272,19 @@ private fun handleDeepLink(navController: NavHostController, action: DeepLinkAct
                 launchSingleTop = true
             }
         }
+        is DeepLinkAction.WalletInviteCallback -> {
+            // Store session token for the invite accept screen to consume
+            WalletCallbackHolder.set(action.sessionToken)
+            // Navigate to invite accept screen which will consume the token
+            navController.navigate(Screen.Login.route) {
+                launchSingleTop = true
+            }
+        }
+        is DeepLinkAction.WalletInviteError -> {
+            // Wallet returned an error during invitation acceptance; navigate to login
+            navController.navigate(Screen.Login.route) {
+                launchSingleTop = true
+            }
+        }
     }
 }

@@ -126,18 +126,15 @@ class InviteAcceptViewModel @Inject constructor(
 
     /**
      * Accept the invitation via SSDID Wallet.
-     * Launches the wallet with a "register" action and the invitation token.
+     * Launches the wallet with the ssdid://invite deep link — wallet handles
+     * email verification and authentication for new users.
      */
     fun acceptWithWallet() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, registrationError = null) }
             try {
-                // Create a challenge for registration (includes invitation context)
-                val challenge = authRepository.createChallenge("register")
-
-                // Launch wallet
-                authRepository.launchWalletAuth(challenge)
-
+                // Launch wallet with invite deep link — wallet handles email verification + authentication
+                authRepository.launchWalletInvite(_uiState.value.token)
                 _uiState.update { it.copy(isLoading = false, isWaitingForWallet = true) }
             } catch (e: Exception) {
                 _uiState.update {
