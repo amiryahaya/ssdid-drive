@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Folders;
@@ -10,7 +11,7 @@ public static class DeleteFolder
     public static void Map(RouteGroupBuilder group) =>
         group.MapDelete("/{id:guid}", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, IStorageService storage, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, IStorageService storage, FileActivityService activity, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -25,6 +26,10 @@ public static class DeleteFolder
         if (folder.OwnerId != user.Id)
             return AppError.Forbidden("Only the folder owner can delete it").ToProblemResult();
 
+        var folderName = folder.Name;
+        var folderOwnerId = folder.OwnerId;
+        var fileCount = folder.Files.Count;
+
         // Recursively collect all descendant folders and their files, track storage paths
         var storagePaths = new List<string>();
         await DeleteFolderRecursive(folder.Id, db, storagePaths, ct);
@@ -34,6 +39,10 @@ public static class DeleteFolder
         // Best-effort physical file deletion after DB commit
         foreach (var path in storagePaths)
             await storage.DeleteAsync(path, ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FolderDeleted,
+            "folder", id, folderName, folderOwnerId,
+            new { file_count = fileCount }, ct);
 
         return Results.NoContent();
     }

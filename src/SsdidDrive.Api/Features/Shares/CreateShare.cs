@@ -20,7 +20,7 @@ public static class CreateShare
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, FileActivityService activity, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -107,6 +107,14 @@ public static class CreateShare
             ct: ct);
 
         await db.SaveChangesAsync(ct);
+
+        var resourceOwnerId = req.ResourceType == "folder"
+            ? await db.Folders.Where(f => f.Id == req.ResourceId).Select(f => f.OwnerId).FirstOrDefaultAsync(ct)
+            : await db.Files.Where(f => f.Id == req.ResourceId).Select(f => f.UploadedById).FirstOrDefaultAsync(ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FileShared,
+            req.ResourceType, req.ResourceId, resourceName, resourceOwnerId,
+            new { shared_with_id = req.SharedWithId, shared_with_name = recipient.DisplayName ?? recipient.Did, permission = req.Permission }, ct);
 
         return Results.Created($"/api/shares/{share.Id}", new
         {

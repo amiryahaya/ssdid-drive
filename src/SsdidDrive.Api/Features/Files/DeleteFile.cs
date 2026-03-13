@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Features.Files;
@@ -10,7 +11,7 @@ public static class DeleteFile
     public static void Map(RouteGroupBuilder group) =>
         group.MapDelete("/files/{id:guid}", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, IStorageService storage, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, IStorageService storage, FileActivityService activity, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -24,6 +25,10 @@ public static class DeleteFile
         if (file.UploadedById != user.Id && file.Folder.OwnerId != user.Id)
             return AppError.Forbidden("Only the file uploader or folder owner can delete this file").ToProblemResult();
 
+        var fileName = file.Name;
+        var fileSize = file.Size;
+        var fileOwnerId = file.UploadedById;
+
         // Delete any shares for this file
         var shares = await db.Shares
             .Where(s => s.ResourceId == id && s.ResourceType == "file")
@@ -36,6 +41,10 @@ public static class DeleteFile
 
         // Best-effort physical file deletion after DB commit
         await storage.DeleteAsync(storagePath, ct);
+
+        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.FileDeleted,
+            "file", id, fileName, fileOwnerId,
+            new { size = fileSize }, ct);
 
         return Results.NoContent();
     }
