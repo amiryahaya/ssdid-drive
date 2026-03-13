@@ -187,6 +187,37 @@ builder.Services.AddRateLimiter(options =>
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
     });
+
+    // GET /api/recovery/share — partitioned by DID (query string), 5 req/DID/hour
+    options.AddPolicy("recovery-share", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var did = httpContext.Request.Query["did"].ToString();
+        var key = string.IsNullOrEmpty(did) ? "anonymous" : did;
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
+    // POST /api/recovery/complete — partitioned by IP, 10 req/IP/hour
+    options.AddPolicy("recovery-complete", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
 });
 
 // ── OpenAPI ──

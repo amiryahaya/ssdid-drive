@@ -12,7 +12,7 @@ public static class CompleteRecovery
 
     public static void Map(IEndpointRouteBuilder routes) =>
         routes.MapPost("/api/recovery/complete", Handle)
-            .RequireRateLimiting("auth");
+            .RequireRateLimiting("recovery-complete");
 
     private static async Task<IResult> Handle(
         Request req,

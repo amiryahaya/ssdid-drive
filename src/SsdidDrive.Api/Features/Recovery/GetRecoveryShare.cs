@@ -9,7 +9,7 @@ public static class GetRecoveryShare
 {
     public static void Map(IEndpointRouteBuilder routes) =>
         routes.MapGet("/api/recovery/share", Handle)
-            .RequireRateLimiting("auth");
+            .RequireRateLimiting("recovery-share");
 
     private static async Task<IResult> Handle(
         string did,
