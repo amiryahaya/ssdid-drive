@@ -62,6 +62,8 @@ class LoginScreenTest {
 
         override suspend fun launchWalletAuth(challenge: ChallengeInfo) {}
 
+        override suspend fun launchWalletInvite(token: String) {}
+
         override suspend fun listenForSession(challenge: ChallengeInfo): String = "test-token"
 
         override suspend fun saveSession(sessionToken: String) {}

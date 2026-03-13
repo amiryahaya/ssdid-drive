@@ -19,9 +19,15 @@ data class CreateFolderRequest(
 )
 
 data class UpdateFolderRequest(
-    @SerializedName("encrypted_metadata") val encryptedMetadata: String?,
-    @SerializedName("metadata_nonce") val metadataNonce: String?,
-    @SerializedName("signature") val signature: String?
+    @SerializedName("encrypted_metadata") val encryptedMetadata: String? = null,
+    @SerializedName("metadata_nonce") val metadataNonce: String? = null,
+    @SerializedName("wrapped_kek") val wrappedKek: String? = null,
+    @SerializedName("kem_ciphertext") val kemCiphertext: String? = null,
+    @SerializedName("owner_wrapped_kek") val ownerWrappedKek: String? = null,
+    @SerializedName("owner_kem_ciphertext") val ownerKemCiphertext: String? = null,
+    @SerializedName("ml_kem_ciphertext") val mlKemCiphertext: String? = null,
+    @SerializedName("owner_ml_kem_ciphertext") val ownerMlKemCiphertext: String? = null,
+    @SerializedName("signature") val signature: String? = null
 )
 
 data class MoveFolderRequest(

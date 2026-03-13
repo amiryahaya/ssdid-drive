@@ -263,7 +263,7 @@ class PiiChatRepositoryImpl @Inject constructor(
 
     private fun parseInstant(dateString: String): Instant {
         return try {
-            Instant.parse(dateString)
+            java.time.OffsetDateTime.parse(dateString).toInstant()
         } catch (e: Exception) {
             Instant.now()
         }

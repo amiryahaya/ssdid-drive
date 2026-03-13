@@ -286,8 +286,8 @@ class RecoveryRepositoryImpl @Inject constructor(
             threshold = threshold,
             totalShares = totalShares,
             status = RecoveryConfigStatus.fromString(status),
-            createdAt = Instant.parse(insertedAt),
-            updatedAt = Instant.parse(updatedAt)
+            createdAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 
@@ -301,8 +301,8 @@ class RecoveryRepositoryImpl @Inject constructor(
             status = RecoveryShareStatus.fromString(status),
             grantor = grantor?.toDomain(),
             trustee = trustee?.toDomain(),
-            createdAt = Instant.parse(insertedAt),
-            updatedAt = Instant.parse(updatedAt)
+            createdAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 
@@ -314,8 +314,8 @@ class RecoveryRepositoryImpl @Inject constructor(
             reason = reason,
             user = user?.toDomain(),
             progress = null,
-            createdAt = Instant.parse(insertedAt),
-            updatedAt = Instant.parse(updatedAt)
+            createdAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 

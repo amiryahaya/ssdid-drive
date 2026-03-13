@@ -106,8 +106,8 @@ class FileRepositoryImpl @Inject constructor(
                             mimeType = metadata.mimeType,
                             size = metadata.size,
                             status = FileStatus.fromString(fileDto.status),
-                            createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                            updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                            updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                         )
                     } catch (e: Exception) {
                         // Log decryption error but continue with other files
@@ -191,8 +191,8 @@ class FileRepositoryImpl @Inject constructor(
                     mimeType = metadata.mimeType,
                     size = metadata.size,
                     status = FileStatus.fromString(fileDto.status),
-                    createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                    updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                    createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                    updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                 )
                 Result.success(file)
             } else {
@@ -350,8 +350,8 @@ class FileRepositoryImpl @Inject constructor(
                                 mimeType = metadata.mimeType,
                                 size = metadata.size,
                                 status = FileStatus.fromString(fileDto.status),
-                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                                createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                                updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                             )
                         } else {
                             FileItem(
@@ -363,8 +363,8 @@ class FileRepositoryImpl @Inject constructor(
                                 mimeType = mimeType,
                                 size = tempFile.length(),
                                 status = FileStatus.fromString(fileDto.status),
-                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                                createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                                updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                             )
                         }
 
@@ -616,8 +616,8 @@ class FileRepositoryImpl @Inject constructor(
                         mimeType = metadata.mimeType,
                         size = metadata.size,
                         status = FileStatus.fromString(movedFileDto.status),
-                        createdAt = java.time.Instant.parse(movedFileDto.insertedAt),
-                        updatedAt = java.time.Instant.parse(movedFileDto.updatedAt)
+                        createdAt = java.time.OffsetDateTime.parse(movedFileDto.insertedAt).toInstant(),
+                        updatedAt = java.time.OffsetDateTime.parse(movedFileDto.updatedAt).toInstant()
                     )
                     Result.success(file)
                 } else {
@@ -688,8 +688,8 @@ class FileRepositoryImpl @Inject constructor(
                     mimeType = metadata.mimeType,
                     size = metadata.size,
                     status = FileStatus.fromString(updatedFileDto.status),
-                    createdAt = java.time.Instant.parse(updatedFileDto.insertedAt),
-                    updatedAt = java.time.Instant.parse(updatedFileDto.updatedAt)
+                    createdAt = java.time.OffsetDateTime.parse(updatedFileDto.insertedAt).toInstant(),
+                    updatedAt = java.time.OffsetDateTime.parse(updatedFileDto.updatedAt).toInstant()
                 )
                 Result.success(file)
             } else {
@@ -833,8 +833,8 @@ class FileRepositoryImpl @Inject constructor(
                                 mimeType = metadata.mimeType,
                                 size = metadata.size,
                                 status = FileStatus.fromString(fileDto.status),
-                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                                createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                                updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                             )
                         } else {
                             FileItem(
@@ -846,8 +846,8 @@ class FileRepositoryImpl @Inject constructor(
                                 mimeType = mimeType,
                                 size = localFile.length(),
                                 status = FileStatus.fromString(fileDto.status),
-                                createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                                updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                                createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                                updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                             )
                         }
 
@@ -920,8 +920,8 @@ class FileRepositoryImpl @Inject constructor(
             signature = Base64.decode(signature, Base64.NO_WRAP),
             cachedName = cachedName,
             cachedMimeType = cachedMimeType,
-            insertedAt = java.time.Instant.parse(insertedAt),
-            updatedAt = java.time.Instant.parse(updatedAt)
+            insertedAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 
@@ -948,8 +948,8 @@ class FileRepositoryImpl @Inject constructor(
                             mimeType = metadata.mimeType,
                             size = metadata.size,
                             status = FileStatus.fromString(fileDto.status),
-                            createdAt = java.time.Instant.parse(fileDto.insertedAt),
-                            updatedAt = java.time.Instant.parse(fileDto.updatedAt)
+                            createdAt = java.time.OffsetDateTime.parse(fileDto.insertedAt).toInstant(),
+                            updatedAt = java.time.OffsetDateTime.parse(fileDto.updatedAt).toInstant()
                         )
                     } catch (e: Exception) {
                         // Log decryption error but continue with other files

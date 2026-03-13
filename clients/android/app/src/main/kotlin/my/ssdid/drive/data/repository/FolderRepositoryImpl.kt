@@ -36,16 +36,7 @@ class FolderRepositoryImpl @Inject constructor(
                 } catch (_: Exception) {
                     // Root folder may not have encryption keys yet (e.g. auto-created for new tenants)
                     if (folderDto.isRoot) {
-                        Folder(
-                            id = folderDto.id,
-                            parentId = folderDto.parentId,
-                            ownerId = folderDto.ownerId,
-                            tenantId = folderDto.tenantId,
-                            isRoot = true,
-                            name = "My Files",
-                            createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
-                            updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
-                        )
+                        initializeRootFolderEncryption(folderDto)
                     } else {
                         return Result.error(AppException.CryptoError("Failed to decrypt folder"))
                     }
@@ -57,6 +48,56 @@ class FolderRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to get root folder", e))
         }
+    }
+
+    /**
+     * Initialize encryption for a root folder that was auto-created without keys.
+     * Generates KEK, wraps with owner keys, updates backend, and caches the KEK.
+     */
+    private suspend fun initializeRootFolderEncryption(folderDto: FolderDto): Folder {
+        val encryptionData = folderKeyManager.createRootFolderEncryption("My Files")
+
+        // Cache the KEK so createFolder() can use it
+        folderKeyManager.cacheKek(folderDto.id, encryptionData.kek)
+
+        // Create signature
+        val signature = folderKeyManager.createFolderSignature(
+            folderId = folderDto.id,
+            parentId = null,
+            encryptedMetadata = encryptionData.encryptedMetadata,
+            metadataNonce = encryptionData.metadataNonce,
+            ownerWrappedKek = encryptionData.ownerWrappedKek,
+            ownerKemCiphertext = encryptionData.ownerKemCiphertext,
+            ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
+            wrappedKek = encryptionData.wrappedKek,
+            kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
+            mlKemCiphertext = encryptionData.mlKemCiphertext
+        )
+
+        // Update backend with encryption data
+        val updateRequest = UpdateFolderRequest(
+            encryptedMetadata = encryptionData.encryptedMetadata,
+            metadataNonce = encryptionData.metadataNonce,
+            wrappedKek = encryptionData.wrappedKek,
+            kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
+            ownerWrappedKek = encryptionData.ownerWrappedKek,
+            ownerKemCiphertext = encryptionData.ownerKemCiphertext,
+            mlKemCiphertext = encryptionData.mlKemCiphertext,
+            ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
+            signature = signature
+        )
+        apiService.updateFolder(folderDto.id, updateRequest)
+
+        return Folder(
+            id = folderDto.id,
+            parentId = folderDto.parentId,
+            ownerId = folderDto.ownerId,
+            tenantId = folderDto.tenantId,
+            isRoot = true,
+            name = "My Files",
+            createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
+        )
     }
 
     override fun observeRootFolder(): Flow<Folder?> {

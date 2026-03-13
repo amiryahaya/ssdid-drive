@@ -523,12 +523,12 @@ class ShareRepositoryImpl @Inject constructor(
             resourceId = resourceId,
             permission = SharePermission.fromString(permission),
             recursive = recursive ?: false,
-            expiresAt = expiresAt?.let { Instant.parse(it) },
-            revokedAt = revokedAt?.let { Instant.parse(it) },
+            expiresAt = expiresAt?.let { java.time.OffsetDateTime.parse(it).toInstant() },
+            revokedAt = revokedAt?.let { java.time.OffsetDateTime.parse(it).toInstant() },
             grantor = grantor?.toDomain(),
             grantee = grantee?.toDomain(),
-            createdAt = Instant.parse(insertedAt),
-            updatedAt = Instant.parse(updatedAt)
+            createdAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 
@@ -565,12 +565,12 @@ class ShareRepositoryImpl @Inject constructor(
             kemCiphertext = Base64.decode(kemCiphertext, Base64.NO_WRAP),
             signature = Base64.decode(signature, Base64.NO_WRAP),
             recursive = recursive,
-            expiresAt = expiresAt?.let { Instant.parse(it) },
-            revokedAt = revokedAt?.let { Instant.parse(it) },
+            expiresAt = expiresAt?.let { java.time.OffsetDateTime.parse(it).toInstant() },
+            revokedAt = revokedAt?.let { java.time.OffsetDateTime.parse(it).toInstant() },
             grantorEmail = grantor?.email,
             granteeEmail = grantee?.email,
-            insertedAt = Instant.parse(insertedAt),
-            updatedAt = Instant.parse(updatedAt)
+            insertedAt = java.time.OffsetDateTime.parse(insertedAt).toInstant(),
+            updatedAt = java.time.OffsetDateTime.parse(updatedAt).toInstant()
         )
     }
 }

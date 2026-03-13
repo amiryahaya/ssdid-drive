@@ -22,7 +22,10 @@ class Converters {
 
     @TypeConverter
     fun toInstant(value: String?): Instant? {
-        return value?.let { Instant.parse(it) }
+        return value?.let {
+            try { java.time.OffsetDateTime.parse(it).toInstant() }
+            catch (_: Exception) { Instant.parse(it) }
+        }
     }
 
     // ==================== ByteArray Converters ====================
