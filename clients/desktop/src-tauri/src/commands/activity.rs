@@ -4,6 +4,7 @@ use crate::error::AppResult;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use urlencoding::encode;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ActivityItem {
@@ -40,10 +41,10 @@ pub async fn list_activity(
     let mut params = vec![];
     if let Some(p) = page { params.push(format!("page={p}")); }
     if let Some(ps) = page_size { params.push(format!("page_size={ps}")); }
-    if let Some(ref et) = event_type { params.push(format!("event_type={et}")); }
-    if let Some(ref rt) = resource_type { params.push(format!("resource_type={rt}")); }
-    if let Some(ref f) = from { params.push(format!("from={f}")); }
-    if let Some(ref t) = to { params.push(format!("to={t}")); }
+    if let Some(ref et) = event_type { params.push(format!("event_type={}", encode(et))); }
+    if let Some(ref rt) = resource_type { params.push(format!("resource_type={}", encode(rt))); }
+    if let Some(ref f) = from { params.push(format!("from={}", encode(f))); }
+    if let Some(ref t) = to { params.push(format!("to={}", encode(t))); }
     let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
     state.api_client().get(&format!("/activity{query}")).await
 }
@@ -56,11 +57,13 @@ pub async fn list_resource_activity(
     page_size: Option<i64>,
 ) -> AppResult<ActivityResponse> {
     state.require_auth()?;
+    let parsed_id = uuid::Uuid::parse_str(&resource_id)
+        .map_err(|_| "Invalid resource ID format")?;
     let mut params = vec![];
     if let Some(p) = page { params.push(format!("page={p}")); }
     if let Some(ps) = page_size { params.push(format!("page_size={ps}")); }
     let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
-    state.api_client().get(&format!("/activity/resource/{resource_id}{query}")).await
+    state.api_client().get(&format!("/activity/resource/{parsed_id}{query}")).await
 }
 
 #[tauri::command]
@@ -79,12 +82,12 @@ pub async fn list_admin_activity(
     let mut params = vec![];
     if let Some(p) = page { params.push(format!("page={p}")); }
     if let Some(ps) = page_size { params.push(format!("page_size={ps}")); }
-    if let Some(ref ai) = actor_id { params.push(format!("actor_id={ai}")); }
-    if let Some(ref et) = event_type { params.push(format!("event_type={et}")); }
-    if let Some(ref rt) = resource_type { params.push(format!("resource_type={rt}")); }
-    if let Some(ref f) = from { params.push(format!("from={f}")); }
-    if let Some(ref t) = to { params.push(format!("to={t}")); }
-    if let Some(ref s) = search { params.push(format!("search={s}")); }
+    if let Some(ref ai) = actor_id { params.push(format!("actor_id={}", encode(ai))); }
+    if let Some(ref et) = event_type { params.push(format!("event_type={}", encode(et))); }
+    if let Some(ref rt) = resource_type { params.push(format!("resource_type={}", encode(rt))); }
+    if let Some(ref f) = from { params.push(format!("from={}", encode(f))); }
+    if let Some(ref t) = to { params.push(format!("to={}", encode(t))); }
+    if let Some(ref s) = search { params.push(format!("search={}", encode(s))); }
     let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
     state.api_client().get(&format!("/activity/admin{query}")).await
 }

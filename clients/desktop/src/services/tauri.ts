@@ -314,9 +314,9 @@ export const tauriService = {
   }): Promise<ActivityResponse> {
     return invoke('list_activity', {
       page: params?.page ?? null,
-      pageSize: params?.pageSize ?? null,
-      eventType: params?.eventType ?? null,
-      resourceType: params?.resourceType ?? null,
+      page_size: params?.pageSize ?? null,
+      event_type: params?.eventType ?? null,
+      resource_type: params?.resourceType ?? null,
       from: params?.from ?? null,
       to: params?.to ?? null,
     });
@@ -328,9 +328,9 @@ export const tauriService = {
     pageSize?: number,
   ): Promise<ActivityResponse> {
     return invoke('list_resource_activity', {
-      resourceId,
+      resource_id: resourceId,
       page: page ?? null,
-      pageSize: pageSize ?? null,
+      page_size: pageSize ?? null,
     });
   },
 
@@ -346,10 +346,10 @@ export const tauriService = {
   }): Promise<ActivityResponse> {
     return invoke('list_admin_activity', {
       page: params?.page ?? null,
-      pageSize: params?.pageSize ?? null,
-      actorId: params?.actorId ?? null,
-      eventType: params?.eventType ?? null,
-      resourceType: params?.resourceType ?? null,
+      page_size: params?.pageSize ?? null,
+      actor_id: params?.actorId ?? null,
+      event_type: params?.eventType ?? null,
+      resource_type: params?.resourceType ?? null,
       from: params?.from ?? null,
       to: params?.to ?? null,
       search: params?.search ?? null,
