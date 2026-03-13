@@ -30,7 +30,9 @@ public static class ListResourceActivity
             .AnyAsync(f => f.Id == id && f.OwnerId == user.Id && f.TenantId == tenantId, ct);
 
         var hasShare = !isFileOwner && !isFolderOwner && await db.Shares
-            .AnyAsync(s => s.ResourceId == id && s.SharedWithId == user.Id, ct);
+            .AnyAsync(s => s.ResourceId == id && s.SharedWithId == user.Id
+                && (db.Files.Any(f => f.Id == id && f.Folder.TenantId == tenantId)
+                    || db.Folders.Any(f => f.Id == id && f.TenantId == tenantId)), ct);
 
         if (!isFileOwner && !isFolderOwner && !hasShare)
             return AppError.NotFound("Resource not found or access denied").ToProblemResult();
@@ -45,8 +47,10 @@ public static class ListResourceActivity
 
         var total = await query.CountAsync(ct);
 
-        // Client-side ordering for SQLite compatibility in tests
-        var items = (await query
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(a => new
             {
                 id = a.Id,
@@ -59,11 +63,7 @@ public static class ListResourceActivity
                 details = a.Details,
                 created_at = a.CreatedAt
             })
-            .ToListAsync(ct))
-            .OrderByDescending(a => a.created_at)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+            .ToListAsync(ct);
 
         return Results.Ok(new { items, total, page, page_size = pageSize });
     }

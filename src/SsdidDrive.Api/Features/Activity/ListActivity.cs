@@ -47,8 +47,10 @@ public static class ListActivity
         var page = Math.Max(1, pagination.Page);
         var total = await query.CountAsync(ct);
 
-        // Client-side ordering for SQLite compatibility in tests
-        var items = (await query
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(a => new
             {
                 id = a.Id,
@@ -61,11 +63,7 @@ public static class ListActivity
                 details = a.Details,
                 created_at = a.CreatedAt
             })
-            .ToListAsync(ct))
-            .OrderByDescending(a => a.created_at)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+            .ToListAsync(ct);
 
         return Results.Ok(new { items, total, page, page_size = pageSize });
     }

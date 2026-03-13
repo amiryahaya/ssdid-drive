@@ -1,11 +1,14 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
 
 namespace SsdidDrive.Api.Services;
 
-public class FileActivityService(AppDbContext db, ILogger<FileActivityService> logger)
+public class FileActivityService(IServiceScopeFactory scopeFactory, ILogger<FileActivityService> logger)
 {
+    private const int MaxDetailsLength = 4096;
+
     public async Task LogAsync(
         Guid actorId,
         Guid tenantId,
@@ -19,6 +22,13 @@ public class FileActivityService(AppDbContext db, ILogger<FileActivityService> l
     {
         try
         {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var serialized = details is not null ? JsonSerializer.Serialize(details) : null;
+            if (serialized?.Length > MaxDetailsLength)
+                serialized = serialized[..MaxDetailsLength];
+
             var activity = new FileActivity
             {
                 Id = Guid.NewGuid(),
@@ -29,9 +39,7 @@ public class FileActivityService(AppDbContext db, ILogger<FileActivityService> l
                 ResourceId = resourceId,
                 ResourceName = resourceName,
                 ResourceOwnerId = resourceOwnerId,
-                Details = details is not null
-                    ? JsonSerializer.Serialize(details)
-                    : null,
+                Details = serialized,
                 CreatedAt = DateTimeOffset.UtcNow
             };
 

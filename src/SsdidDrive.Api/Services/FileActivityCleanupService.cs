@@ -5,28 +5,33 @@ namespace SsdidDrive.Api.Services;
 
 public class FileActivityCleanupService(
     IServiceProvider services,
-    ILogger<FileActivityCleanupService> logger) : IHostedService, IDisposable
+    ILogger<FileActivityCleanupService> logger) : BackgroundService
 {
-    private Timer? _timer;
-
-    public Task StartAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var now = DateTimeOffset.UtcNow;
         var nextRun = new DateTimeOffset(now.Date.AddDays(now.Hour >= 3 ? 1 : 0).AddHours(3), TimeSpan.Zero);
         var delay = nextRun - now;
 
-        _timer = new Timer(ExecuteCleanup, null, delay, TimeSpan.FromDays(1));
         logger.LogInformation("FileActivity cleanup scheduled. Next run at {NextRun:u}", nextRun);
-        return Task.CompletedTask;
+
+        try
+        {
+            await Task.Delay(delay, stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await RunCleanupAsync(stoppingToken);
+                await Task.Delay(TimeSpan.FromDays(1), stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Graceful shutdown
+        }
     }
 
-    public Task StopAsync(CancellationToken ct)
-    {
-        _timer?.Change(Timeout.Infinite, 0);
-        return Task.CompletedTask;
-    }
-
-    private async void ExecuteCleanup(object? state)
+    private async Task RunCleanupAsync(CancellationToken ct)
     {
         try
         {
@@ -41,18 +46,16 @@ public class FileActivityCleanupService(
                 deleted = await db.FileActivities
                     .Where(a => a.CreatedAt < cutoff)
                     .Take(1000)
-                    .ExecuteDeleteAsync();
+                    .ExecuteDeleteAsync(ct);
                 totalDeleted += deleted;
             } while (deleted == 1000);
 
             if (totalDeleted > 0)
                 logger.LogInformation("FileActivity cleanup: deleted {Count} entries older than 90 days", totalDeleted);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "FileActivity cleanup failed");
         }
     }
-
-    public void Dispose() => _timer?.Dispose();
 }

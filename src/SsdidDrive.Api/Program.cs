@@ -156,7 +156,7 @@ builder.Services.AddHttpClient<RegistryClient>(client =>
 builder.Services.AddScoped<SsdidAuthService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<AuditService>();
-builder.Services.AddScoped<FileActivityService>();
+builder.Services.AddSingleton<FileActivityService>();
 builder.Services.AddHostedService<FileActivityCleanupService>();
 
 // ── Email (Resend) ──

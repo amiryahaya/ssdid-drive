@@ -56,7 +56,7 @@ public static class ListAdminActivity
 
         if (!string.IsNullOrWhiteSpace(pagination.Search))
         {
-            var search = pagination.Search.ToLower();
+            var search = pagination.Search.ToLower(System.Globalization.CultureInfo.InvariantCulture);
             query = query.Where(a => a.ResourceName.ToLower().Contains(search));
         }
 
@@ -64,8 +64,10 @@ public static class ListAdminActivity
         var page = Math.Max(1, pagination.Page);
         var total = await query.CountAsync(ct);
 
-        // Client-side ordering for SQLite compatibility in tests
-        var items = (await query
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(a => new
             {
                 id = a.Id,
@@ -78,11 +80,7 @@ public static class ListAdminActivity
                 details = a.Details,
                 created_at = a.CreatedAt
             })
-            .ToListAsync(ct))
-            .OrderByDescending(a => a.created_at)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+            .ToListAsync(ct);
 
         return Results.Ok(new { items, total, page, page_size = pageSize });
     }
