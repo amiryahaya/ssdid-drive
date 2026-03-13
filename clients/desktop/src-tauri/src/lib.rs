@@ -127,10 +127,14 @@ pub fn run() {
             // Recovery commands
             commands::recovery::setup_recovery,
             commands::recovery::get_recovery_status,
-            commands::recovery::initiate_recovery,
-            commands::recovery::approve_recovery_request,
+            commands::recovery::split_master_key_command,
+            commands::recovery::reconstruct_master_key_command,
+            commands::recovery::create_recovery_file_command,
+            commands::recovery::parse_recovery_file_command,
+            commands::recovery::get_server_share,
             commands::recovery::complete_recovery,
-            commands::recovery::get_pending_recovery_requests,
+            commands::recovery::delete_recovery_setup,
+            commands::recovery::compute_key_proof_command,
             // Settings commands
             commands::settings::get_settings,
             commands::settings::update_settings,

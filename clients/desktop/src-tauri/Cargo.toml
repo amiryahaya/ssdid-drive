@@ -64,6 +64,8 @@ parking_lot = "0.12"
 dirs = "6"
 rand = "0.8"
 sha2 = "0.10"
+sharks = "0.5"
+hex = "0.4"
 mime_guess = "2"
 zeroize = { version = "1.8", features = ["derive"] }
 urlencoding = "2"
