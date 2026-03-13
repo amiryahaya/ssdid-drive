@@ -59,6 +59,7 @@ fun FileBrowserScreen(
     var showSyncSheet by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val snackbarHostState = remember { SnackbarHostState() }
     val haptic = LocalHapticFeedback.current
@@ -354,13 +355,6 @@ fun FileBrowserScreen(
                         }
                     },
                     actions = {
-                        // Refresh button
-                        IconButton(
-                            onClick = { viewModel.loadFolder(folderId) },
-                            modifier = Modifier.semantics { contentDescription = "Refresh" }
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                        }
                         // Search button
                         IconButton(
                             onClick = { viewModel.enterSearchMode() },
@@ -368,35 +362,7 @@ fun FileBrowserScreen(
                         ) {
                             Icon(Icons.Default.Search, contentDescription = "Search")
                         }
-                        // Favorites filter toggle
-                        IconButton(
-                            onClick = { viewModel.toggleShowFavoritesOnly() },
-                            modifier = Modifier.semantics {
-                                contentDescription = if (uiState.showFavoritesOnly) "Show all files" else "Show favorites only"
-                            }
-                        ) {
-                            Icon(
-                                if (uiState.showFavoritesOnly) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                                contentDescription = "Favorites",
-                                tint = if (uiState.showFavoritesOnly)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        // View mode toggle
-                        IconButton(
-                            onClick = { viewModel.toggleViewMode() },
-                            modifier = Modifier.semantics {
-                                contentDescription = if (uiState.viewMode == ViewMode.LIST) "Switch to grid view" else "Switch to list view"
-                            }
-                        ) {
-                            Icon(
-                                if (uiState.viewMode == ViewMode.LIST) Icons.Default.GridView else Icons.Default.ViewList,
-                                contentDescription = "View mode"
-                            )
-                        }
-                        // Sort button
+                        // Sort button with dropdown
                         Box {
                             IconButton(
                                 onClick = { showSortMenu = true },
@@ -424,22 +390,89 @@ fun FileBrowserScreen(
                                 }
                             }
                         }
-                        // Sync status badge
+                        // Sync status badge (only shown when syncing)
                         SyncStatusBadge(
                             syncStatus = syncStatus,
                             onClick = { showSyncSheet = true }
                         )
-                        IconButton(
-                            onClick = onNavigateToShares,
-                            modifier = Modifier.semantics { contentDescription = "View shared files" }
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = "Shares")
-                        }
-                        IconButton(
-                            onClick = onNavigateToSettings,
-                            modifier = Modifier.semantics { contentDescription = "Open settings" }
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        // Overflow menu
+                        Box {
+                            IconButton(
+                                onClick = { showOverflowMenu = true },
+                                modifier = Modifier.semantics { contentDescription = "More options" }
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            }
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Refresh") },
+                                    onClick = {
+                                        viewModel.loadFolder(folderId)
+                                        showOverflowMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Refresh, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(if (uiState.showFavoritesOnly) "Show all files" else "Show favorites")
+                                    },
+                                    onClick = {
+                                        viewModel.toggleShowFavoritesOnly()
+                                        showOverflowMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (uiState.showFavoritesOnly) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                            contentDescription = null,
+                                            tint = if (uiState.showFavoritesOnly)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(if (uiState.viewMode == ViewMode.LIST) "Grid view" else "List view")
+                                    },
+                                    onClick = {
+                                        viewModel.toggleViewMode()
+                                        showOverflowMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (uiState.viewMode == ViewMode.LIST) Icons.Default.GridView else Icons.Default.ViewList,
+                                            contentDescription = null
+                                        )
+                                    }
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Shared files") },
+                                    onClick = {
+                                        onNavigateToShares()
+                                        showOverflowMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    onClick = {
+                                        onNavigateToSettings()
+                                        showOverflowMenu = false
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Settings, contentDescription = null)
+                                    }
+                                )
+                            }
                         }
                     }
                 )
