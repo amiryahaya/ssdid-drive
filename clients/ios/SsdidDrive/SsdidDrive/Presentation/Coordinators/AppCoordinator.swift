@@ -30,11 +30,18 @@ final class AppCoordinator: BaseCoordinator {
     /// Separate task for deep link processing to avoid racing with startup
     private var deepLinkTask: Task<Void, Never>?
 
+    /// Task for background notification cleanup
+    private var cleanupTask: Task<Void, Never>?
+
+    /// URL received at launch before startup completes
+    var pendingStartupURL: URL?
+
     // MARK: - Deinit
 
     deinit {
         activeTask?.cancel()
         deepLinkTask?.cancel()
+        cleanupTask?.cancel()
     }
 
     // MARK: - Start
@@ -47,15 +54,23 @@ final class AppCoordinator: BaseCoordinator {
 
     private func determineInitialFlow() {
         activeTask?.cancel()
-        activeTask = Task {
+        activeTask = Task { [weak self] in
+            guard let self else { return }
             guard !Task.isCancelled else { return }
 
             let settings = container.userDefaultsManager
 
             // Check onboarding
             if !settings.hasCompletedOnboarding {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     showOnboarding()
+                    if let startupURL = pendingStartupURL {
+                        pendingStartupURL = nil
+                        if let action = DeepLinkParser.parse(startupURL) {
+                            handleDeepLinkAction(action)
+                        }
+                    }
                 }
                 return
             }
@@ -65,8 +80,15 @@ final class AppCoordinator: BaseCoordinator {
             // Check authentication
             let isAuthenticated = await container.authRepository.isAuthenticated()
             if !isAuthenticated {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     showAuth()
+                    if let startupURL = pendingStartupURL {
+                        pendingStartupURL = nil
+                        if let action = DeepLinkParser.parse(startupURL) {
+                            handleDeepLinkAction(action)
+                        }
+                    }
                 }
                 return
             }
@@ -79,11 +101,18 @@ final class AppCoordinator: BaseCoordinator {
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 if biometricEnabled && !keysUnlocked {
                     showLockScreen()
                 } else {
                     showMain()
+                }
+                if let startupURL = pendingStartupURL {
+                    pendingStartupURL = nil
+                    if let action = DeepLinkParser.parse(startupURL) {
+                        handleDeepLinkAction(action)
+                    }
                 }
             }
         }
@@ -143,7 +172,8 @@ final class AppCoordinator: BaseCoordinator {
         coordinator.start()
 
         // Cleanup old notifications (runs in background)
-        Task {
+        cleanupTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try await container.notificationRepository.cleanupOldNotifications(daysOld: 30)
             } catch {
@@ -171,14 +201,16 @@ final class AppCoordinator: BaseCoordinator {
     func handleDeepLinkAction(_ action: DeepLinkAction) {
         // Check if user is authenticated
         deepLinkTask?.cancel()
-        deepLinkTask = Task {
+        deepLinkTask = Task { [weak self] in
+            guard let self else { return }
             guard !Task.isCancelled else { return }
 
             let isAuthenticated = await container.authRepository.isAuthenticated()
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 if isAuthenticated {
                     // User is authenticated, process immediately
                     processDeepLinkAction(action)

@@ -25,6 +25,9 @@ final class AuthCoordinator: BaseCoordinator {
     /// can be delivered to it.
     private(set) var inviteAcceptViewModel: InviteAcceptViewModel?
 
+    /// Navigation delegate adapter for cleaning up invite ViewModel on back-swipe
+    private var navDelegateAdapter: NavigationDelegateAdapter?
+
     // MARK: - Start
 
     override func start() {
@@ -52,6 +55,12 @@ final class AuthCoordinator: BaseCoordinator {
         self.inviteAcceptViewModel = viewModel
 
         let inviteVC = InviteAcceptViewController(viewModel: viewModel)
+        navDelegateAdapter = NavigationDelegateAdapter { [weak self] vc in
+            if !(vc is InviteAcceptViewController) {
+                self?.inviteAcceptViewModel = nil
+            }
+        }
+        navigationController.delegate = navDelegateAdapter
         navigationController.setViewControllers([inviteVC], animated: true)
     }
 
@@ -112,5 +121,25 @@ extension AuthCoordinator: JoinTenantViewModelDelegate {
             // Store the pending code for the app coordinator to process after auth.
             self?.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
         }
+    }
+}
+
+// MARK: - Navigation Delegate Adapter
+
+/// NSObject adapter for UINavigationControllerDelegate since BaseCoordinator
+/// does not inherit from NSObject.
+private final class NavigationDelegateAdapter: NSObject, UINavigationControllerDelegate {
+    private let onDidShow: (UIViewController) -> Void
+
+    init(onDidShow: @escaping (UIViewController) -> Void) {
+        self.onDidShow = onDidShow
+    }
+
+    func navigationController(
+        _ navigationController: UINavigationController,
+        didShow viewController: UIViewController,
+        animated: Bool
+    ) {
+        onDidShow(viewController)
     }
 }

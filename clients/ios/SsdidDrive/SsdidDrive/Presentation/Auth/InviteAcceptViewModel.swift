@@ -31,6 +31,12 @@ final class InviteAcceptViewModel: BaseViewModel {
     private var acceptTask: Task<Void, Never>?
     private var callbackTask: Task<Void, Never>?
 
+    deinit {
+        loadTask?.cancel()
+        acceptTask?.cancel()
+        callbackTask?.cancel()
+    }
+
     // MARK: - Computed Properties
 
     var email: String { invitation?.email ?? "" }
@@ -82,8 +88,8 @@ final class InviteAcceptViewModel: BaseViewModel {
             do {
                 try await authRepository.launchWalletInvite(token: token)
                 guard !Task.isCancelled else { return }
-                isLoading = false
                 isWaitingForWallet = true
+                isLoading = false
             } catch {
                 guard !Task.isCancelled else { return }
                 isLoading = false
@@ -93,7 +99,7 @@ final class InviteAcceptViewModel: BaseViewModel {
     }
 
     func handleWalletCallback(sessionToken: String) {
-        callbackTask?.cancel()
+        guard isWaitingForWallet, callbackTask == nil else { return }
         callbackTask = Task { [weak self] in
             guard let self else { return }
             do {

@@ -376,27 +376,28 @@ extension AuthRepositoryImpl {
     }
 
     func saveSessionFromWallet(sessionToken: String) async throws {
+        // Temporarily set token to allow getCurrentUser() to work
         keychainManager.accessToken = sessionToken
 
-        // Sync to shared keychain for File Provider extension
-        if let tokenData = sessionToken.data(using: .utf8) {
-            try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
-        }
-
-        // Fetch user profile to populate userId
         do {
             let user = try await getCurrentUser()
+            // Success — write all state atomically
             keychainManager.userId = user.id
+
+            if let tokenData = sessionToken.data(using: .utf8) {
+                try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
+            }
             if let userIdData = user.id.data(using: .utf8) {
                 try? keychainManager.saveToSharedKeychain(userIdData, for: Constants.Keychain.userId)
             }
-        } catch {
-            // Non-fatal: userId will be populated on next app launch
-        }
 
-        // Update shared defaults for menu bar helper
-        SharedDefaults.shared.writeIsAuthenticated(true)
-        SharedDefaults.shared.notifyHelper()
+            SharedDefaults.shared.writeIsAuthenticated(true)
+            SharedDefaults.shared.notifyHelper()
+        } catch {
+            // Rollback: clear the access token since we couldn't validate it
+            keychainManager.accessToken = nil
+            throw error
+        }
     }
 
     // MARK: - Private Helpers for Invitation
