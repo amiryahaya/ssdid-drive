@@ -141,7 +141,7 @@ docker-compose.override.yml
 compose.override.yml
 
 ## Claude Code
-.claude/settings.local.json
+.claude/
 
 ## Test artifacts
 *.coverage
