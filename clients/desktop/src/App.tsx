@@ -14,6 +14,7 @@ import { FavoritesPage } from '@/pages/FavoritesPage';
 import { SharedWithMePage } from '@/pages/SharedWithMePage';
 import { MySharesPage } from '@/pages/MySharesPage';
 import { PiiChatPage } from '@/pages/PiiChatPage';
+import { ActivityPage } from '@/pages/ActivityPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { InvitationsPage } from '@/pages/InvitationsPage';
 import { MembersPage } from '@/pages/MembersPage';
@@ -161,6 +162,7 @@ function App() {
                     <Route path="/" element={<Navigate to="/files" replace />} />
                     <Route path="/files" element={<FilesPage />} />
                     <Route path="/files/:folderId" element={<FilesPage />} />
+                    <Route path="/activity" element={<ActivityPage />} />
                     <Route path="/favorites" element={<FavoritesPage />} />
                     <Route path="/shared-with-me" element={<SharedWithMePage />} />
                     <Route path="/my-shares" element={<MySharesPage />} />

@@ -17,6 +17,27 @@ import type {
   DecryptedAskResponse,
 } from '../types';
 
+// ==================== Activity Types ====================
+
+export interface ActivityItem {
+  id: string;
+  actor_id: string;
+  actor_name: string | null;
+  event_type: string;
+  resource_type: string;
+  resource_id: string;
+  resource_name: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ActivityResponse {
+  items: ActivityItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 // ==================== SSDID Auth Helpers ====================
 
 export interface ChallengeResult {
@@ -279,6 +300,60 @@ export const tauriService = {
 
   async piiClearKemKeys(): Promise<void> {
     return invoke('pii_clear_kem_keys');
+  },
+
+  // ==================== Activity Commands ====================
+
+  async listActivity(params?: {
+    page?: number;
+    pageSize?: number;
+    eventType?: string;
+    resourceType?: string;
+    from?: string;
+    to?: string;
+  }): Promise<ActivityResponse> {
+    return invoke('list_activity', {
+      page: params?.page ?? null,
+      pageSize: params?.pageSize ?? null,
+      eventType: params?.eventType ?? null,
+      resourceType: params?.resourceType ?? null,
+      from: params?.from ?? null,
+      to: params?.to ?? null,
+    });
+  },
+
+  async listResourceActivity(
+    resourceId: string,
+    page?: number,
+    pageSize?: number,
+  ): Promise<ActivityResponse> {
+    return invoke('list_resource_activity', {
+      resourceId,
+      page: page ?? null,
+      pageSize: pageSize ?? null,
+    });
+  },
+
+  async listAdminActivity(params?: {
+    page?: number;
+    pageSize?: number;
+    actorId?: string;
+    eventType?: string;
+    resourceType?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+  }): Promise<ActivityResponse> {
+    return invoke('list_admin_activity', {
+      page: params?.page ?? null,
+      pageSize: params?.pageSize ?? null,
+      actorId: params?.actorId ?? null,
+      eventType: params?.eventType ?? null,
+      resourceType: params?.resourceType ?? null,
+      from: params?.from ?? null,
+      to: params?.to ?? null,
+      search: params?.search ?? null,
+    });
   },
 
   // ==================== Crypto Commands ====================

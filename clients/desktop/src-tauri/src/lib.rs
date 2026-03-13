@@ -153,6 +153,10 @@ pub fn run() {
             commands::notifications::get_notifications,
             commands::notifications::mark_notification_read,
             commands::notifications::mark_all_notifications_read,
+            // Activity commands
+            commands::activity::list_activity,
+            commands::activity::list_resource_activity,
+            commands::activity::list_admin_activity,
             // Tenant commands
             commands::tenant::list_tenants,
             commands::tenant::switch_tenant,

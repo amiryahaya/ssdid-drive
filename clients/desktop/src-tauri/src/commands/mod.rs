@@ -1,5 +1,6 @@
 //! Tauri commands - IPC interface between frontend and backend
 
+pub mod activity;
 pub mod auth;
 pub mod biometric;
 pub mod crypto;
