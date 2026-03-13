@@ -83,8 +83,12 @@ public static class CreateUploadUrl
         db.Files.Add(fileItem);
         await db.SaveChangesAsync(ct);
 
-        var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
-        var uploadUrl = $"{baseUrl}/api/files/{fileId}/blob";
+        // Use forwarded headers (reverse proxy) or fall back to request values
+        var scheme = httpContext.Request.Headers["X-Forwarded-Proto"].FirstOrDefault()
+            ?? httpContext.Request.Scheme;
+        var host = httpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault()
+            ?? httpContext.Request.Host.ToString();
+        var uploadUrl = $"{scheme}://{host}/api/files/{fileId}/blob";
 
         return Results.Ok(new
         {
