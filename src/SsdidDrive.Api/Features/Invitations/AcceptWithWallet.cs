@@ -51,8 +51,12 @@ public static class AcceptWithWallet
         return await verifyResult.Match(
             async did =>
             {
-                // 3. Email match (case-insensitive)
-                if (!string.Equals(req.Email?.Trim(), invitation.Email?.Trim(), StringComparison.OrdinalIgnoreCase))
+                // 3. Invitation must have an email to verify
+                if (string.IsNullOrWhiteSpace(invitation.Email))
+                    return AppError.BadRequest("Invitation has no email to verify").ToProblemResult();
+
+                // 4. Email match (case-insensitive)
+                if (!string.Equals(req.Email?.Trim(), invitation.Email.Trim(), StringComparison.OrdinalIgnoreCase))
                     return AppError.Forbidden("Email verification failed").ToProblemResult();
 
                 // 4. Begin transaction for all DB changes
@@ -68,7 +72,7 @@ public static class AcceptWithWallet
                     {
                         Id = Guid.NewGuid(),
                         Did = did,
-                        DisplayName = req.Email,
+                        DisplayName = null,
                         Status = UserStatus.Active,
                         TenantId = invitation.TenantId,
                         CreatedAt = DateTimeOffset.UtcNow,

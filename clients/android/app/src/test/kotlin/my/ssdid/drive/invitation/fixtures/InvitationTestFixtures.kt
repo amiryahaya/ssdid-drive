@@ -13,7 +13,6 @@ object InvitationTestFixtures {
 
     object DomainModels {
         val validTokenInvitation = TokenInvitation(
-            id = "inv-123",
             email = "user@example.com",
             role = UserRole.USER,
             tenantName = "Test Organization",
@@ -115,35 +114,25 @@ object InvitationTestFixtures {
 
     object DTOs {
         val validInviteInfoDto = InviteInfoDto(
-            id = "inv-123",
             email = "user@example.com",
             role = "member",
             tenantName = "Test Organization",
             inviterName = "John Doe",
             message = "Welcome to our team!",
             expiresAt = "2030-12-31T23:59:59Z",
-            valid = true,
-            errorReason = null
+            status = "pending"
         )
 
         val expiredInviteInfoDto = validInviteInfoDto.copy(
-            valid = false,
-            errorReason = "expired"
+            status = "expired"
         )
 
         val revokedInviteInfoDto = validInviteInfoDto.copy(
-            valid = false,
-            errorReason = "revoked"
+            status = "revoked"
         )
 
         val alreadyUsedInviteInfoDto = validInviteInfoDto.copy(
-            valid = false,
-            errorReason = "already_used"
-        )
-
-        val notFoundInviteInfoDto = validInviteInfoDto.copy(
-            valid = false,
-            errorReason = "not_found"
+            status = "accepted"
         )
 
         val inviteInfoDtoWithNullOptionals = validInviteInfoDto.copy(
@@ -230,14 +219,13 @@ object InvitationTestFixtures {
         val validInviteInfoResponse = """
             {
                 "data": {
-                    "id": "inv-123",
                     "email": "user@example.com",
                     "role": "member",
                     "tenant_name": "Test Organization",
                     "inviter_name": "John Doe",
                     "message": "Welcome to our team!",
                     "expires_at": "2030-12-31T23:59:59Z",
-                    "valid": true
+                    "status": "pending"
                 }
             }
         """.trimIndent()
@@ -245,13 +233,11 @@ object InvitationTestFixtures {
         val expiredInviteInfoResponse = """
             {
                 "data": {
-                    "id": "inv-123",
                     "email": "user@example.com",
                     "role": "member",
                     "tenant_name": "Test Organization",
                     "expires_at": "2020-01-01T00:00:00Z",
-                    "valid": false,
-                    "error_reason": "expired"
+                    "status": "expired"
                 }
             }
         """.trimIndent()

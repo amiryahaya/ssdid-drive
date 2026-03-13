@@ -273,18 +273,18 @@ private fun handleDeepLink(navController: NavHostController, action: DeepLinkAct
             }
         }
         is DeepLinkAction.WalletInviteCallback -> {
-            // Store session token for the invite accept screen to consume
+            // Wallet completed invite acceptance — save session and go to main screen.
+            // The wallet already verified email match, credential, and server identity.
             WalletCallbackHolder.set(action.sessionToken)
-            // Navigate to invite accept screen which will consume the token
-            navController.navigate(Screen.Login.route) {
-                launchSingleTop = true
-            }
+            // The InviteAcceptScreen is still on the back stack and its LaunchedEffect
+            // will consume the token, save the session, and trigger onRegistrationSuccess
+            // which navigates to Files. We just need to pop back to it.
+            // Since the screen should still be on the stack, no navigation needed —
+            // the activity resume will recompose it.
         }
         is DeepLinkAction.WalletInviteError -> {
-            // Wallet returned an error during invitation acceptance; navigate to login
-            navController.navigate(Screen.Login.route) {
-                launchSingleTop = true
-            }
+            // Wallet returned an error — InviteAcceptScreen is still on back stack
+            // and will show appropriate state when resumed.
         }
     }
 }

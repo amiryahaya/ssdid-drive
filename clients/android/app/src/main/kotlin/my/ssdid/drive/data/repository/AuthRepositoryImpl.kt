@@ -400,15 +400,20 @@ class AuthRepositoryImpl @Inject constructor(
 
                 val dto = body.data
                 val invitation = TokenInvitation(
-                    id = dto.id,
                     email = dto.email,
                     role = UserRole.fromString(dto.role),
                     tenantName = dto.tenantName,
                     inviterName = dto.inviterName,
                     message = dto.message,
                     expiresAt = dto.expiresAt,
-                    valid = dto.valid,
-                    errorReason = TokenInvitationError.fromString(dto.errorReason)
+                    valid = dto.status == "pending",
+                    errorReason = when (dto.status) {
+                        "pending" -> null
+                        "accepted" -> TokenInvitationError.ALREADY_USED
+                        "expired" -> TokenInvitationError.EXPIRED
+                        "revoked" -> TokenInvitationError.REVOKED
+                        else -> TokenInvitationError.NOT_FOUND
+                    }
                 )
                 Result.success(invitation)
             } else {

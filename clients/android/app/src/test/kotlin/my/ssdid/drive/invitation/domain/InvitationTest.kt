@@ -24,7 +24,6 @@ class InvitationTest {
     fun `TokenInvitation created with all fields populated`() {
         val invitation = InvitationTestFixtures.DomainModels.validTokenInvitation
 
-        assertEquals("inv-123", invitation.id)
         assertEquals("user@example.com", invitation.email)
         assertEquals(UserRole.USER, invitation.role)
         assertEquals("Test Organization", invitation.tenantName)

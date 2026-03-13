@@ -35,13 +35,9 @@ public static class GetInvitationByToken
 
         return Results.Ok(new
         {
-            invitation.Id,
-            invitation.TenantId,
             TenantName = invitation.Tenant.Name,
-            invitation.InvitedById,
             InviterName = invitation.InvitedBy?.DisplayName,
             invitation.Email,
-            invitation.InvitedUserId,
             Role = invitation.Role.ToString().ToLowerInvariant(),
             Status = invitation.Status.ToString().ToLowerInvariant(),
             invitation.ShortCode,

@@ -79,7 +79,6 @@ data class InvitationAccepted(
  * Used for invitation-only registration flow.
  */
 data class TokenInvitation(
-    val id: String,
     val email: String,
     val role: UserRole,
     val tenantName: String,
