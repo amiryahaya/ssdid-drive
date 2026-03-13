@@ -34,12 +34,17 @@ class FolderRepositoryImpl @Inject constructor(
                 val folder = try {
                     decryptFolder(folderDto)
                 } catch (_: Exception) {
-                    // Root folder may not have encryption keys yet (e.g. auto-created for new tenants)
-                    if (folderDto.isRoot) {
-                        initializeRootFolderEncryption(folderDto)
-                    } else {
-                        return Result.error(AppException.CryptoError("Failed to decrypt folder"))
-                    }
+                    // Folder has no encryption or keys not available — return plain folder
+                    Folder(
+                        id = folderDto.id,
+                        parentId = folderDto.parentId,
+                        ownerId = folderDto.ownerId,
+                        tenantId = folderDto.tenantId,
+                        isRoot = folderDto.isRoot,
+                        name = "My Files",
+                        createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
+                        updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
+                    )
                 }
                 Result.success(folder)
             } else {
@@ -48,56 +53,6 @@ class FolderRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to get root folder", e))
         }
-    }
-
-    /**
-     * Initialize encryption for a root folder that was auto-created without keys.
-     * Generates KEK, wraps with owner keys, updates backend, and caches the KEK.
-     */
-    private suspend fun initializeRootFolderEncryption(folderDto: FolderDto): Folder {
-        val encryptionData = folderKeyManager.createRootFolderEncryption("My Files")
-
-        // Cache the KEK so createFolder() can use it
-        folderKeyManager.cacheKek(folderDto.id, encryptionData.kek)
-
-        // Create signature
-        val signature = folderKeyManager.createFolderSignature(
-            folderId = folderDto.id,
-            parentId = null,
-            encryptedMetadata = encryptionData.encryptedMetadata,
-            metadataNonce = encryptionData.metadataNonce,
-            ownerWrappedKek = encryptionData.ownerWrappedKek,
-            ownerKemCiphertext = encryptionData.ownerKemCiphertext,
-            ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
-            wrappedKek = encryptionData.wrappedKek,
-            kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
-            mlKemCiphertext = encryptionData.mlKemCiphertext
-        )
-
-        // Update backend with encryption data
-        val updateRequest = UpdateFolderRequest(
-            encryptedMetadata = encryptionData.encryptedMetadata,
-            metadataNonce = encryptionData.metadataNonce,
-            wrappedKek = encryptionData.wrappedKek,
-            kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
-            ownerWrappedKek = encryptionData.ownerWrappedKek,
-            ownerKemCiphertext = encryptionData.ownerKemCiphertext,
-            mlKemCiphertext = encryptionData.mlKemCiphertext,
-            ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
-            signature = signature
-        )
-        apiService.updateFolder(folderDto.id, updateRequest)
-
-        return Folder(
-            id = folderDto.id,
-            parentId = folderDto.parentId,
-            ownerId = folderDto.ownerId,
-            tenantId = folderDto.tenantId,
-            isRoot = true,
-            name = "My Files",
-            createdAt = java.time.OffsetDateTime.parse(folderDto.createdAt).toInstant(),
-            updatedAt = java.time.OffsetDateTime.parse(folderDto.updatedAt).toInstant()
-        )
     }
 
     override fun observeRootFolder(): Flow<Folder?> {
@@ -194,47 +149,48 @@ class FolderRepositoryImpl @Inject constructor(
 
     override suspend fun createFolder(parentId: String, name: String): Result<Folder> {
         return try {
-            // Get parent folder's KEK
+            // Try E2EE folder creation if keys are available
             val parentKek = folderKeyManager.getCachedKek(parentId)
-                ?: return Result.error(AppException.CryptoError("Parent folder KEK not available"))
 
-            // Create encryption data for new folder
-            val encryptionData = folderKeyManager.createChildFolderEncryption(name, parentKek)
-
-            // Cache the new folder's KEK (we'll need it if user navigates into it)
-            // Note: We don't have the folder ID yet, will cache after response
-
-            val request = CreateFolderRequest(
-                parentId = parentId,
-                encryptedMetadata = encryptionData.encryptedMetadata,
-                metadataNonce = encryptionData.metadataNonce,
-                wrappedKek = encryptionData.wrappedKek,
-                kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
-                ownerWrappedKek = encryptionData.ownerWrappedKek,
-                ownerKemCiphertext = encryptionData.ownerKemCiphertext,
-                mlKemCiphertext = encryptionData.mlKemCiphertext,
-                ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
-                signature = folderKeyManager.createFolderSignature(
-                    folderId = null,
-                    parentId = parentId,
-                    encryptedMetadata = encryptionData.encryptedMetadata,
-                    metadataNonce = encryptionData.metadataNonce,
-                    ownerWrappedKek = encryptionData.ownerWrappedKek,
-                    ownerKemCiphertext = encryptionData.ownerKemCiphertext,
-                    ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
-                    wrappedKek = encryptionData.wrappedKek,
-                    kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
-                    mlKemCiphertext = encryptionData.mlKemCiphertext
-                )
-            )
+            val request = if (parentKek != null) {
+                try {
+                    val encryptionData = folderKeyManager.createChildFolderEncryption(name, parentKek)
+                    CreateFolderRequest(
+                        parentId = parentId,
+                        encryptedMetadata = encryptionData.encryptedMetadata,
+                        metadataNonce = encryptionData.metadataNonce,
+                        wrappedKek = encryptionData.wrappedKek,
+                        kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
+                        ownerWrappedKek = encryptionData.ownerWrappedKek,
+                        ownerKemCiphertext = encryptionData.ownerKemCiphertext,
+                        mlKemCiphertext = encryptionData.mlKemCiphertext,
+                        ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
+                        signature = folderKeyManager.createFolderSignature(
+                            folderId = null,
+                            parentId = parentId,
+                            encryptedMetadata = encryptionData.encryptedMetadata,
+                            metadataNonce = encryptionData.metadataNonce,
+                            ownerWrappedKek = encryptionData.ownerWrappedKek,
+                            ownerKemCiphertext = encryptionData.ownerKemCiphertext,
+                            ownerMlKemCiphertext = encryptionData.ownerMlKemCiphertext,
+                            wrappedKek = encryptionData.wrappedKek,
+                            kemCiphertext = encryptionData.kemCiphertext.ifEmpty { null },
+                            mlKemCiphertext = encryptionData.mlKemCiphertext
+                        )
+                    )
+                } catch (_: Exception) {
+                    // Keys not unlocked, fall back to plain folder
+                    CreateFolderRequest(parentId = parentId, name = name)
+                }
+            } else {
+                // No parent KEK cached — create plain folder (E2EE will be added when wallet key transfer is implemented)
+                CreateFolderRequest(parentId = parentId, name = name)
+            }
 
             val response = apiService.createFolder(request)
 
             if (response.isSuccessful) {
                 val folderDto = response.body()!!.data
-
-                // Cache the KEK for the new folder
-                folderKeyManager.cacheKek(folderDto.id, encryptionData.kek)
 
                 val folder = Folder(
                     id = folderDto.id,
@@ -466,11 +422,24 @@ class FolderRepositoryImpl @Inject constructor(
     /**
      * Decrypt a folder DTO into a domain Folder.
      *
-     * Decrypts the KEK using owner access, then decrypts the metadata.
+     * If the folder has no encryption data (plain folder), returns it with
+     * a fallback name. Otherwise decrypts the KEK and metadata.
      */
     private fun decryptFolder(dto: FolderDto): Folder {
         val encryptedMetadata = dto.encryptedMetadata
-            ?: throw AppException.CryptoError("Missing encrypted metadata")
+        // Plain folder — no encryption data
+        if (encryptedMetadata.isNullOrBlank() || dto.ownerKemCiphertext.isBlank() || dto.ownerWrappedKek.isBlank()) {
+            return Folder(
+                id = dto.id,
+                parentId = dto.parentId,
+                ownerId = dto.ownerId,
+                tenantId = dto.tenantId,
+                isRoot = dto.isRoot,
+                name = dto.name ?: if (dto.isRoot) "My Files" else "Folder",
+                createdAt = java.time.OffsetDateTime.parse(dto.createdAt).toInstant(),
+                updatedAt = java.time.OffsetDateTime.parse(dto.updatedAt).toInstant()
+            )
+        }
 
         val signature = dto.signature
         if (!signature.isNullOrBlank()) {

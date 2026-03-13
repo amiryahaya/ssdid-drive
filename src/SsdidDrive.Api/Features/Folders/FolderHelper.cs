@@ -11,6 +11,7 @@ internal static class FolderHelper
         f.OwnerId,
         f.TenantId,
         IsRoot = f.ParentFolderId is null,
+        f.Name,
         EncryptedMetadata = f.EncryptedMetadata,
         MetadataNonce = f.MetadataNonce,
         WrappedKek = f.WrappedKek ?? (f.EncryptedFolderKey is not null ? Convert.ToBase64String(f.EncryptedFolderKey) : ""),

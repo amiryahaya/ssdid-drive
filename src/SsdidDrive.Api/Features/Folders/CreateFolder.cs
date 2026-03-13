@@ -9,15 +9,16 @@ public static class CreateFolder
 {
     private record Request(
         string? ParentId,
-        string EncryptedMetadata,
-        string MetadataNonce,
-        string WrappedKek,
+        string? Name,
+        string? EncryptedMetadata,
+        string? MetadataNonce,
+        string? WrappedKek,
         string? KemCiphertext,
-        string OwnerWrappedKek,
-        string OwnerKemCiphertext,
+        string? OwnerWrappedKek,
+        string? OwnerKemCiphertext,
         string? MlKemCiphertext,
         string? OwnerMlKemCiphertext,
-        string Signature);
+        string? Signature);
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
@@ -45,7 +46,7 @@ public static class CreateFolder
         var now = DateTimeOffset.UtcNow;
         var folder = new Folder
         {
-            Name = "encrypted",
+            Name = req.Name ?? "encrypted",
             ParentFolderId = parentId,
             OwnerId = user.Id,
             TenantId = user.TenantId.Value,
