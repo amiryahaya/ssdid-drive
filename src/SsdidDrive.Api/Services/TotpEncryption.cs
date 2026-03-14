@@ -6,13 +6,15 @@ public class TotpEncryption
 {
     private readonly byte[] _key;
 
-    public TotpEncryption(IConfiguration config)
+    public TotpEncryption(IConfiguration config, ILogger<TotpEncryption> logger)
     {
         var keyBase64 = config["Auth:TotpEncryptionKey"];
         if (string.IsNullOrEmpty(keyBase64))
         {
-            // Generate a key for development — log warning
             _key = RandomNumberGenerator.GetBytes(32);
+            logger.LogWarning(
+                "Auth:TotpEncryptionKey is not configured. Using a random key — " +
+                "TOTP secrets will be unrecoverable after restart. Set a persistent key for production.");
         }
         else
         {

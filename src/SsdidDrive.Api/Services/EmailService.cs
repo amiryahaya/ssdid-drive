@@ -9,13 +9,19 @@ public interface IEmailService
     Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default);
 }
 
-public sealed class NullEmailService : IEmailService
+public sealed class NullEmailService(ILogger<NullEmailService> logger) : IEmailService
 {
     public Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message)
-        => Task.CompletedTask;
+    {
+        logger.LogInformation("Invitation for {Email} to {Tenant} (code: {Code})", toEmail, tenantName, shortCode);
+        return Task.CompletedTask;
+    }
 
     public Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default)
-        => Task.CompletedTask;
+    {
+        logger.LogInformation("OTP for {Email}: {Code}", toEmail, code);
+        return Task.CompletedTask;
+    }
 }
 
 public class EmailService : IEmailService

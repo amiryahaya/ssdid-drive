@@ -76,7 +76,7 @@ public class OidcTokenValidator
             if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(email))
                 return AppError.Unauthorized("ID token missing required claims (sub, email)");
 
-            return new OidcClaims(sub, email, name);
+            return new OidcClaims(sub, email.ToLowerInvariant(), name);
         }
         catch (SecurityTokenException ex)
         {
