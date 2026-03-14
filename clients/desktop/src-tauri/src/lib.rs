@@ -76,6 +76,16 @@ pub fn run() {
     tracing::info!("Starting SSDID Drive Desktop v{}", env!("CARGO_PKG_VERSION"));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Focus existing window when a second instance is launched
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+            // Forward deep link args to the existing instance
+            if let Some(url) = args.get(1) {
+                tracing::info!("Single instance: received URL from new instance: {}", url);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
