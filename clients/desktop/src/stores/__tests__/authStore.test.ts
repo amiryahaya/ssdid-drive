@@ -287,4 +287,212 @@ describe('authStore', () => {
       expect(useAuthStore.getState().devices).toEqual(remainingDevices);
     });
   });
+
+  describe('sendOtp', () => {
+    it('should call invoke with send_otp and correct args', async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await useAuthStore.getState().sendOtp('test@example.com');
+
+      expect(mockInvoke).toHaveBeenCalledWith('send_otp', {
+        email: 'test@example.com',
+        invitationToken: null,
+      });
+    });
+
+    it('should set isLoading true during call', async () => {
+      mockInvoke.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(undefined), 100))
+      );
+
+      const promise = useAuthStore.getState().sendOtp('test@example.com');
+
+      expect(useAuthStore.getState().isLoading).toBe(true);
+      expect(useAuthStore.getState().error).toBeNull();
+
+      await promise;
+
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('should set error on failure and rethrow', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Rate limited'));
+
+      await expect(
+        useAuthStore.getState().sendOtp('test@example.com')
+      ).rejects.toThrow('Rate limited');
+
+      expect(useAuthStore.getState().error).toBe('Rate limited');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('should pass invitationToken when provided', async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await useAuthStore.getState().sendOtp('test@example.com', 'invite-token-123');
+
+      expect(mockInvoke).toHaveBeenCalledWith('send_otp', {
+        email: 'test@example.com',
+        invitationToken: 'invite-token-123',
+      });
+    });
+  });
+
+  describe('verifyOtp', () => {
+    it('should call invoke with verify_otp and correct args', async () => {
+      mockInvoke
+        .mockResolvedValueOnce({ token: 'session-token', totp_setup_required: false }) // verify_otp
+        .mockResolvedValueOnce(mockAuthStatus); // check_auth_status
+
+      await useAuthStore.getState().verifyOtp('test@example.com', '123456');
+
+      expect(mockInvoke).toHaveBeenCalledWith('verify_otp', {
+        email: 'test@example.com',
+        code: '123456',
+        invitationToken: null,
+      });
+    });
+
+    it('should call checkAuth after success', async () => {
+      mockInvoke
+        .mockResolvedValueOnce({ token: 'session-token', totp_setup_required: false })
+        .mockResolvedValueOnce(mockAuthStatus);
+
+      await useAuthStore.getState().verifyOtp('test@example.com', '123456');
+
+      expect(mockInvoke).toHaveBeenCalledWith('check_auth_status');
+    });
+
+    it('should return totpSetupRequired from response', async () => {
+      mockInvoke
+        .mockResolvedValueOnce({ token: 'session-token', totp_setup_required: true })
+        .mockResolvedValueOnce(mockAuthStatus);
+
+      const result = await useAuthStore.getState().verifyOtp('test@example.com', '123456');
+
+      expect(result).toEqual({ totpSetupRequired: true });
+    });
+
+    it('should set error on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Invalid OTP'));
+
+      await expect(
+        useAuthStore.getState().verifyOtp('test@example.com', '999999')
+      ).rejects.toThrow('Invalid OTP');
+
+      expect(useAuthStore.getState().error).toBe('Invalid OTP');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('emailLogin', () => {
+    it('should call invoke with email_login', async () => {
+      mockInvoke.mockResolvedValueOnce({ requires_totp: false });
+
+      await useAuthStore.getState().emailLogin('test@example.com');
+
+      expect(mockInvoke).toHaveBeenCalledWith('email_login', { email: 'test@example.com' });
+    });
+
+    it('should return requiresTotp true when response indicates', async () => {
+      mockInvoke.mockResolvedValueOnce({ requires_totp: true });
+
+      const result = await useAuthStore.getState().emailLogin('test@example.com');
+
+      expect(result).toEqual({ requiresTotp: true });
+    });
+
+    it('should return requiresTotp false when response indicates', async () => {
+      mockInvoke.mockResolvedValueOnce({ requires_totp: false });
+
+      const result = await useAuthStore.getState().emailLogin('test@example.com');
+
+      expect(result).toEqual({ requiresTotp: false });
+    });
+
+    it('should set error on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('User not found'));
+
+      await expect(
+        useAuthStore.getState().emailLogin('unknown@example.com')
+      ).rejects.toThrow('User not found');
+
+      expect(useAuthStore.getState().error).toBe('User not found');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('loginWithOidc', () => {
+    it('should call invoke with oidc_login', async () => {
+      mockInvoke.mockResolvedValueOnce(undefined);
+
+      await useAuthStore.getState().loginWithOidc('google');
+
+      expect(mockInvoke).toHaveBeenCalledWith('oidc_login', { provider: 'google' });
+    });
+
+    it('should set isLoading during call', async () => {
+      mockInvoke.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(undefined), 100))
+      );
+
+      const promise = useAuthStore.getState().loginWithOidc('microsoft');
+
+      expect(useAuthStore.getState().isLoading).toBe(true);
+      expect(useAuthStore.getState().error).toBeNull();
+
+      await promise;
+
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('should set error on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Browser open failed'));
+
+      await expect(
+        useAuthStore.getState().loginWithOidc('google')
+      ).rejects.toThrow('Browser open failed');
+
+      expect(useAuthStore.getState().error).toBe('Browser open failed');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('totpVerify', () => {
+    it('should call invoke with totp_verify', async () => {
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // totp_verify
+        .mockResolvedValueOnce(mockAuthStatus); // check_auth_status
+
+      await useAuthStore.getState().totpVerify('test@example.com', '123456');
+
+      expect(mockInvoke).toHaveBeenCalledWith('totp_verify', {
+        email: 'test@example.com',
+        code: '123456',
+      });
+    });
+
+    it('should call checkAuth after success', async () => {
+      mockInvoke
+        .mockResolvedValueOnce(undefined) // totp_verify
+        .mockResolvedValueOnce(mockAuthStatus); // check_auth_status
+
+      await useAuthStore.getState().totpVerify('test@example.com', '123456');
+
+      expect(mockInvoke).toHaveBeenCalledWith('check_auth_status');
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+      expect(useAuthStore.getState().user).toEqual(mockAuthStatus.user);
+    });
+
+    it('should set error on failure', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('Invalid TOTP code'));
+
+      await expect(
+        useAuthStore.getState().totpVerify('test@example.com', '000000')
+      ).rejects.toThrow('Invalid TOTP code');
+
+      expect(useAuthStore.getState().error).toBe('Invalid TOTP code');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+  });
 });
