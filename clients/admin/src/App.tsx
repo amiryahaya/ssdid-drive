@@ -3,6 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
+import AuthCallbackPage from './pages/AuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
 import TenantsPage from './pages/TenantsPage'
@@ -89,7 +90,10 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter basename="/admin">
-        {isAuthenticated ? <AuthenticatedApp /> : <LoginPage />}
+        <Routes>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="*" element={isAuthenticated ? <AuthenticatedApp /> : <LoginPage />} />
+        </Routes>
       </BrowserRouter>
     </ErrorBoundary>
   )

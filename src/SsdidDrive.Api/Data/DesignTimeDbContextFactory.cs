@@ -15,7 +15,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         // The connection string only needs to be syntactically valid;
         // EF uses it to determine the provider but does not connect during migration scaffolding.
-        optionsBuilder.UseNpgsql("Host=localhost;Database=ssdid_drive;Username=postgres;Password=postgres");
+        optionsBuilder.UseNpgsql("Host=localhost;Database=ssdid_drive;Username=ssdid_drive;Password=ssdid_drive");
         return new AppDbContext(optionsBuilder.Options);
     }
 }
