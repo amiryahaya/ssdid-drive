@@ -1,5 +1,0 @@
-framework module KazKemNative {
-    umbrella header "kazkem.h"
-    export *
-    module * { export * }
-}

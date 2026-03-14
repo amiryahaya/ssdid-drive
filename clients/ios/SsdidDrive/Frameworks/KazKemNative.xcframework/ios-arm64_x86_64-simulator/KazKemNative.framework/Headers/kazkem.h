@@ -139,7 +139,7 @@ int kaz_kem_decapsulate(unsigned char *ss, unsigned long long *sslen,
 /**
  * Get version string.
  *
- * @return Pointer to version string (e.g., "2.1.0")
+ * @return Pointer to version string (e.g., "2.0.0")
  */
 const char* kaz_kem_version(void);
 

@@ -1,7 +1,0 @@
-module KazSignNative {
-    header "sign.h"
-    header "nist_api.h"
-    header "kdf.h"
-    header "security.h"
-    export *
-}
