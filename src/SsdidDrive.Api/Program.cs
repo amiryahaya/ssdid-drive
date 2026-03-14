@@ -19,6 +19,8 @@ using SsdidDrive.Api.Features.Admin;
 using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
 using SsdidDrive.Api.Features.Account;
+using SsdidDrive.Api.Features.ExtensionServices;
+using SsdidDrive.Api.Features.TenantRequests;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
@@ -157,6 +159,7 @@ builder.Services.AddScoped<OtpService>();
 builder.Services.AddSingleton<TotpService>();
 builder.Services.AddSingleton<TotpEncryption>();
 builder.Services.AddSingleton<OidcTokenValidator>();
+builder.Services.AddScoped<ExtensionServiceContext>();
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
@@ -367,6 +370,8 @@ app.MapCredentialFeature();
 app.MapAdminFeature();
 app.MapActivityFeature();
 app.MapAccountFeature();
+app.MapExtensionServiceFeature();
+app.MapTenantRequestFeature();
 
 // ── Serve admin SPA ──
 var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");

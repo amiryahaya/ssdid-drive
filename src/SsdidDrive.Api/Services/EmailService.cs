@@ -7,6 +7,7 @@ public interface IEmailService
 {
     Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message);
     Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default);
+    Task SendRejectionAsync(string toEmail, string organizationName, string? reason, CancellationToken ct = default);
 }
 
 public sealed class NullEmailService(ILogger<NullEmailService> logger) : IEmailService
@@ -20,6 +21,12 @@ public sealed class NullEmailService(ILogger<NullEmailService> logger) : IEmailS
     public Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default)
     {
         logger.LogInformation("OTP for {Email}: {Code}", toEmail, code);
+        return Task.CompletedTask;
+    }
+
+    public Task SendRejectionAsync(string toEmail, string organizationName, string? reason, CancellationToken ct = default)
+    {
+        logger.LogInformation("Rejection for {Email}: org={Org}, reason={Reason}", toEmail, organizationName, reason);
         return Task.CompletedTask;
     }
 }
@@ -124,6 +131,43 @@ public class EmailService : IEmailService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send OTP email to {Email}", toEmail);
+        }
+    }
+
+    public async Task SendRejectionAsync(string toEmail, string organizationName, string? reason, CancellationToken ct = default)
+    {
+        var safeName = WebUtility.HtmlEncode(organizationName);
+        var safeReason = string.IsNullOrWhiteSpace(reason) ? null : WebUtility.HtmlEncode(reason);
+
+        var html = $"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+                <h2 style="color: #111827; margin-bottom: 8px;">Tenant Request Update</h2>
+                <p style="color: #6b7280; font-size: 15px;">
+                    Your request to create the organization <strong style="color: #111827;">{safeName}</strong> has been reviewed and was not approved at this time.
+                </p>
+                {(safeReason is null ? "" : $"""<p style="color: #6b7280; font-size: 14px; border-left: 3px solid #e5e7eb; padding-left: 12px;"><strong>Reason:</strong> {safeReason}</p>""")}
+                <p style="color: #6b7280; font-size: 14px;">If you believe this was in error, please contact your administrator.</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+                <p style="color: #9ca3af; font-size: 12px; text-align: center;">SSDID Drive — Post-quantum secure file storage</p>
+            </div>
+            """;
+
+        var emailMessage = new EmailMessage
+        {
+            From = _fromAddress,
+            Subject = $"SSDID Drive - Tenant Request Update: {safeName}"
+        };
+        emailMessage.To.Add(toEmail);
+        emailMessage.HtmlBody = html;
+
+        try
+        {
+            await _resend.EmailSendAsync(emailMessage, ct);
+            _logger.LogInformation("Rejection email sent to {Email} for org {Org}", toEmail, organizationName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send rejection email to {Email}", toEmail);
         }
     }
 }
