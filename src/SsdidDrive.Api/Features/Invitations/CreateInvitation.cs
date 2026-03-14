@@ -14,7 +14,7 @@ public static class CreateInvitation
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/", Handle);
 
-    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, IEmailService emailService, CancellationToken ct)
+    private static async Task<IResult> Handle(Request req, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, IEmailService emailService, AuditService audit, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -99,12 +99,26 @@ public static class CreateInvitation
 
         await db.SaveChangesAsync(ct);
 
-        // Send invitation email (EmailService handles errors internally, won't throw)
+        // Send invitation email — capture success/failure for response
+        bool emailSent = false;
+        string? emailError = null;
         if (!string.IsNullOrWhiteSpace(req.Email))
         {
-            await emailService.SendInvitationAsync(
-                req.Email, tenant!.Name, role.Value.ToString().ToLowerInvariant(), shortCode, req.Message);
+            try
+            {
+                await emailService.SendInvitationAsync(
+                    req.Email, tenant!.Name, role.Value.ToString().ToLowerInvariant(), shortCode, req.Message);
+                emailSent = true;
+            }
+            catch (Exception)
+            {
+                emailError = "Failed to send invitation email";
+            }
         }
+
+        // Audit log
+        await audit.LogAsync(user.Id, "invitation.created", "Invitation", invitation.Id,
+            $"Invited {req.Email ?? "(no email)"} as {role.Value.ToString().ToLowerInvariant()} to tenant {tenant!.Name}", ct);
 
         return Results.Created($"/api/invitations/{invitation.Id}", new
         {
@@ -115,8 +129,11 @@ public static class CreateInvitation
             invited_user_id = invitation.InvitedUserId,
             role = invitation.Role.ToString().ToLowerInvariant(),
             status = invitation.Status.ToString().ToLowerInvariant(),
+            token = invitation.Token,
             short_code = invitation.ShortCode,
             message = invitation.Message,
+            email_sent = emailSent,
+            email_error = emailError,
             expires_at = invitation.ExpiresAt,
             created_at = invitation.CreatedAt
         });
