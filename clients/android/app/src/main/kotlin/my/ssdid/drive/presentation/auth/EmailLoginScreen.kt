@@ -19,21 +19,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import my.ssdid.drive.R
 
 @Composable
-fun LoginScreen(
-    onLoginSuccess: () -> Unit,
+fun EmailLoginScreen(
+    onNavigateToTotp: (email: String) -> Unit,
     onNavigateToRegister: () -> Unit = {},
     onNavigateToRecovery: () -> Unit = {},
-    onNavigateToTotp: (email: String) -> Unit = {},
     onOidcLogin: (provider: String) -> Unit = {},
-    viewModel: LoginViewModel = hiltViewModel()
+    viewModel: EmailLoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    LaunchedEffect(uiState.isAuthenticated) {
-        if (uiState.isAuthenticated) {
-            onLoginSuccess()
-        }
-    }
 
     LaunchedEffect(uiState.navigateToTotp) {
         uiState.navigateToTotp?.let { email ->
@@ -94,11 +87,11 @@ fun LoginScreen(
 
         // Continue button
         Button(
-            onClick = { viewModel.submitEmail() },
+            onClick = viewModel::submitEmail,
             enabled = !uiState.isLoading && uiState.email.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("login_button")
+                .testTag("continue_button")
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(

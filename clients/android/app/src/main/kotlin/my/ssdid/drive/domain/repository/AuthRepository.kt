@@ -1,18 +1,18 @@
 package my.ssdid.drive.domain.repository
 
+import my.ssdid.drive.domain.model.LinkedLogin
 import my.ssdid.drive.domain.model.TokenInvitation
+import my.ssdid.drive.domain.model.TotpSetupInfo
 import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.util.Result
 
 /**
  * Repository interface for authentication operations.
  *
- * Authentication is handled via SSDID Wallet deep links.
- * The flow is:
- * 1. App requests server info (challenge)
- * 2. App launches SSDID Wallet via deep link with challenge
- * 3. Wallet authenticates user and calls back with session token
- * 4. App saves session token for API access
+ * Authentication methods:
+ * - Email + TOTP: Email as identifier, TOTP as proof
+ * - OIDC: Google and Microsoft sign-in via native SDKs
+ * - Account linking: Multiple login methods per account
  */
 interface AuthRepository {
 
@@ -22,42 +22,14 @@ interface AuthRepository {
     suspend fun isAuthenticated(): Boolean
 
     /**
-     * Create a challenge for SSDID Wallet authentication.
-     *
-     * @param action The action type ("authenticate" or "register")
-     * @return ChallengeInfo containing the deep link URL for the wallet
-     */
-    suspend fun createChallenge(action: String): ChallengeInfo
-
-    /**
-     * Launch the SSDID Wallet app via deep link for authentication.
-     *
-     * @param challenge The challenge info containing the wallet deep link URL
-     */
-    suspend fun launchWalletAuth(challenge: ChallengeInfo)
-
-    /**
-     * Listen for session token via SSE after launching wallet.
-     * Blocks until the server sends the authenticated event or timeout.
-     *
-     * @param challenge The challenge info with SSE connection details
-     * @return The session token
-     */
-    suspend fun listenForSession(challenge: ChallengeInfo): String
-
-    /**
-     * Save the session token received from the wallet callback.
-     *
-     * @param sessionToken The session token from the wallet
-     */
-    suspend fun saveSession(sessionToken: String)
-
-    /**
      * Get the current session token.
-     *
-     * @return The session token, or null if not authenticated
      */
     suspend fun getSession(): String?
+
+    /**
+     * Save session tokens (access + refresh).
+     */
+    suspend fun saveSession(accessToken: String, refreshToken: String)
 
     /**
      * Logout the current user.
@@ -72,9 +44,6 @@ interface AuthRepository {
 
     /**
      * Update the current user's profile.
-     *
-     * @param displayName New display name (optional, pass null to keep current)
-     * @return Result containing the updated User or an error
      */
     suspend fun updateProfile(displayName: String?): Result<User>
 
@@ -83,61 +52,106 @@ interface AuthRepository {
      */
     suspend fun areKeysUnlocked(): Boolean
 
+    // ==================== Email + TOTP Auth ====================
+
+    /**
+     * Initiate email login.
+     * @return true if TOTP verification is required
+     */
+    suspend fun emailLogin(email: String): Result<Boolean>
+
+    /**
+     * Register via email with invitation token. Sends OTP.
+     */
+    suspend fun emailRegister(email: String, invitationToken: String): Result<Unit>
+
+    /**
+     * Verify email registration OTP and create account.
+     */
+    suspend fun emailRegisterVerify(email: String, code: String, invitationToken: String): Result<User>
+
+    /**
+     * Verify TOTP code for login.
+     */
+    suspend fun totpVerify(email: String, code: String): Result<User>
+
+    /**
+     * Initiate TOTP setup. Returns setup info with otpauth URI.
+     */
+    suspend fun totpSetup(): Result<TotpSetupInfo>
+
+    /**
+     * Confirm TOTP setup with first code. Returns backup codes.
+     */
+    suspend fun totpSetupConfirm(code: String): Result<List<String>>
+
+    /**
+     * Initiate TOTP recovery (sends email OTP).
+     */
+    suspend fun totpRecovery(email: String): Result<Unit>
+
+    /**
+     * Verify TOTP recovery code.
+     */
+    suspend fun totpRecoveryVerify(email: String, code: String): Result<User>
+
+    // ==================== OIDC Auth ====================
+
+    /**
+     * Verify an OIDC ID token for login or registration.
+     * @param provider "google" or "microsoft"
+     * @param idToken The ID token from the native SDK
+     * @param invitationToken Optional invitation token for registration
+     */
+    suspend fun oidcVerify(provider: String, idToken: String, invitationToken: String? = null): Result<User>
+
+    // ==================== Account Logins (Linking) ====================
+
+    /**
+     * List linked logins for the current account.
+     */
+    suspend fun getLinkedLogins(): Result<List<LinkedLogin>>
+
+    /**
+     * Initiate linking an email login (sends OTP).
+     */
+    suspend fun linkEmail(email: String): Result<Unit>
+
+    /**
+     * Verify email link OTP.
+     */
+    suspend fun linkEmailVerify(email: String, code: String): Result<LinkedLogin>
+
+    /**
+     * Link an OIDC login to the current account.
+     */
+    suspend fun linkOidc(provider: String, idToken: String): Result<LinkedLogin>
+
+    /**
+     * Unlink a login method. Must keep at least 1.
+     */
+    suspend fun unlinkLogin(loginId: String): Result<Unit>
+
     // ==================== Biometric Unlock ====================
 
-    /**
-     * Enable biometric unlock by storing the master key in biometric-protected storage.
-     *
-     * @return Result indicating success or failure
-     */
     suspend fun enableBiometricUnlock(): Result<Unit>
-
-    /**
-     * Disable biometric unlock by clearing the biometric-protected master key.
-     *
-     * @return Result indicating success or failure
-     */
     suspend fun disableBiometricUnlock(): Result<Unit>
-
-    /**
-     * Unlock the user's keys using biometric authentication.
-     * Retrieves the master key from biometric-protected storage and decrypts private keys.
-     *
-     * @return Result indicating success or failure
-     */
     suspend fun unlockWithBiometric(): Result<Unit>
-
-    /**
-     * Check if biometric unlock is enabled and available.
-     *
-     * @return true if biometric unlock is set up and can be used
-     */
     suspend fun isBiometricUnlockEnabled(): Boolean
-
-    /**
-     * Lock the keys by clearing them from memory.
-     * Called when app is locked due to timeout or manual lock.
-     */
     suspend fun lockKeys()
 
     // ==================== Invitation Token (Public - for new users) ====================
 
     /**
      * Get public invitation info by token.
-     * This is for new users who received an invitation link.
-     * No authentication required.
-     *
-     * @param token The invitation token from the deep link
-     * @return Result containing TokenInvitation or an error
      */
     suspend fun getInvitationInfo(token: String): Result<TokenInvitation>
 
-    /**
-     * Launch the SSDID Wallet app via the ssdid://invite deep link.
-     * The wallet handles email verification and authentication for new users.
-     *
-     * @param token The invitation token
-     */
+    // ==================== Legacy SSDID (kept during migration) ====================
+
+    suspend fun createChallenge(action: String): ChallengeInfo
+    suspend fun launchWalletAuth(challenge: ChallengeInfo)
+    suspend fun listenForSession(challenge: ChallengeInfo): String
     suspend fun launchWalletInvite(token: String)
 }
 

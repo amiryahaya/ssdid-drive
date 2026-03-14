@@ -274,7 +274,7 @@ class InviteAcceptViewModelTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
         coEvery { authRepository.launchWalletInvite(any()) } just Runs
-        coEvery { authRepository.saveSession("session-token-abc") } just Runs
+        coEvery { authRepository.saveSession("session-token-abc", "") } just Runs
 
         viewModel = createViewModel()
         advanceUntilIdle()
@@ -285,7 +285,7 @@ class InviteAcceptViewModelTest {
         viewModel.handleWalletCallback("session-token-abc")
         advanceUntilIdle()
 
-        coVerify { authRepository.saveSession("session-token-abc") }
+        coVerify { authRepository.saveSession("session-token-abc", "") }
         viewModel.uiState.test {
             val state = awaitItem()
             assertTrue(state.isRegistered)
@@ -298,7 +298,7 @@ class InviteAcceptViewModelTest {
     fun `handleWalletCallback failure shows registration error`() = runTest {
         coEvery { authRepository.getInvitationInfo(any()) } returns
             Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
-        coEvery { authRepository.saveSession(any()) } throws
+        coEvery { authRepository.saveSession(any(), any()) } throws
             RuntimeException("Invalid session token")
 
         viewModel = createViewModel()

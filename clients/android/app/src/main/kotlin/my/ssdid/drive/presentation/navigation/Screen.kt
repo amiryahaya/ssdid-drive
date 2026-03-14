@@ -13,6 +13,14 @@ sealed class Screen(val route: String) {
     data object Login : Screen("login")
     data object Register : Screen("register")
     data object Lock : Screen("lock")
+    data object EmailLogin : Screen("email-login")
+    data object TotpVerify : Screen("totp-verify/{email}") {
+        fun createRoute(email: String) = "totp-verify/$email"
+    }
+    data object TotpSetup : Screen("totp-setup")
+    data object TotpRecovery : Screen("totp-recovery/{email}") {
+        fun createRoute(email: String) = "totp-recovery/$email"
+    }
 
     // Invitation acceptance (deep link)
     data object InviteAccept : Screen("invite/{token}") {
@@ -55,6 +63,7 @@ sealed class Screen(val route: String) {
     data object CreateInvitation : Screen("settings/invitations/create")
     data object SentInvitations : Screen("settings/invitations/sent")
     data object Members : Screen("settings/members")
+    data object LinkedLogins : Screen("settings/linked-logins")
 
     // Tenant screens
     data object JoinTenant : Screen("join-tenant")
@@ -85,5 +94,6 @@ sealed class Screen(val route: String) {
         const val ARG_TOTAL_SHARES = "totalShares"
         const val ARG_TOKEN = "token"
         const val ARG_CONVERSATION_ID = "conversationId"
+        const val ARG_EMAIL = "email"
     }
 }

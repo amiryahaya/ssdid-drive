@@ -1,9 +1,11 @@
 package my.ssdid.drive.presentation.auth
 
 import app.cash.turbine.test
+import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.domain.repository.AuthRepository
-import my.ssdid.drive.domain.repository.ChallengeInfo
+import my.ssdid.drive.util.AppException
 import my.ssdid.drive.util.PushNotificationManager
+import my.ssdid.drive.util.Result
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,16 +15,6 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Unit tests for LoginViewModel.
- *
- * Tests cover:
- * - Initial state
- * - Sign in with SSDID Wallet flow
- * - Wallet callback handling
- * - Error handling
- * - UI state transitions
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
 
@@ -31,10 +23,10 @@ class LoginViewModelTest {
     private lateinit var viewModel: LoginViewModel
     private val testDispatcher = StandardTestDispatcher()
 
-    private val testChallengeInfo = ChallengeInfo(
-        challengeId = "challenge-456",
-        subscriberSecret = "secret-456",
-        walletDeepLink = "ssdid://login?challenge_id=challenge-456"
+    private val testUser = User(
+        id = "user-1",
+        email = "test@example.com",
+        displayName = "Test User"
     )
 
     @Before
@@ -50,166 +42,132 @@ class LoginViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // ==================== Initial State Tests ====================
+    // ==================== Initial State ====================
 
     @Test
     fun `initial state is correct`() = runTest {
         viewModel.uiState.test {
             val state = awaitItem()
+            assertEquals("", state.email)
             assertFalse(state.isLoading)
-            assertFalse(state.isWaitingForWallet)
             assertFalse(state.isAuthenticated)
+            assertNull(state.navigateToTotp)
             assertNull(state.error)
         }
     }
 
-    // ==================== Sign In With Wallet Tests ====================
+    // ==================== Email Login ====================
 
     @Test
-    fun `signInWithWallet creates challenge and launches wallet`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
-
-        viewModel.signInWithWallet()
-        advanceUntilIdle()
-
-        coVerify { authRepository.createChallenge("authenticate") }
-        coVerify { authRepository.launchWalletAuth(testChallengeInfo) }
+    fun `updateEmail updates state`() = runTest {
+        viewModel.updateEmail("user@example.com")
+        assertEquals("user@example.com", viewModel.uiState.value.email)
     }
 
     @Test
-    fun `signInWithWallet sets isWaitingForWallet on success`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
-
-        viewModel.signInWithWallet()
+    fun `submitEmail with blank email shows error`() = runTest {
+        viewModel.submitEmail()
         advanceUntilIdle()
 
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertFalse(state.isLoading)
-            assertTrue(state.isWaitingForWallet)
-            assertNull(state.error)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertEquals("Email is required", viewModel.uiState.value.error)
     }
 
     @Test
-    fun `signInWithWallet shows loading state during challenge creation`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
+    fun `submitEmail navigates to TOTP when required`() = runTest {
+        coEvery { authRepository.emailLogin("test@example.com") } returns Result.success(true)
+
+        viewModel.updateEmail("test@example.com")
+        viewModel.submitEmail()
+        advanceUntilIdle()
+
+        assertEquals("test@example.com", viewModel.uiState.value.navigateToTotp)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `submitEmail shows error when TOTP not set up`() = runTest {
+        coEvery { authRepository.emailLogin("test@example.com") } returns Result.success(false)
+
+        viewModel.updateEmail("test@example.com")
+        viewModel.submitEmail()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.error)
+        assertNull(viewModel.uiState.value.navigateToTotp)
+    }
+
+    @Test
+    fun `submitEmail shows error on failure`() = runTest {
+        coEvery { authRepository.emailLogin("bad@example.com") } returns
+            Result.error(AppException.NotFound("Account not found"))
+
+        viewModel.updateEmail("bad@example.com")
+        viewModel.submitEmail()
+        advanceUntilIdle()
+
+        assertEquals("Account not found", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `submitEmail shows loading state`() = runTest {
+        coEvery { authRepository.emailLogin(any()) } returns Result.success(true)
 
         viewModel.uiState.test {
-            skipItems(1) // Skip initial state
+            skipItems(1) // initial
 
-            viewModel.signInWithWallet()
+            viewModel.updateEmail("test@example.com")
+            awaitItem() // email update
 
-            // Should show loading
-            val loadingState = awaitItem()
-            assertTrue(loadingState.isLoading)
-            assertNull(loadingState.error)
+            viewModel.submitEmail()
 
-            // Should transition to waiting for wallet
+            val loading = awaitItem()
+            assertTrue(loading.isLoading)
+
             testDispatcher.scheduler.advanceUntilIdle()
-            val waitingState = awaitItem()
-            assertFalse(waitingState.isLoading)
-            assertTrue(waitingState.isWaitingForWallet)
+            val done = awaitItem()
+            assertFalse(done.isLoading)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `signInWithWallet failure shows error`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } throws
-            RuntimeException("Wallet not installed")
+    fun `onTotpNavigated clears navigateToTotp`() = runTest {
+        coEvery { authRepository.emailLogin("test@example.com") } returns Result.success(true)
 
-        viewModel.signInWithWallet()
+        viewModel.updateEmail("test@example.com")
+        viewModel.submitEmail()
         advanceUntilIdle()
 
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertFalse(state.isLoading)
-            assertFalse(state.isWaitingForWallet)
-            assertEquals("Wallet not installed", state.error)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertNotNull(viewModel.uiState.value.navigateToTotp)
+
+        viewModel.onTotpNavigated()
+        assertNull(viewModel.uiState.value.navigateToTotp)
     }
 
-    @Test
-    fun `signInWithWallet network error shows error`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } throws
-            RuntimeException("Unable to connect")
-
-        viewModel.signInWithWallet()
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertFalse(state.isLoading)
-            assertNotNull(state.error)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // ==================== Wallet Callback Tests ====================
+    // ==================== OIDC Login ====================
 
     @Test
-    fun `handleWalletCallback saves session and sets isAuthenticated`() = runTest {
-        coEvery { authRepository.saveSession("session-token-abc") } just Runs
+    fun `handleOidcResult sets authenticated on success`() = runTest {
+        coEvery { authRepository.oidcVerify("google", "id-token-123", null) } returns
+            Result.success(testUser)
 
-        viewModel.handleWalletCallback("session-token-abc")
+        viewModel.handleOidcResult("google", "id-token-123")
         advanceUntilIdle()
 
-        coVerify { authRepository.saveSession("session-token-abc") }
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertTrue(state.isAuthenticated)
-            assertFalse(state.isWaitingForWallet)
-            assertNull(state.error)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `handleWalletCallback failure shows error`() = runTest {
-        coEvery { authRepository.saveSession(any()) } throws
-            RuntimeException("Invalid session token")
-
-        viewModel.handleWalletCallback("bad-token")
-        advanceUntilIdle()
-
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertFalse(state.isAuthenticated)
-            assertFalse(state.isWaitingForWallet)
-            assertEquals("Invalid session token", state.error)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    // ==================== Full Flow Test ====================
-
-    @Test
-    fun `full wallet auth flow from sign in to callback`() = runTest {
-        coEvery { authRepository.createChallenge("authenticate") } returns testChallengeInfo
-        coEvery { authRepository.launchWalletAuth(testChallengeInfo) } just Runs
-        coEvery { authRepository.saveSession("session-token-xyz") } just Runs
-
-        // Step 1: Initiate sign in
-        viewModel.signInWithWallet()
-        advanceUntilIdle()
-
-        // Should be waiting for wallet
-        assertTrue(viewModel.uiState.value.isWaitingForWallet)
-        assertFalse(viewModel.uiState.value.isAuthenticated)
-
-        // Step 2: Wallet calls back
-        viewModel.handleWalletCallback("session-token-xyz")
-        advanceUntilIdle()
-
-        // Should be authenticated
         assertTrue(viewModel.uiState.value.isAuthenticated)
-        assertFalse(viewModel.uiState.value.isWaitingForWallet)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `handleOidcResult shows error on failure`() = runTest {
+        coEvery { authRepository.oidcVerify("microsoft", "bad-token", null) } returns
+            Result.error(AppException.Unauthorized())
+
+        viewModel.handleOidcResult("microsoft", "bad-token")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAuthenticated)
+        assertNotNull(viewModel.uiState.value.error)
     }
 }

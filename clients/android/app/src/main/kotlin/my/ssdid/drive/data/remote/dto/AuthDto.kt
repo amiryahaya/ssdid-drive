@@ -506,3 +506,167 @@ data class InviteCodeInfoDto(
     @SerializedName("short_code") val shortCode: String,
     @SerializedName("expires_at") val expiresAt: String
 )
+
+// ==================== Email Auth DTOs ====================
+
+/**
+ * Request to initiate email login.
+ * POST /api/auth/email/login
+ */
+data class EmailLoginRequest(
+    @SerializedName("email") val email: String
+)
+
+/**
+ * Response from email login initiation.
+ */
+data class EmailLoginResponse(
+    @SerializedName("requires_totp") val requiresTotp: Boolean
+)
+
+/**
+ * Request to register via email with invitation.
+ * POST /api/auth/email/register
+ */
+data class EmailRegisterRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("invitation_token") val invitationToken: String
+)
+
+/**
+ * Request to verify email registration OTP.
+ * POST /api/auth/email/register/verify
+ */
+data class EmailRegisterVerifyRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("code") val code: String,
+    @SerializedName("invitation_token") val invitationToken: String
+)
+
+// ==================== OTP DTOs ====================
+
+/**
+ * Request to send an OTP code.
+ */
+data class SendOtpRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("purpose") val purpose: String? = null
+)
+
+/**
+ * Response after sending OTP.
+ */
+data class SendOtpResponse(
+    @SerializedName("message") val message: String? = null
+)
+
+// ==================== TOTP DTOs ====================
+
+/**
+ * Response from TOTP setup initiation.
+ * POST /api/auth/totp/setup
+ */
+data class TotpSetupResponse(
+    @SerializedName("secret") val secret: String,
+    @SerializedName("otpauth_uri") val otpauthUri: String,
+    @SerializedName("qr_code") val qrCode: String? = null
+)
+
+/**
+ * Request to confirm TOTP setup with first code.
+ * POST /api/auth/totp/setup/confirm
+ */
+data class TotpSetupConfirmRequest(
+    @SerializedName("code") val code: String
+)
+
+/**
+ * Response after confirming TOTP setup.
+ */
+data class TotpSetupConfirmResponse(
+    @SerializedName("backup_codes") val backupCodes: List<String>
+)
+
+/**
+ * Request to verify a TOTP code for login.
+ * POST /api/auth/totp/verify
+ */
+data class TotpVerifyRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("code") val code: String
+)
+
+/**
+ * Request to initiate TOTP recovery.
+ * POST /api/auth/totp/recovery
+ */
+data class TotpRecoveryRequest(
+    @SerializedName("email") val email: String
+)
+
+/**
+ * Request to verify TOTP recovery code.
+ * POST /api/auth/totp/recovery/verify
+ */
+data class TotpRecoveryVerifyRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("code") val code: String
+)
+
+// ==================== OIDC DTOs ====================
+
+/**
+ * Request to verify an OIDC ID token.
+ * POST /api/auth/oidc/verify
+ */
+data class OidcVerifyRequest(
+    @SerializedName("provider") val provider: String,
+    @SerializedName("id_token") val idToken: String,
+    @SerializedName("invitation_token") val invitationToken: String? = null
+)
+
+// ==================== Linked Logins DTOs ====================
+
+/**
+ * A linked login method on the account.
+ */
+data class LinkedLoginDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("provider") val provider: String,
+    @SerializedName("provider_subject") val providerSubject: String,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("linked_at") val linkedAt: String? = null
+)
+
+/**
+ * Response for listing linked logins.
+ */
+data class LinkedLoginsResponse(
+    @SerializedName("data") val data: List<LinkedLoginDto>
+)
+
+/**
+ * Request to link an email login.
+ * POST /api/account/logins/email
+ */
+data class LinkEmailRequest(
+    @SerializedName("email") val email: String
+)
+
+/**
+ * Request to verify email link OTP.
+ * POST /api/account/logins/email/verify
+ */
+data class LinkEmailVerifyRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("code") val code: String
+)
+
+/**
+ * Request to link an OIDC login.
+ * POST /api/account/logins/oidc
+ */
+data class LinkOidcRequest(
+    @SerializedName("provider") val provider: String,
+    @SerializedName("id_token") val idToken: String
+)
