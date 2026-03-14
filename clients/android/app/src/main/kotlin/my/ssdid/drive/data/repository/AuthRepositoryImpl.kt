@@ -18,10 +18,12 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import my.ssdid.drive.data.local.BiometricKeyInvalidatedException
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
-import my.ssdid.drive.data.remote.dto.UpdateProfileRequest
+import my.ssdid.drive.data.remote.dto.*
+import my.ssdid.drive.domain.model.LinkedLogin
 import my.ssdid.drive.domain.model.PublicKeys
 import my.ssdid.drive.domain.model.TokenInvitation
 import my.ssdid.drive.domain.model.TokenInvitationError
+import my.ssdid.drive.domain.model.TotpSetupInfo
 import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.domain.model.UserRole
 import my.ssdid.drive.domain.repository.AuthRepository
@@ -155,12 +157,292 @@ class AuthRepositoryImpl @Inject constructor(
         @SerializedName("session_token") val sessionToken: String
     )
 
-    override suspend fun saveSession(sessionToken: String) {
-        secureStorage.saveString("session_token", sessionToken)
+    override suspend fun saveSession(accessToken: String, refreshToken: String) {
+        secureStorage.saveString("session_token", accessToken)
+        secureStorage.saveString("refresh_token", refreshToken)
     }
 
     override suspend fun getSession(): String? {
         return secureStorage.getString("session_token")
+    }
+
+    // ==================== Email + TOTP Auth ====================
+
+    override suspend fun emailLogin(email: String): Result<Boolean> {
+        return try {
+            val response = apiService.emailLogin(EmailLoginRequest(email = email))
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                Result.success(body.requiresTotp)
+            } else {
+                when (response.code()) {
+                    404 -> Result.error(AppException.NotFound("Account not found"))
+                    429 -> Result.error(AppException.ValidationError("Too many attempts. Please try again later."))
+                    else -> Result.error(AppException.Unknown("Login failed: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to login", e))
+        }
+    }
+
+    override suspend fun emailRegister(email: String, invitationToken: String): Result<Unit> {
+        return try {
+            val response = apiService.emailRegister(
+                EmailRegisterRequest(email = email, invitationToken = invitationToken)
+            )
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                when (response.code()) {
+                    409 -> Result.error(AppException.ValidationError("Email already registered"))
+                    422 -> Result.error(AppException.ValidationError("Invalid invitation"))
+                    429 -> Result.error(AppException.ValidationError("Too many attempts"))
+                    else -> Result.error(AppException.Unknown("Registration failed: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to register", e))
+        }
+    }
+
+    override suspend fun emailRegisterVerify(
+        email: String,
+        code: String,
+        invitationToken: String
+    ): Result<User> {
+        return try {
+            val response = apiService.emailRegisterVerify(
+                EmailRegisterVerifyRequest(
+                    email = email,
+                    code = code,
+                    invitationToken = invitationToken
+                )
+            )
+            handleAuthResponse(response)
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to verify registration", e))
+        }
+    }
+
+    override suspend fun totpVerify(email: String, code: String): Result<User> {
+        return try {
+            val response = apiService.totpVerify(
+                TotpVerifyRequest(email = email, code = code)
+            )
+            handleAuthResponse(response)
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to verify TOTP", e))
+        }
+    }
+
+    override suspend fun totpSetup(): Result<TotpSetupInfo> {
+        return try {
+            val response = apiService.totpSetup()
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                Result.success(
+                    TotpSetupInfo(
+                        secret = body.secret,
+                        otpauthUri = body.otpauthUri,
+                        qrCode = body.qrCode
+                    )
+                )
+            } else {
+                Result.error(AppException.Unknown("TOTP setup failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to setup TOTP", e))
+        }
+    }
+
+    override suspend fun totpSetupConfirm(code: String): Result<List<String>> {
+        return try {
+            val response = apiService.totpSetupConfirm(
+                TotpSetupConfirmRequest(code = code)
+            )
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                Result.success(body.backupCodes)
+            } else {
+                when (response.code()) {
+                    400 -> Result.error(AppException.ValidationError("Invalid TOTP code"))
+                    else -> Result.error(AppException.Unknown("TOTP confirm failed: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to confirm TOTP", e))
+        }
+    }
+
+    override suspend fun totpRecovery(email: String): Result<Unit> {
+        return try {
+            val response = apiService.totpRecovery(TotpRecoveryRequest(email = email))
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.error(AppException.Unknown("TOTP recovery failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to initiate TOTP recovery", e))
+        }
+    }
+
+    override suspend fun totpRecoveryVerify(email: String, code: String): Result<User> {
+        return try {
+            val response = apiService.totpRecoveryVerify(
+                TotpRecoveryVerifyRequest(email = email, code = code)
+            )
+            handleAuthResponse(response)
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to verify TOTP recovery", e))
+        }
+    }
+
+    // ==================== OIDC Auth ====================
+
+    override suspend fun oidcVerify(
+        provider: String,
+        idToken: String,
+        invitationToken: String?
+    ): Result<User> {
+        return try {
+            val response = apiService.oidcVerify(
+                OidcVerifyRequest(
+                    provider = provider,
+                    idToken = idToken,
+                    invitationToken = invitationToken
+                )
+            )
+            handleAuthResponse(response)
+        } catch (e: Exception) {
+            Result.error(AppException.Network("OIDC verification failed", e))
+        }
+    }
+
+    // ==================== Account Logins (Linking) ====================
+
+    override suspend fun getLinkedLogins(): Result<List<LinkedLogin>> {
+        return try {
+            val response = apiService.getLinkedLogins()
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                val logins = body.data.map { it.toDomain() }
+                Result.success(logins)
+            } else {
+                Result.error(AppException.Unknown("Failed to get logins: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to get linked logins", e))
+        }
+    }
+
+    override suspend fun linkEmail(email: String): Result<Unit> {
+        return try {
+            val response = apiService.linkEmail(LinkEmailRequest(email = email))
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                when (response.code()) {
+                    409 -> Result.error(AppException.ValidationError("Email already linked to another account"))
+                    else -> Result.error(AppException.Unknown("Failed to link email: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to link email", e))
+        }
+    }
+
+    override suspend fun linkEmailVerify(email: String, code: String): Result<LinkedLogin> {
+        return try {
+            val response = apiService.linkEmailVerify(
+                LinkEmailVerifyRequest(email = email, code = code)
+            )
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                Result.success(body.toDomain())
+            } else {
+                Result.error(AppException.Unknown("Failed to verify email link: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to verify email link", e))
+        }
+    }
+
+    override suspend fun linkOidc(provider: String, idToken: String): Result<LinkedLogin> {
+        return try {
+            val response = apiService.linkOidc(
+                LinkOidcRequest(provider = provider, idToken = idToken)
+            )
+            if (response.isSuccessful) {
+                val body = response.body()
+                    ?: return Result.error(AppException.Unknown("Empty response"))
+                Result.success(body.toDomain())
+            } else {
+                when (response.code()) {
+                    409 -> Result.error(AppException.ValidationError("This login is already linked to another account"))
+                    else -> Result.error(AppException.Unknown("Failed to link OIDC: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to link OIDC login", e))
+        }
+    }
+
+    override suspend fun unlinkLogin(loginId: String): Result<Unit> {
+        return try {
+            val response = apiService.unlinkLogin(loginId)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                when (response.code()) {
+                    400 -> Result.error(AppException.ValidationError("Cannot remove last login method"))
+                    else -> Result.error(AppException.Unknown("Failed to unlink login: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to unlink login", e))
+        }
+    }
+
+    /**
+     * Handle a standard auth response (access_token + refresh_token + user).
+     */
+    private suspend fun handleAuthResponse(
+        response: retrofit2.Response<AuthResponse>
+    ): Result<User> {
+        if (response.isSuccessful) {
+            val body = response.body()
+                ?: return Result.error(AppException.Unknown("Empty auth response"))
+            val data = body.data
+            saveSession(data.accessToken, data.refreshToken)
+            fetchAndApplyTenantConfig()
+            analyticsManager.trackLogin("standard")
+            pushNotificationManager.requestPermission()
+            return Result.success(data.user.toDomain())
+        } else {
+            return when (response.code()) {
+                401 -> Result.error(AppException.Unauthorized())
+                422 -> Result.error(AppException.ValidationError("Invalid credentials"))
+                429 -> Result.error(AppException.ValidationError("Too many attempts"))
+                else -> Result.error(AppException.Unknown("Auth failed: ${response.code()}"))
+            }
+        }
+    }
+
+    private fun LinkedLoginDto.toDomain(): LinkedLogin {
+        return LinkedLogin(
+            id = id,
+            provider = provider,
+            providerSubject = providerSubject,
+            email = email,
+            linkedAt = linkedAt
+        )
     }
 
     override suspend fun logout(): Result<Unit> {

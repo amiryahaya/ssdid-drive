@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +36,7 @@ fun SettingsScreen(
     onNavigateToMembers: () -> Unit = {},
     onNavigateToPiiChat: () -> Unit = {},
     onNavigateToJoinTenant: () -> Unit = {},
+    onNavigateToLinkedLogins: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -131,6 +133,17 @@ fun SettingsScreen(
                     AiChatSectionButton(
                         onNavigateToPiiChat = onNavigateToPiiChat
                     )
+
+                    // Linked Logins
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsNavigationCard(
+                            icon = Icons.Default.VpnKey,
+                            title = "Linked Logins",
+                            subtitle = "Manage your sign-in methods",
+                            onClick = onNavigateToLinkedLogins
+                        )
+                    }
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
 

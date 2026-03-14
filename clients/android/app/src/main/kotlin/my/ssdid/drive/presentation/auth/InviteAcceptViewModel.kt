@@ -153,7 +153,7 @@ class InviteAcceptViewModel @Inject constructor(
     fun handleWalletCallback(sessionToken: String) {
         viewModelScope.launch {
             try {
-                authRepository.saveSession(sessionToken)
+                authRepository.saveSession(sessionToken, "")
                 savedStateHandle["isWaitingForWallet"] = false
                 _uiState.update { it.copy(isWaitingForWallet = false, isRegistered = true) }
             } catch (e: Exception) {

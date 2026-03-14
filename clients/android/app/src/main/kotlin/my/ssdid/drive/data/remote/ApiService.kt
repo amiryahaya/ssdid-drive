@@ -2,6 +2,7 @@ package my.ssdid.drive.data.remote
 
 import com.google.gson.annotations.SerializedName
 import my.ssdid.drive.data.remote.dto.ActivityResponseDto
+import my.ssdid.drive.data.remote.dto.AuthResponse
 import my.ssdid.drive.data.remote.dto.AcceptInviteRequest
 import my.ssdid.drive.data.remote.dto.AcceptInviteResponse
 import my.ssdid.drive.data.remote.dto.CompleteRecoveryRequest
@@ -202,13 +203,98 @@ interface ApiService {
         @Body request: AcceptInviteRequest
     ): Response<AcceptInviteResponse>
 
-    // ==================== SSDID Authentication ====================
+    // ==================== Email + TOTP Authentication ====================
 
     /**
-     * Get server info for SSDID Wallet authentication.
-     * Returns server DID, challenge ID, and other info needed to build the wallet deep link.
-     * This is an unauthenticated endpoint.
+     * Initiate email login. Returns whether TOTP is required.
      */
+    @POST("auth/email/login")
+    suspend fun emailLogin(@Body request: my.ssdid.drive.data.remote.dto.EmailLoginRequest): Response<my.ssdid.drive.data.remote.dto.EmailLoginResponse>
+
+    /**
+     * Register via email with invitation token.
+     */
+    @POST("auth/email/register")
+    suspend fun emailRegister(@Body request: my.ssdid.drive.data.remote.dto.EmailRegisterRequest): Response<my.ssdid.drive.data.remote.dto.SendOtpResponse>
+
+    /**
+     * Verify email registration OTP.
+     */
+    @POST("auth/email/register/verify")
+    suspend fun emailRegisterVerify(@Body request: my.ssdid.drive.data.remote.dto.EmailRegisterVerifyRequest): Response<AuthResponse>
+
+    /**
+     * Initiate TOTP setup. Returns secret and otpauth URI.
+     */
+    @POST("auth/totp/setup")
+    suspend fun totpSetup(): Response<my.ssdid.drive.data.remote.dto.TotpSetupResponse>
+
+    /**
+     * Confirm TOTP setup with first code.
+     */
+    @POST("auth/totp/setup/confirm")
+    suspend fun totpSetupConfirm(@Body request: my.ssdid.drive.data.remote.dto.TotpSetupConfirmRequest): Response<my.ssdid.drive.data.remote.dto.TotpSetupConfirmResponse>
+
+    /**
+     * Verify a TOTP code for login.
+     */
+    @POST("auth/totp/verify")
+    suspend fun totpVerify(@Body request: my.ssdid.drive.data.remote.dto.TotpVerifyRequest): Response<AuthResponse>
+
+    /**
+     * Initiate TOTP recovery (sends email OTP).
+     */
+    @POST("auth/totp/recovery")
+    suspend fun totpRecovery(@Body request: my.ssdid.drive.data.remote.dto.TotpRecoveryRequest): Response<my.ssdid.drive.data.remote.dto.SendOtpResponse>
+
+    /**
+     * Verify TOTP recovery code.
+     */
+    @POST("auth/totp/recovery/verify")
+    suspend fun totpRecoveryVerify(@Body request: my.ssdid.drive.data.remote.dto.TotpRecoveryVerifyRequest): Response<AuthResponse>
+
+    // ==================== OIDC Authentication ====================
+
+    /**
+     * Verify an OIDC ID token (login or register).
+     */
+    @POST("auth/oidc/verify")
+    suspend fun oidcVerify(@Body request: my.ssdid.drive.data.remote.dto.OidcVerifyRequest): Response<AuthResponse>
+
+    // ==================== Account Logins (Linking) ====================
+
+    /**
+     * List linked logins for the current account.
+     */
+    @GET("account/logins")
+    suspend fun getLinkedLogins(): Response<my.ssdid.drive.data.remote.dto.LinkedLoginsResponse>
+
+    /**
+     * Initiate linking an email login.
+     */
+    @POST("account/logins/email")
+    suspend fun linkEmail(@Body request: my.ssdid.drive.data.remote.dto.LinkEmailRequest): Response<my.ssdid.drive.data.remote.dto.SendOtpResponse>
+
+    /**
+     * Verify email link OTP.
+     */
+    @POST("account/logins/email/verify")
+    suspend fun linkEmailVerify(@Body request: my.ssdid.drive.data.remote.dto.LinkEmailVerifyRequest): Response<my.ssdid.drive.data.remote.dto.LinkedLoginDto>
+
+    /**
+     * Link an OIDC login.
+     */
+    @POST("account/logins/oidc")
+    suspend fun linkOidc(@Body request: my.ssdid.drive.data.remote.dto.LinkOidcRequest): Response<my.ssdid.drive.data.remote.dto.LinkedLoginDto>
+
+    /**
+     * Unlink a login method.
+     */
+    @DELETE("account/logins/{id}")
+    suspend fun unlinkLogin(@Path("id") loginId: String): Response<Unit>
+
+    // ==================== Legacy SSDID Authentication ====================
+
     @GET("auth/ssdid/server-info")
     suspend fun getServerInfo(): ServerInfoResponse
 

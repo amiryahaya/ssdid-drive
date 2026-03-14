@@ -18,6 +18,8 @@ import my.ssdid.drive.presentation.auth.InviteAcceptScreen
 import my.ssdid.drive.presentation.auth.LockScreen
 import my.ssdid.drive.presentation.auth.LoginScreen
 import my.ssdid.drive.presentation.auth.RegisterScreen
+import my.ssdid.drive.presentation.auth.TotpSetupScreen
+import my.ssdid.drive.presentation.auth.TotpVerifyScreen
 import my.ssdid.drive.presentation.files.FileBrowserScreen
 import my.ssdid.drive.presentation.recovery.InitiateRecoveryScreen
 import my.ssdid.drive.presentation.recovery.PendingRequestsScreen
@@ -27,6 +29,7 @@ import my.ssdid.drive.presentation.recovery.TrusteeSelectionScreen
 import my.ssdid.drive.presentation.files.upload.ShareIntentScreen
 import my.ssdid.drive.presentation.settings.CreateInvitationScreen
 import my.ssdid.drive.presentation.settings.InvitationsScreen
+import my.ssdid.drive.presentation.settings.LinkedLoginsScreen
 import my.ssdid.drive.presentation.settings.MembersScreen
 import my.ssdid.drive.presentation.settings.SentInvitationsScreen
 import my.ssdid.drive.presentation.settings.SettingsScreen
@@ -104,7 +107,45 @@ fun NavGraph(
                 },
                 onNavigateToRecovery = {
                     navController.navigate(Screen.Recovery.route)
+                },
+                onNavigateToTotp = { email ->
+                    navController.navigate(Screen.TotpVerify.createRoute(email))
+                },
+                onOidcLogin = { _ ->
+                    // OIDC is handled by the LoginViewModel via native SDK callbacks
                 }
+            )
+        }
+
+        // TOTP verification (login step 2)
+        composable(
+            route = Screen.TotpVerify.route,
+            arguments = listOf(
+                navArgument(Screen.ARG_EMAIL) { type = NavType.StringType }
+            )
+        ) {
+            TotpVerifyScreen(
+                onLoginSuccess = {
+                    navController.navigate(Screen.Files.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                },
+                onNavigateToRecovery = { email ->
+                    navController.navigate(Screen.TotpRecovery.createRoute(email))
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // TOTP setup
+        composable(Screen.TotpSetup.route) {
+            TotpSetupScreen(
+                onSetupComplete = {
+                    navController.navigate(Screen.Files.route) {
+                        popUpTo(Screen.TotpSetup.route) { inclusive = true }
+                    }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -277,6 +318,9 @@ fun NavGraph(
                 },
                 onNavigateToJoinTenant = {
                     navController.navigate(Screen.JoinTenant.route)
+                },
+                onNavigateToLinkedLogins = {
+                    navController.navigate(Screen.LinkedLogins.route)
                 }
             )
         }
@@ -324,6 +368,17 @@ fun NavGraph(
         composable(Screen.Members.route) {
             MembersScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Linked logins management
+        composable(Screen.LinkedLogins.route) {
+            LinkedLoginsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOidcLink = { provider ->
+                    // OIDC linking is handled by the LinkedLoginsViewModel via native SDK callbacks
+                    // The provider parameter triggers the platform-specific OIDC flow
+                }
             )
         }
 

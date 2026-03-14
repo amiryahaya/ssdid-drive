@@ -66,7 +66,7 @@ class RegisterViewModel @Inject constructor(
     fun handleWalletCallback(sessionToken: String) {
         viewModelScope.launch {
             try {
-                authRepository.saveSession(sessionToken)
+                authRepository.saveSession(sessionToken, "")
                 _uiState.update { it.copy(isWaitingForWallet = false, isRegistered = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isWaitingForWallet = false, error = e.message) }
