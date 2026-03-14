@@ -21,13 +21,16 @@ pub struct OidcLoginResponse {
 /// Open system browser for OIDC provider authentication
 #[tauri::command]
 pub async fn oidc_login(provider: String, state: State<'_, AppState>) -> AppResult<()> {
+    const ALLOWED_PROVIDERS: &[&str] = &["google", "microsoft"];
+    if !ALLOWED_PROVIDERS.contains(&provider.as_str()) {
+        return Err(AppError::Validation(format!("Unknown OIDC provider: {}", provider)));
+    }
+
     let base_url = state.api_client().base_url().to_string();
     let server_url = base_url
         .trim_end_matches("/api")
         .trim_end_matches("/api/");
 
-    // The server-side authorize endpoint generates PKCE state and redirects
-    // the browser to the identity provider (Google/Microsoft).
     let authorize_url = format!(
         "{}/api/auth/oidc/{}/authorize?redirect_uri={}",
         server_url,
@@ -71,14 +74,7 @@ pub async fn verify_oidc_token(
         )
         .await?;
 
-    // Save session token
-    state.auth_service().save_session(&response.token)?;
-    state.unlock();
-
-    // Fetch and cache user
-    if let Ok(user) = state.auth_service().get_current_user().await {
-        state.set_current_user(Some(user));
-    }
+    state.complete_login(&response.token).await?;
 
     Ok(response)
 }

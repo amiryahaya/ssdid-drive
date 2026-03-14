@@ -217,6 +217,17 @@ impl AppState {
         tracing::info!("Application unlocked");
     }
 
+    /// Complete login: save session, unlock, and fetch+cache user
+    pub async fn complete_login(&self, token: &str) -> AppResult<()> {
+        self.auth_service().save_session(token)?;
+        self.unlock();
+        match self.auth_service().get_current_user().await {
+            Ok(user) => self.set_current_user(Some(user)),
+            Err(e) => tracing::warn!("Failed to fetch user after login: {}", e),
+        }
+        Ok(())
+    }
+
     /// Get the API client
     pub fn api_client(&self) -> &Arc<ApiClient> {
         &self.api_client

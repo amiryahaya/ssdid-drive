@@ -92,7 +92,7 @@ export function useDeepLink() {
       }
 
       // Check if user needs to authenticate first
-      if (!isAuthenticated && parsed.action !== 'invite') {
+      if (!isAuthenticated && parsed.action !== 'invite' && parsed.action !== 'auth') {
         info({
           title: 'Authentication required',
           description: 'Please log in to access this link',
@@ -146,6 +146,19 @@ export function useDeepLink() {
         case 'auth':
           // OIDC callback: ssdid-drive://auth/callback?provider=google&id_token=xxx
           if (parsed.id === 'callback' && parsed.params?.provider && parsed.params?.id_token) {
+            // Validate provider against allowlist
+            const ALLOWED_PROVIDERS = ['google', 'microsoft'];
+            if (!ALLOWED_PROVIDERS.includes(parsed.params.provider)) {
+              showError({ title: 'Sign-in failed', description: 'Unknown provider' });
+              navigate('/login');
+              break;
+            }
+            // Guard against oversized tokens
+            if (parsed.params.id_token.length > 8192) {
+              showError({ title: 'Sign-in failed', description: 'Invalid token' });
+              navigate('/login');
+              break;
+            }
             info({
               title: 'Completing sign-in',
               description: 'Verifying your identity...',
@@ -163,13 +176,12 @@ export function useDeepLink() {
               });
 
               // Session is saved by Rust command, refresh auth state
-              const { useAuthStore } = await import('@/stores/authStore');
               await useAuthStore.getState().checkAuth();
 
               if (response.totp_setup_required) {
                 navigate('/login/totp-setup');
               } else if (response.mfa_required) {
-                navigate('/login/email');
+                navigate('/login/totp-setup');
               } else {
                 success({
                   title: 'Signed in',
