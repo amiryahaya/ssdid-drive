@@ -2,14 +2,15 @@
 
 ## Overview
 
-Slack-style invite-only onboarding for SSDID Drive. No open registration. All users enter through invitations. Authentication is always via SSDID Wallet.
+Invite-only onboarding for SSDID Drive targeting enterprise B2B. No open registration. All users enter through invitations. Authentication supports three methods: Email+TOTP, OIDC (Google/Microsoft), and SSDID Wallet.
 
 ## Principles
 
 - **Invite-only** — no self-registration, no open sign-up
-- **Top-down tenant creation** — only SuperAdmin creates tenants
-- **Wallet-based auth** — all logins via SSDID Wallet QR scan
+- **Top-down tenant creation** — users request tenants, SuperAdmin approves (requester auto-becomes Owner)
+- **Multi-auth** — Email+TOTP, OIDC (Google/Microsoft), SSDID Wallet — all 3 supported for invitation acceptance
 - **Multi-tenant** — a user can belong to multiple tenants via separate invitations
+- **Email-verified** — invitation email must match the accepting user's email across all auth methods
 
 ## Roles & Permissions
 
@@ -25,10 +26,10 @@ Slack-style invite-only onboarding for SSDID Drive. No open registration. All us
 ```
 1. Deploy SSDID Drive with AdminDid in appsettings
 2. SuperAdmin registers with matching DID → auto-promoted
-3. SuperAdmin creates Tenant "Acme Corp" (admin portal)
-4. SuperAdmin invites first Owner to "Acme Corp" (admin portal)
-5. Owner invites Admins/Members (inside the app)
-6. Admins invite Members (inside the app)
+3. User registers (any auth method) and submits TenantRequest
+4. SuperAdmin approves → tenant created + requester becomes Owner (automatic)
+5. Owner invites Admins/Members (inside the app, via email)
+6. Invitees accept using any auth method (Email+TOTP, OIDC, or Wallet)
 ```
 
 ## Invitation Flow
