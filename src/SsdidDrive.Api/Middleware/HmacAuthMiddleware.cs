@@ -25,10 +25,17 @@ public static class HmacSignatureHelper
 
     public static bool VerifySignature(byte[] secret, string timestamp, string method, string path, string bodyHash, string providedSignature)
     {
-        var expected = ComputeSignature(secret, timestamp, method, path, bodyHash);
-        var expectedBytes = Convert.FromBase64String(expected);
-        var providedBytes = Convert.FromBase64String(providedSignature);
-        return CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
+        try
+        {
+            var expected = ComputeSignature(secret, timestamp, method, path, bodyHash);
+            var expectedBytes = Convert.FromBase64String(expected);
+            var providedBytes = Convert.FromBase64String(providedSignature);
+            return CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }
 
@@ -101,8 +108,10 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
         var bodyHash = HmacSignatureHelper.ComputeBodyHash(body);
         var method = context.Request.Method;
         var path = context.Request.Path.Value ?? "/";
+        var query = context.Request.QueryString.Value ?? "";
+        var pathAndQuery = query.Length > 0 ? $"{path}{query}" : path;
 
-        if (!HmacSignatureHelper.VerifySignature(secret, timestampHeader, method, path, bodyHash, signatureHeader))
+        if (!HmacSignatureHelper.VerifySignature(secret, timestampHeader, method, pathAndQuery, bodyHash, signatureHeader))
         {
             context.Response.StatusCode = 401;
             await context.Response.WriteAsJsonAsync(new { error = "Invalid HMAC signature" });
@@ -123,7 +132,7 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
         serviceContext.Permissions = permissions;
 
         service.LastUsedAt = DateTimeOffset.UtcNow;
-        _ = db.SaveChangesAsync();
+        await db.SaveChangesAsync(CancellationToken.None);
 
         await next(context);
     }

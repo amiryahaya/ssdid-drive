@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
@@ -21,6 +22,12 @@ public static class SubmitRequest
     {
         if (string.IsNullOrWhiteSpace(request.OrganizationName))
             return AppError.BadRequest("Organization name is required").ToProblemResult();
+
+        var alreadyPending = await db.TenantRequests
+            .AnyAsync(r => r.RequesterAccountId == accessor.UserId
+                           && r.Status == TenantRequestStatus.Pending, ct);
+        if (alreadyPending)
+            return AppError.Conflict("You already have a pending tenant request").ToProblemResult();
 
         var tenantRequest = new TenantRequest
         {
