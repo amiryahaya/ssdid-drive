@@ -23,62 +23,33 @@ public static class AcceptWithWallet
         Request req,
         AppDbContext db,
         SsdidAuthService auth,
-        NotificationService notifications,
+        InvitationAcceptanceService acceptanceService,
         CancellationToken ct)
     {
-        // 1. Look up invitation by token (without status filter to distinguish 404 vs 409)
-        var invitation = await db.Invitations
-            .Include(i => i.Tenant)
-            .Include(i => i.InvitedBy)
-            .FirstOrDefaultAsync(i => i.Token == token || i.ShortCode == token, ct);
-
-        if (invitation is null)
-            return AppError.NotFound("Invitation not found").ToProblemResult();
-
-        // 2. Check expiry first (returns 404 per spec)
-        if (invitation.ExpiresAt <= DateTimeOffset.UtcNow)
-        {
-            if (invitation.Status == InvitationStatus.Pending)
-            {
-                invitation.Status = InvitationStatus.Expired;
-                invitation.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-            return AppError.NotFound("Invitation has expired").ToProblemResult();
-        }
-
-        // 3. Check status (Accepted → 409, others → 404)
-        if (invitation.Status == InvitationStatus.Accepted)
-            return AppError.Conflict("Invitation has already been accepted").ToProblemResult();
-
-        if (invitation.Status != InvitationStatus.Pending)
-            return AppError.NotFound("Invitation not found or is no longer valid").ToProblemResult();
-
-        // 4. Invitation must have an email to verify
-        if (string.IsNullOrWhiteSpace(invitation.Email))
-            return AppError.BadRequest("Invitation has no email to verify").ToProblemResult();
-
-        // 5. Email match (case-insensitive) — check before credential verification (cheap first)
-        if (!string.Equals(req.Email?.Trim(), invitation.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-            return AppError.Forbidden("Email verification failed").ToProblemResult();
-
-        // 6. Verify credential
+        // 1. Verify credential first (cheap to fail fast)
         var verifyResult = auth.VerifyCredential(req.Credential);
         return await verifyResult.Match(
             async did =>
             {
-                // 7. Find or create user BEFORE transaction to avoid Npgsql aborted-transaction state
-                //    on DbUpdateException (concurrent DID collision).
+                // 2. Find or create user
                 var user = await db.Users
                     .FirstOrDefaultAsync(u => u.Did == did, ct);
 
                 var isNewUser = user is null;
                 if (isNewUser)
                 {
+                    // Look up invitation to get tenantId for new user's primary tenant
+                    var invitation = await db.Invitations
+                        .FirstOrDefaultAsync(i => i.Token == token || i.ShortCode == token, ct);
+
+                    if (invitation is null)
+                        return AppError.NotFound("Invitation not found").ToProblemResult();
+
                     user = new User
                     {
                         Id = Guid.NewGuid(),
                         Did = did,
+                        Email = req.Email?.Trim().ToLowerInvariant(),
                         DisplayName = null,
                         Status = UserStatus.Active,
                         TenantId = invitation.TenantId,
@@ -92,93 +63,50 @@ public static class AcceptWithWallet
                     }
                     catch (DbUpdateException)
                     {
-                        // Concurrent request created the same DID — re-fetch
                         db.ChangeTracker.Clear();
                         user = await db.Users.FirstAsync(u => u.Did == did, ct);
                         isNewUser = false;
                     }
                 }
 
-                // 8. Check not already a member
-                if (!isNewUser)
-                {
-                    var existingMembership = await db.UserTenants
-                        .AnyAsync(ut => ut.UserId == user!.Id && ut.TenantId == invitation.TenantId, ct);
-                    if (existingMembership)
-                        return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
-                }
-
-                // 9. Begin transaction for invitation acceptance + membership creation
-                await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-                // 10. Accept invitation atomically
-                var updated = await db.Invitations
-                    .Where(i => i.Id == invitation.Id && i.Status == InvitationStatus.Pending)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(i => i.Status, InvitationStatus.Accepted)
-                        .SetProperty(i => i.InvitedUserId, user!.Id)
-                        .SetProperty(i => i.AcceptedByDid, did)
-                        .SetProperty(i => i.AcceptedAt, DateTimeOffset.UtcNow)
-                        .SetProperty(i => i.UpdatedAt, DateTimeOffset.UtcNow), ct);
-
-                if (updated == 0)
-                    return AppError.Conflict("Invitation has already been processed").ToProblemResult();
-
-                // 11. Create UserTenant (handle concurrent duplicate)
-                db.UserTenants.Add(new UserTenant
-                {
-                    UserId = user!.Id,
-                    TenantId = invitation.TenantId,
-                    Role = invitation.Role,
-                    CreatedAt = DateTimeOffset.UtcNow
-                });
-
-                // 12. Notify inviter
-                await notifications.CreateAsync(
-                    invitation.InvitedById,
-                    "invitation_accepted",
-                    "Invitation Accepted",
-                    $"{user.DisplayName ?? user.Did ?? "A user"} accepted your invitation",
-                    actionType: "invitation",
-                    actionResourceId: invitation.Id.ToString(),
+                // 3. Delegate invitation acceptance to shared service
+                var result = await acceptanceService.AcceptAsync(
+                    user!.Id,
+                    req.Email,
+                    token: token,
+                    acceptedByDid: did,
                     ct: ct);
 
-                try
-                {
-                    await db.SaveChangesAsync(ct);
-                }
-                catch (DbUpdateException)
-                {
-                    // Duplicate UserTenant from concurrent request
-                    return AppError.Conflict("User is already a member of this tenant").ToProblemResult();
-                }
-                await transaction.CommitAsync(ct);
-
-                // 14. Create session
-                var sessionResult = auth.CreateAuthenticatedSession(did);
-                return sessionResult.Match(
-                    ok => Results.Ok(new
+                return result.Match(
+                    ok =>
                     {
-                        session_token = ok.SessionToken,
-                        did = ok.Did,
-                        server_did = ok.ServerDid,
-                        server_key_id = ok.ServerKeyId,
-                        server_signature = ok.ServerSignature,
-                        user = new
-                        {
-                            user.Id,
-                            user.Did,
-                            display_name = user.DisplayName,
-                            status = user.Status.ToString().ToLowerInvariant()
-                        },
-                        tenant = new
-                        {
-                            id = invitation.TenantId,
-                            name = invitation.Tenant.Name,
-                            slug = invitation.Tenant.Slug,
-                            role = invitation.Role.ToString().ToLowerInvariant()
-                        }
-                    }),
+                        // 4. Create session
+                        var sessionResult = auth.CreateAuthenticatedSession(did);
+                        return sessionResult.Match(
+                            session => Results.Ok(new
+                            {
+                                session_token = session.SessionToken,
+                                did = session.Did,
+                                server_did = session.ServerDid,
+                                server_key_id = session.ServerKeyId,
+                                server_signature = session.ServerSignature,
+                                user = new
+                                {
+                                    user!.Id,
+                                    user.Did,
+                                    display_name = user.DisplayName,
+                                    status = user.Status.ToString().ToLowerInvariant()
+                                },
+                                tenant = new
+                                {
+                                    id = ok.TenantId,
+                                    name = ok.TenantName,
+                                    slug = ok.TenantSlug,
+                                    role = ok.Role.ToString().ToLowerInvariant()
+                                }
+                            }),
+                            err => err.ToProblemResult());
+                    },
                     err => err.ToProblemResult());
             },
             err => Task.FromResult(err.ToProblemResult()));
