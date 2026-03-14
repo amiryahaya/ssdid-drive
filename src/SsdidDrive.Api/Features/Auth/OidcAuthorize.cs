@@ -16,10 +16,10 @@ public static class OidcAuthorize
     private static IResult Handle(
         string provider,
         string? redirect_uri,
+        string? invitation_token,
         ISessionStore sessionStore,
         OidcCodeExchanger exchanger)
     {
-        // Use hex encoding — safe in query strings without escaping
         var stateToken = RandomNumberGenerator.GetHexString(64, lowercase: true);
 
         var result = exchanger.GetAuthorizationUrl(provider, stateToken);
@@ -28,12 +28,8 @@ public static class OidcAuthorize
 
         var (url, state, codeVerifier) = result.Value;
 
-        // Store state → (codeVerifier, provider) mapping via challenge store.
-        // Embed redirect_uri in the codeVerifier payload so OidcCallback can route
-        // back to the correct client (admin portal vs desktop deep link).
-        var challengePayload = string.IsNullOrEmpty(redirect_uri)
-            ? codeVerifier
-            : $"{codeVerifier}|{redirect_uri}";
+        // 3-segment format: "codeVerifier|redirect_uri|invitation_token"
+        var challengePayload = $"{codeVerifier}|{redirect_uri ?? ""}|{invitation_token ?? ""}";
         sessionStore.CreateChallenge("oidc", state, challengePayload, provider);
 
         return Results.Redirect(url);

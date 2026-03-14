@@ -24,6 +24,7 @@ public static class OidcCallback
         OidcCodeExchanger exchanger,
         OidcTokenValidator validator,
         AuditService auditService,
+        InvitationAcceptanceService acceptanceService,
         IConfiguration config,
         CancellationToken ct)
     {
@@ -32,37 +33,26 @@ public static class OidcCallback
         if (string.IsNullOrEmpty(state))
             return AppError.BadRequest("Missing state parameter").ToProblemResult();
 
-        // Validate and consume state
         var challengeEntry = sessionStore.ConsumeChallenge("oidc", state);
         if (challengeEntry is null)
             return AppError.Unauthorized("Invalid or expired state parameter").ToProblemResult();
 
-        // Challenge payload may contain redirect_uri: "codeVerifier|redirect_uri"
+        // Parse challenge payload: "codeVerifier|redirect_uri|invitation_token"
+        // Backward compatible with old 2-segment format
         var challengePayload = challengeEntry.Challenge;
         var storedProvider = challengeEntry.KeyId;
-        string codeVerifier;
-        string? clientRedirectUri = null;
-
-        var pipeIndex = challengePayload.IndexOf('|');
-        if (pipeIndex >= 0)
-        {
-            codeVerifier = challengePayload[..pipeIndex];
-            clientRedirectUri = challengePayload[(pipeIndex + 1)..];
-        }
-        else
-        {
-            codeVerifier = challengePayload;
-        }
+        var segments = challengePayload.Split('|');
+        var codeVerifier = segments[0];
+        string? clientRedirectUri = segments.Length > 1 && !string.IsNullOrEmpty(segments[1]) ? segments[1] : null;
+        string? invitationToken = segments.Length > 2 && !string.IsNullOrEmpty(segments[2]) ? segments[2] : null;
 
         if (!string.Equals(storedProvider, provider, StringComparison.OrdinalIgnoreCase))
             return AppError.Unauthorized("State/provider mismatch").ToProblemResult();
 
-        // Exchange code for ID token
         var tokenResult = await exchanger.ExchangeCodeAsync(provider, code, codeVerifier, ct);
         if (!tokenResult.IsSuccess)
             return tokenResult.Error!.ToProblemResult();
 
-        // Validate ID token
         var claims = await validator.ValidateAsync(provider, tokenResult.Value!, ct);
         if (!claims.IsSuccess)
             return claims.Error!.ToProblemResult();
@@ -78,7 +68,6 @@ public static class OidcCallback
         if (providerEnum is null)
             return AppError.BadRequest("Unsupported provider").ToProblemResult();
 
-        // Look up existing login
         var existingLogin = await db.Logins
             .Include(l => l.Account)
             .FirstOrDefaultAsync(l =>
@@ -86,13 +75,91 @@ public static class OidcCallback
                 && l.ProviderSubject == oidcClaims.Subject, ct);
 
         if (existingLogin is null)
-            return RedirectWithError(config, "No account linked to this provider. Register first.", clientRedirectUri);
+        {
+            // No existing login — check if this is an invitation-based registration
+            if (string.IsNullOrEmpty(invitationToken))
+                return RedirectWithError(config, "No account linked to this provider. Register first.", clientRedirectUri);
 
+            // Validate invitation
+            var invitation = await db.Invitations
+                .Include(i => i.Tenant)
+                .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
+                    && i.Status == InvitationStatus.Pending
+                    && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+
+            if (invitation is null)
+                return RedirectWithError(config, "Invalid or expired invitation", clientRedirectUri);
+
+            // Email match
+            if (!string.IsNullOrEmpty(invitation.Email)
+                && !string.Equals(invitation.Email, oidcClaims.Email, StringComparison.OrdinalIgnoreCase))
+                return RedirectWithError(config, "Email does not match the invitation", clientRedirectUri);
+
+            // Find or create user
+            var existingUser = await db.Users
+                .FirstOrDefaultAsync(u => u.Email == oidcClaims.Email, ct);
+
+            User newUser;
+            if (existingUser is not null)
+            {
+                newUser = existingUser;
+            }
+            else
+            {
+                newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Email = oidcClaims.Email,
+                    DisplayName = oidcClaims.Name,
+                    EmailVerified = true,
+                    Status = UserStatus.Active,
+                    TenantId = invitation.TenantId,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                };
+                db.Users.Add(newUser);
+            }
+
+            // Create OIDC login link
+            db.Logins.Add(new Login
+            {
+                AccountId = newUser.Id,
+                Provider = providerEnum.Value,
+                ProviderSubject = oidcClaims.Subject,
+            });
+
+            await db.SaveChangesAsync(ct);
+
+            // Accept invitation via shared service
+            var acceptResult = await acceptanceService.AcceptAsync(
+                newUser.Id,
+                oidcClaims.Email,
+                token: invitationToken,
+                ct: ct);
+
+            if (!acceptResult.IsSuccess)
+                return RedirectWithError(config, acceptResult.Error!.Detail ?? "Failed to accept invitation", clientRedirectUri);
+
+            newUser.LastLoginAt = DateTimeOffset.UtcNow;
+            newUser.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            var regSessionToken = sessionStore.CreateSession(newUser.Id.ToString());
+            if (regSessionToken is null)
+                return RedirectWithError(config, "Session limit exceeded", clientRedirectUri);
+
+            await auditService.LogAsync(newUser.Id, "auth.register.oidc", "user", newUser.Id,
+                $"Provider: {provider}, via invitation", ct);
+
+            return BuildRedirect(clientRedirectUri, config, regSessionToken, provider,
+                mfaRequired: false, totpSetupRequired: false);
+        }
+
+        // ── Existing login path (unchanged) ──
         var user = existingLogin.Account;
         if (user.Status == UserStatus.Suspended)
             return RedirectWithError(config, "Account is suspended", clientRedirectUri);
 
-        // Check if user is admin/owner in any tenant
         var isAdmin = await db.UserTenants
             .AnyAsync(ut => ut.UserId == user.Id
                 && (ut.Role == TenantRole.Owner || ut.Role == TenantRole.Admin), ct);
@@ -105,13 +172,11 @@ public static class OidcCallback
         {
             if (user.TotpEnabled)
             {
-                // Admin with TOTP — require MFA verification
                 sessionValue = $"mfa:{user.Id}";
                 mfaRequired = true;
             }
             else
             {
-                // Admin without TOTP — full session so they can call /totp/setup
                 sessionValue = user.Id.ToString();
                 totpSetupRequired = true;
             }
@@ -121,7 +186,6 @@ public static class OidcCallback
             sessionValue = user.Id.ToString();
         }
 
-        // Only stamp LastLoginAt for completed logins (not MFA-pending)
         if (!mfaRequired)
         {
             user.LastLoginAt = DateTimeOffset.UtcNow;
@@ -138,30 +202,29 @@ public static class OidcCallback
             "user", user.Id,
             $"Provider: {provider} (server-side)", ct);
 
-        // Redirect to the originating client
-        var baseUrl = clientRedirectUri ?? config["AdminPortal:BaseUrl"] ?? "/admin";
-        string redirectUrl;
+        return BuildRedirect(clientRedirectUri, config, sessionToken, provider, mfaRequired, totpSetupRequired);
+    }
 
+    private static IResult BuildRedirect(string? clientRedirectUri, IConfiguration config,
+        string sessionToken, string provider, bool mfaRequired, bool totpSetupRequired)
+    {
         if (clientRedirectUri is not null)
         {
-            // Desktop deep link: append token as query param
             var separator = clientRedirectUri.Contains('?') ? "&" : "?";
-            redirectUrl = $"{clientRedirectUri}{separator}" +
+            return Results.Redirect(
+                $"{clientRedirectUri}{separator}" +
                 $"token={Uri.EscapeDataString(sessionToken)}" +
                 $"&provider={Uri.EscapeDataString(provider)}" +
                 $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
-                $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
-        }
-        else
-        {
-            // Admin portal
-            redirectUrl = $"{baseUrl}/auth/callback" +
-                $"?token={Uri.EscapeDataString(sessionToken)}" +
-                $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
-                $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
+                $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}");
         }
 
-        return Results.Redirect(redirectUrl);
+        var baseUrl = config["AdminPortal:BaseUrl"] ?? "/admin";
+        return Results.Redirect(
+            $"{baseUrl}/auth/callback" +
+            $"?token={Uri.EscapeDataString(sessionToken)}" +
+            $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
+            $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}");
     }
 
     private static IResult RedirectWithError(IConfiguration config, string error, string? clientRedirectUri = null)
