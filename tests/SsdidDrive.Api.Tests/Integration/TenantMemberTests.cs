@@ -171,6 +171,45 @@ public class TenantMemberTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task RemoveMember_RevokesTheirPendingInvitations()
+    {
+        var (ownerClient, ownerId, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "TM-CascOwner");
+        var (adminClient, adminId) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "TM-CascAdmin");
+
+        // Promote to admin
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var ut = db.UserTenants.Single(ut => ut.UserId == adminId && ut.TenantId == tenantId);
+            ut.Role = TenantRole.Admin;
+            await db.SaveChangesAsync();
+        }
+
+        // Admin creates an invitation
+        var createResp = await adminClient.PostAsJsonAsync("/api/invitations", new
+        {
+            email = "cascade-target@example.com",
+            role = "member"
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var createBody = await createResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var invitationId = Guid.Parse(createBody.GetProperty("id").GetString()!);
+
+        // Owner removes the admin
+        var removeResp = await ownerClient.DeleteAsync($"/api/tenants/{tenantId}/members/{adminId}");
+        Assert.Equal(HttpStatusCode.NoContent, removeResp.StatusCode);
+
+        // Verify the admin's invitation was revoked
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var invitation = await db.Invitations.FindAsync(invitationId);
+            Assert.NotNull(invitation);
+            Assert.Equal(InvitationStatus.Revoked, invitation!.Status);
+        }
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private async Task<(HttpClient Client, Guid UserId)> CreateAdminClient(Guid tenantId)
