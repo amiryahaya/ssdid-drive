@@ -29,5 +29,17 @@ public static class AuthFeature
         // SSE endpoint for real-time challenge completion (mapped outside the group
         // because it needs its own path prefix, not nested under the group)
         routes.MapAuthEvents();
+
+        // New auth endpoints (email + TOTP + OIDC)
+        var auth = routes.MapGroup("/api/auth")
+            .WithTags("Authentication");
+
+        EmailRegister.Map(auth);
+        EmailRegisterVerify.Map(auth);
+        TotpSetup.Map(auth);
+        TotpSetupConfirm.Map(auth);
+        EmailLogin.Map(auth);
+        TotpVerify.Map(auth);
+        OidcVerify.Map(auth);
     }
 }
