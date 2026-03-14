@@ -41,6 +41,8 @@ public static class AuthFeature
         EmailLogin.Map(auth);
         TotpVerify.Map(auth);
         OidcVerify.Map(auth);
+        OidcAuthorize.Map(auth);
+        OidcCallback.Map(auth);
         TotpRecovery.Map(auth);
         TotpRecoveryVerify.Map(auth);
     }
