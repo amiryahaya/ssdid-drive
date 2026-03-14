@@ -24,6 +24,15 @@ public class User
     public DateTimeOffset UpdatedAt { get; set; }
     public bool HasRecoverySetup { get; set; }
 
+    // Auth: TOTP
+    public string? TotpSecret { get; set; }
+    public bool TotpEnabled { get; set; }
+    public string? BackupCodes { get; set; } // Encrypted JSON array
+    public bool EmailVerified { get; set; }
+
+    // Linked logins
+    public ICollection<Login> Logins { get; set; } = [];
+
     // TenantId is the user's default/primary tenant.
     // UserTenants is the full membership list (a user can belong to multiple tenants).
     public Guid? TenantId { get; set; }

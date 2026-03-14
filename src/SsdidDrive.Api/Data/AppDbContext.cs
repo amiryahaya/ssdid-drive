@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
     public DbSet<FileActivity> FileActivities => Set<FileActivity>();
+    public DbSet<Login> Logins => Set<Login>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -344,6 +345,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(a => a.Actor)
                 .WithMany()
                 .HasForeignKey(a => a.ActorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Login>(e =>
+        {
+            e.ToTable("logins");
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.Provider)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<LoginProvider>(v, true));
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.LinkedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => new { x.Provider, x.ProviderSubject }).IsUnique();
+            e.HasIndex(x => x.AccountId);
+
+            e.HasOne(x => x.Account)
+                .WithMany(u => u.Logins)
+                .HasForeignKey(x => x.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
