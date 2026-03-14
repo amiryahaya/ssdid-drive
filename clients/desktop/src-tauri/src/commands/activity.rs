@@ -1,6 +1,6 @@
 //! Activity log commands
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -58,7 +58,7 @@ pub async fn list_resource_activity(
 ) -> AppResult<ActivityResponse> {
     state.require_auth()?;
     let parsed_id = uuid::Uuid::parse_str(&resource_id)
-        .map_err(|_| "Invalid resource ID format")?;
+        .map_err(|_| AppError::Validation("Invalid resource ID format".into()))?;
     let mut params = vec![];
     if let Some(p) = page { params.push(format!("page={p}")); }
     if let Some(ps) = page_size { params.push(format!("page_size={ps}")); }

@@ -17,6 +17,54 @@ import type {
   DecryptedAskResponse,
 } from '../types';
 
+// ==================== Email Auth Types ====================
+
+export interface OtpSendResponse {
+  message: string;
+}
+
+export interface OtpVerifyResponse {
+  token: string;
+  totp_setup_required?: boolean;
+}
+
+export interface EmailLoginResponse {
+  requires_totp: boolean;
+}
+
+// ==================== OIDC Auth Types ====================
+
+export interface OidcLoginResponse {
+  token: string;
+  mfa_required?: boolean;
+  totp_setup_required?: boolean;
+}
+
+// ==================== TOTP Types ====================
+
+export interface TotpSetupResponse {
+  secret: string;
+  otpauth_uri: string;
+}
+
+export interface TotpSetupConfirmResponse {
+  backup_codes: string[];
+}
+
+export interface TotpVerifyResponse {
+  token: string;
+}
+
+// ==================== Account Types ====================
+
+export interface LinkedLogin {
+  id: string;
+  provider: string;
+  provider_subject: string;
+  email: string | null;
+  linked_at: string;
+}
+
 // ==================== Activity Types ====================
 
 export interface ActivityItem {
@@ -442,6 +490,62 @@ export const tauriService = {
 
   async deleteRecoverySetup(): Promise<void> {
     return invoke('delete_recovery_setup');
+  },
+
+  // ==================== Email Auth Commands ====================
+
+  async sendOtp(email: string, invitationToken?: string): Promise<OtpSendResponse> {
+    return invoke('send_otp', { email, invitationToken: invitationToken ?? null });
+  },
+
+  async verifyOtp(email: string, code: string, invitationToken?: string): Promise<OtpVerifyResponse> {
+    return invoke('verify_otp', { email, code, invitationToken: invitationToken ?? null });
+  },
+
+  async emailLogin(email: string): Promise<EmailLoginResponse> {
+    return invoke('email_login', { email });
+  },
+
+  // ==================== OIDC Auth Commands ====================
+
+  async oidcLogin(provider: string): Promise<void> {
+    return invoke('oidc_login', { provider });
+  },
+
+  async verifyOidcToken(provider: string, idToken: string, invitationToken?: string): Promise<OidcLoginResponse> {
+    return invoke('verify_oidc_token', { provider, idToken, invitationToken: invitationToken ?? null });
+  },
+
+  // ==================== TOTP Commands ====================
+
+  async totpSetup(): Promise<TotpSetupResponse> {
+    return invoke('totp_setup');
+  },
+
+  async totpSetupConfirm(code: string): Promise<TotpSetupConfirmResponse> {
+    return invoke('totp_setup_confirm', { code });
+  },
+
+  async totpVerify(email: string, code: string): Promise<TotpVerifyResponse> {
+    return invoke('totp_verify', { email, code });
+  },
+
+  // ==================== Account Commands ====================
+
+  async listLogins(): Promise<LinkedLogin[]> {
+    return invoke('list_logins');
+  },
+
+  async linkEmailLogin(email: string): Promise<OtpSendResponse> {
+    return invoke('link_email_login', { email });
+  },
+
+  async linkOidcLogin(provider: string, idToken: string): Promise<void> {
+    return invoke('link_oidc_login', { provider, idToken });
+  },
+
+  async unlinkLogin(loginId: string): Promise<void> {
+    return invoke('unlink_login', { loginId });
   },
 };
 

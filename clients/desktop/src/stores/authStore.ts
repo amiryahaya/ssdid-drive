@@ -40,6 +40,17 @@ interface AuthState {
   updateProfile: (name: string) => Promise<void>;
   loadDevices: () => Promise<void>;
   revokeDevice: (deviceId: string) => Promise<void>;
+
+  // Email auth
+  sendOtp: (email: string, invitationToken?: string) => Promise<void>;
+  verifyOtp: (email: string, code: string, invitationToken?: string) => Promise<{ totpSetupRequired?: boolean }>;
+  emailLogin: (email: string) => Promise<{ requiresTotp: boolean }>;
+
+  // OIDC
+  loginWithOidc: (provider: 'google' | 'microsoft') => Promise<void>;
+
+  // TOTP
+  totpVerify: (email: string, code: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -195,6 +206,79 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           set({ error: message });
+          throw error;
+        }
+      },
+
+      sendOtp: async (email, invitationToken) => {
+        set({ isLoading: true, error: null });
+        try {
+          await invoke('send_otp', { email, invitationToken: invitationToken ?? null });
+          set({ isLoading: false });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      verifyOtp: async (email, code, invitationToken) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await invoke<{ token: string; totp_setup_required?: boolean }>(
+            'verify_otp',
+            { email, code, invitationToken: invitationToken ?? null }
+          );
+          // Session is already saved by the Rust command
+          await get().checkAuth();
+          set({ isLoading: false });
+          return { totpSetupRequired: response.totp_setup_required };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      emailLogin: async (email) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await invoke<{ requires_totp: boolean }>(
+            'email_login',
+            { email }
+          );
+          set({ isLoading: false });
+          return { requiresTotp: response.requires_totp };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      loginWithOidc: async (provider) => {
+        set({ isLoading: true, error: null });
+        try {
+          await invoke('oidc_login', { provider });
+          // Browser opens — auth continues via deep link callback
+          set({ isLoading: false });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      totpVerify: async (email, code) => {
+        set({ isLoading: true, error: null });
+        try {
+          await invoke('totp_verify', { email, code });
+          // Session is already saved by the Rust command
+          await get().checkAuth();
+          set({ isLoading: false });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
           throw error;
         }
       },

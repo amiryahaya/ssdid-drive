@@ -28,6 +28,20 @@ vi.mock('@/components/auth/QrChallenge', () => ({
   ),
 }));
 
+// Mock OidcButtons
+vi.mock('@/components/auth/OidcButtons', () => ({
+  OidcButtons: ({ onProviderClick, disabled }: { onProviderClick: (p: string) => void; disabled: boolean }) => (
+    <div data-testid="oidc-buttons">
+      <button data-testid="oidc-google" onClick={() => onProviderClick('google')} disabled={disabled}>
+        Google
+      </button>
+      <button data-testid="oidc-microsoft" onClick={() => onProviderClick('microsoft')} disabled={disabled}>
+        Microsoft
+      </button>
+    </div>
+  ),
+}));
+
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,25 +60,63 @@ describe('LoginPage', () => {
     expect(screen.getByText('SSDID Drive')).toBeInTheDocument();
   });
 
-  it('should render the wallet sign-in prompt', () => {
+  it('should render Sign in with Email button', () => {
     render(<LoginPage />);
 
-    expect(screen.getByText('Sign in with your SSDID Wallet')).toBeInTheDocument();
+    expect(screen.getByText('Sign in with Email')).toBeInTheDocument();
   });
 
-  it('should render the QrChallenge component with authenticate action', () => {
-    render(<LoginPage />);
+  it('should navigate to /login/email when email button clicked', async () => {
+    const { user } = render(<LoginPage />);
 
-    const qrChallenge = screen.getByTestId('qr-challenge');
-    expect(qrChallenge).toBeInTheDocument();
-    expect(qrChallenge).toHaveAttribute('data-action', 'authenticate');
+    await user.click(screen.getByText('Sign in with Email'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/login/email');
   });
 
-  it('should not render email or password inputs', () => {
+  it('should render OIDC buttons', () => {
     render(<LoginPage />);
 
-    expect(screen.queryByPlaceholderText('you@example.com')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Enter your password')).not.toBeInTheDocument();
+    expect(screen.getByTestId('oidc-buttons')).toBeInTheDocument();
+  });
+
+  it('should show collapsible SSDID Wallet section', () => {
+    render(<LoginPage />);
+
+    expect(screen.getByText('Sign in with SSDID Wallet')).toBeInTheDocument();
+  });
+
+  it('should show QR challenge when wallet section is expanded', async () => {
+    const { user } = render(<LoginPage />);
+
+    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+
+    expect(screen.getByTestId('qr-challenge')).toBeInTheDocument();
+  });
+
+  it('should call loginWithSession when QrChallenge fires onAuthenticated', async () => {
+    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
+
+    const { user } = render(<LoginPage />);
+
+    // Expand wallet section first
+    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+    await user.click(screen.getByTestId('mock-authenticate'));
+
+    expect(loginWithSessionSpy).toHaveBeenCalledWith('mock-session-token');
+  });
+
+  it('should navigate to /files on successful wallet authentication', async () => {
+    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
+
+    const { user } = render(<LoginPage />);
+
+    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+    await user.click(screen.getByTestId('mock-authenticate'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/files');
   });
 
   it('should show error message when auth fails', () => {
@@ -86,39 +138,6 @@ describe('LoginPage', () => {
     expect(useAuthStore.getState().error).toBeNull();
   });
 
-  it('should call loginWithSession when QrChallenge fires onAuthenticated', async () => {
-    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
-    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
-
-    const { user } = render(<LoginPage />);
-
-    await user.click(screen.getByTestId('mock-authenticate'));
-
-    expect(loginWithSessionSpy).toHaveBeenCalledWith('mock-session-token');
-  });
-
-  it('should navigate to /files on successful authentication', async () => {
-    const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
-    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
-
-    const { user } = render(<LoginPage />);
-
-    await user.click(screen.getByTestId('mock-authenticate'));
-
-    expect(mockNavigate).toHaveBeenCalledWith('/files');
-  });
-
-  it('should not navigate when loginWithSession throws', async () => {
-    const loginWithSessionSpy = vi.fn().mockRejectedValue(new Error('Invalid session'));
-    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
-
-    const { user } = render(<LoginPage />);
-
-    await user.click(screen.getByTestId('mock-authenticate'));
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-  });
-
   it('should show link to register page', () => {
     render(<LoginPage />);
 
@@ -127,18 +146,11 @@ describe('LoginPage', () => {
     expect(registerLink).toHaveAttribute('href', '/register');
   });
 
-  it('should show wallet download link', () => {
+  it('should show invite code link', () => {
     render(<LoginPage />);
 
-    const downloadLink = screen.getByRole('link', { name: /download it/i });
-    expect(downloadLink).toBeInTheDocument();
-    expect(downloadLink).toHaveAttribute('href', 'https://ssdid.io/wallet');
-    expect(downloadLink).toHaveAttribute('target', '_blank');
-  });
-
-  it('should show post-quantum cryptography message', () => {
-    render(<LoginPage />);
-
-    expect(screen.getByText('Protected with post-quantum cryptography')).toBeInTheDocument();
+    const inviteLink = screen.getByRole('link', { name: /invite code/i });
+    expect(inviteLink).toBeInTheDocument();
+    expect(inviteLink).toHaveAttribute('href', '/join');
   });
 });

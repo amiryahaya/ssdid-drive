@@ -105,6 +105,22 @@ pub fn run() {
             commands::auth::check_auth_status,
             commands::auth::get_current_user,
             commands::auth::logout,
+            // Email auth commands
+            commands::email_auth::send_otp,
+            commands::email_auth::verify_otp,
+            commands::email_auth::email_login,
+            // OIDC auth commands
+            commands::oidc_auth::oidc_login,
+            commands::oidc_auth::verify_oidc_token,
+            // TOTP commands
+            commands::totp::totp_setup,
+            commands::totp::totp_setup_confirm,
+            commands::totp::totp_verify,
+            // Account commands
+            commands::account::list_logins,
+            commands::account::link_email_login,
+            commands::account::link_oidc_login,
+            commands::account::unlink_login,
             // File commands
             commands::files::list_files,
             commands::files::upload_file,

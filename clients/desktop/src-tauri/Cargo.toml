@@ -68,6 +68,7 @@ sharks = "0.5"
 hex = "0.4"
 mime_guess = "2"
 zeroize = { version = "1.8", features = ["derive"] }
+open = "5"
 urlencoding = "2"
 subtle = "2.5"
 

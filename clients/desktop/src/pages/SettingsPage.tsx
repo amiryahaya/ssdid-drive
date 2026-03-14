@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { RecoveryStatusCard } from '@/components/recovery/RecoveryStatusCard';
 import { PendingRecoveryRequests } from '@/components/recovery/PendingRecoveryRequests';
 import { ProfileSection, DevicesList } from '@/components/settings';
+import { LinkedLoginsSection } from '@/components/settings/LinkedLoginsSection';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { usePushPermission } from '@/hooks/usePushPermission';
 import { useBiometric } from '@/hooks/useBiometric';
@@ -75,6 +76,12 @@ export function SettingsPage() {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Account</h2>
         <ProfileSection />
+      </div>
+
+      {/* Linked Logins */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Linked Logins</h2>
+        <LinkedLoginsSection />
       </div>
 
       {/* Devices */}
