@@ -59,15 +59,35 @@ public static class OidcVerify
             user.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            // Check if admin requiring TOTP
-            var userTenant = await db.UserTenants
-                .FirstOrDefaultAsync(ut => ut.UserId == user.Id, ct);
+            // Check if user is admin/owner in any tenant
+            var isAdmin = await db.UserTenants
+                .AnyAsync(ut => ut.UserId == user.Id
+                    && (ut.Role == TenantRole.Owner || ut.Role == TenantRole.Admin), ct);
 
-            bool needsMfa = user.TotpEnabled
-                && userTenant is not null
-                && (userTenant.Role == TenantRole.Owner || userTenant.Role == TenantRole.Admin);
+            string sessionValue;
+            bool mfaRequired = false;
+            bool totpSetupRequired = false;
 
-            var sessionValue = needsMfa ? $"mfa:{user.Id}" : user.Id.ToString();
+            if (isAdmin)
+            {
+                if (user.TotpEnabled)
+                {
+                    // Admin with TOTP — require MFA verification
+                    sessionValue = $"mfa:{user.Id}";
+                    mfaRequired = true;
+                }
+                else
+                {
+                    // Admin without TOTP — require TOTP setup
+                    sessionValue = user.Id.ToString(); // Full session so they can call /totp/setup
+                    totpSetupRequired = true;
+                }
+            }
+            else
+            {
+                sessionValue = user.Id.ToString();
+            }
+
             var token = sessionStore.CreateSession(sessionValue);
             if (token is null)
                 return AppError.ServiceUnavailable("Session limit exceeded").ToProblemResult();
@@ -81,7 +101,8 @@ public static class OidcVerify
                 account_id = user.Id,
                 email = user.Email,
                 display_name = user.DisplayName,
-                mfa_required = needsMfa,
+                mfa_required = mfaRequired,
+                totp_setup_required = totpSetupRequired,
             });
         }
 
