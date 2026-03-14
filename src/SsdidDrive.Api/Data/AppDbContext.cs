@@ -358,7 +358,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(x => x.Name).HasMaxLength(256).IsRequired();
             e.Property(x => x.ServiceKey).HasMaxLength(512).IsRequired();
-            e.Property(x => x.Permissions).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+            e.Property(x => x.Permissions).HasColumnType("jsonb").HasDefaultValueSql("'{}'");
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
 
