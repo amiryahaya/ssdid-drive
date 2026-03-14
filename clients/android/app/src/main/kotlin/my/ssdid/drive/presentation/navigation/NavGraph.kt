@@ -374,7 +374,11 @@ fun NavGraph(
         // Linked logins management
         composable(Screen.LinkedLogins.route) {
             LinkedLoginsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onOidcLink = { provider ->
+                    // OIDC linking is handled by the LinkedLoginsViewModel via native SDK callbacks
+                    // The provider parameter triggers the platform-specific OIDC flow
+                }
             )
         }
 

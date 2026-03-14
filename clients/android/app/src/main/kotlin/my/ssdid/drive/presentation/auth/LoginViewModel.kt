@@ -58,10 +58,13 @@ class LoginViewModel @Inject constructor(
                             it.copy(isLoading = false, navigateToTotp = email)
                         }
                     } else {
+                        // TOTP not enabled — account exists but has no 2FA configured.
+                        // Guide user to set up TOTP or use another login method.
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                error = "TOTP not set up for this account"
+                                error = "This account does not have two-factor authentication enabled. " +
+                                    "Please use DID or OIDC login, or contact your administrator to enable TOTP."
                             )
                         }
                     }

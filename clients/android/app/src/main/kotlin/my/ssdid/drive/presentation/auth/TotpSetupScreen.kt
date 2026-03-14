@@ -1,5 +1,7 @@
 package my.ssdid.drive.presentation.auth
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -11,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -113,6 +116,35 @@ private fun ScanQrStep(
     )
 
     Spacer(modifier = Modifier.height(24.dp))
+
+    // Open in authenticator app via otpauth:// URI
+    if (otpauthUri.isNotEmpty()) {
+        val context = LocalContext.current
+        OutlinedButton(
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(otpauthUri))
+                try {
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    // No authenticator app handles otpauth:// — user must enter manually
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("open_authenticator_button")
+        ) {
+            Text("Open in Authenticator App")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Or enter the secret key manually:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+    }
 
     // Manual entry secret key
     Card(

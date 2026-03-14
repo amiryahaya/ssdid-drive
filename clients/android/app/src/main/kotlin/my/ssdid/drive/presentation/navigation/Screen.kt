@@ -1,5 +1,7 @@
 package my.ssdid.drive.presentation.navigation
 
+import java.net.URLEncoder
+
 /**
  * Sealed class representing all screens in the app.
  * Used for type-safe navigation.
@@ -15,16 +17,16 @@ sealed class Screen(val route: String) {
     data object Lock : Screen("lock")
     data object EmailLogin : Screen("email-login")
     data object TotpVerify : Screen("totp-verify/{email}") {
-        fun createRoute(email: String) = "totp-verify/$email"
+        fun createRoute(email: String) = "totp-verify/${URLEncoder.encode(email, "UTF-8")}"
     }
     data object TotpSetup : Screen("totp-setup")
     data object TotpRecovery : Screen("totp-recovery/{email}") {
-        fun createRoute(email: String) = "totp-recovery/$email"
+        fun createRoute(email: String) = "totp-recovery/${URLEncoder.encode(email, "UTF-8")}"
     }
 
     // Invitation acceptance (deep link)
     data object InviteAccept : Screen("invite/{token}") {
-        fun createRoute(token: String) = "invite/$token"
+        fun createRoute(token: String) = "invite/${URLEncoder.encode(token, "UTF-8")}"
     }
 
     // Main screens
