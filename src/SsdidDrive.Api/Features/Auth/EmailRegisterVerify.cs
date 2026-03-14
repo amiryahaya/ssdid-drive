@@ -32,8 +32,9 @@ public static class EmailRegisterVerify
 
         var email = req.Email.Trim().ToLowerInvariant();
 
+        var invitationToken = req.InvitationToken!.Trim();
         var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => i.Token == req.InvitationToken
+            .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
                 && i.Status == InvitationStatus.Pending
                 && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
 
@@ -45,6 +46,7 @@ public static class EmailRegisterVerify
 
         var user = new User
         {
+            Id = Guid.NewGuid(),
             Email = email,
             EmailVerified = true,
             Status = UserStatus.Active,

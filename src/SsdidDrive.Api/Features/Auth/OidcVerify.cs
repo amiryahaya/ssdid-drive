@@ -111,8 +111,9 @@ public static class OidcVerify
         if (string.IsNullOrWhiteSpace(req.InvitationToken))
             return AppError.NotFound("No account linked to this provider. Register first or link in Settings.").ToProblemResult();
 
+        var invToken = req.InvitationToken!.Trim();
         var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => i.Token == req.InvitationToken
+            .FirstOrDefaultAsync(i => (i.Token == invToken || i.ShortCode == invToken)
                 && i.Status == InvitationStatus.Pending
                 && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
 

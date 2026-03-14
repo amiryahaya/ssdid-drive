@@ -85,10 +85,9 @@ public static class RegisterVerify
         Invitation? invitation = null;
         if (!string.IsNullOrWhiteSpace(inviteToken))
         {
-            // Only accept full token — short codes have insufficient entropy for registration
             invitation = await db.Invitations
                 .FirstOrDefaultAsync(i =>
-                    i.Token == inviteToken
+                    (i.Token == inviteToken || i.ShortCode == inviteToken)
                     && i.Status == InvitationStatus.Pending
                     && i.ExpiresAt > DateTimeOffset.UtcNow);
         }
@@ -167,7 +166,7 @@ public static class RegisterVerify
         // Only accept full token — short codes have insufficient entropy
         var invitation = await db.Invitations
             .FirstOrDefaultAsync(i =>
-                i.Token == inviteToken
+                (i.Token == inviteToken || i.ShortCode == inviteToken)
                 && i.Status == InvitationStatus.Pending
                 && i.ExpiresAt > DateTimeOffset.UtcNow);
 

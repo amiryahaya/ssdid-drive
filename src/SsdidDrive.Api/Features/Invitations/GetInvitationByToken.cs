@@ -27,7 +27,7 @@ public static class GetInvitationByToken
             .Include(i => i.Tenant)
             .Include(i => i.InvitedBy)
             .FirstOrDefaultAsync(i =>
-                i.Token == token
+                (i.Token == token || i.ShortCode == token)
                 && i.Status == InvitationStatus.Pending, ct);
 
         if (invitation is null || invitation.ExpiresAt <= DateTimeOffset.UtcNow)

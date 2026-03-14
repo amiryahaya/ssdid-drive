@@ -30,7 +30,7 @@ public static class AcceptWithWallet
         var invitation = await db.Invitations
             .Include(i => i.Tenant)
             .Include(i => i.InvitedBy)
-            .FirstOrDefaultAsync(i => i.Token == token, ct);
+            .FirstOrDefaultAsync(i => i.Token == token || i.ShortCode == token, ct);
 
         if (invitation is null)
             return AppError.NotFound("Invitation not found").ToProblemResult();
