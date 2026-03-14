@@ -153,6 +153,7 @@ else
     builder.Services.AddSingleton<IOtpStore, InMemoryOtpStore>();
 
 builder.Services.AddScoped<OtpService>();
+builder.Services.AddSingleton<TotpService>();
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
