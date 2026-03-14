@@ -170,6 +170,8 @@ pub async fn pii_ask(
 /// Call this when switching conversations or logging out
 #[tauri::command]
 pub async fn pii_clear_kem_keys(state: State<'_, AppState>) -> AppResult<()> {
+    state.require_auth()?;
+    state.require_unlocked()?;
     state.pii_service().clear_kem_secret_keys();
     tracing::info!("PII KEM keys cleared from memory");
     Ok(())

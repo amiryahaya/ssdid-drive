@@ -48,6 +48,7 @@ public static class RotateFolderKey
                 .Where(s =>
                     s.ResourceId == id &&
                     s.ResourceType == "folder" &&
+                    s.RevokedAt == null &&
                     memberUserIds.Contains(s.SharedWithId))
                 .ToListAsync(ct);
 

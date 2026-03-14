@@ -11,6 +11,7 @@ use crate::services::{AppGroupService, CryptoResponse};
 pub async fn register_file_provider_domain(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
         info!("Registering File Provider domain");
@@ -95,6 +96,8 @@ pub async fn signal_file_changed(file_id: String) -> Result<(), String> {
 pub async fn process_crypto_requests(
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
+    state.require_auth().map_err(|e| e.to_string())?;
+    state.require_unlocked().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
         let app_group = AppGroupService::new();
@@ -193,6 +196,7 @@ pub fn get_file_provider_container_path() -> Option<String> {
 pub async fn sync_file_metadata_to_extension(
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
         use crate::services::SharedFileMetadata;

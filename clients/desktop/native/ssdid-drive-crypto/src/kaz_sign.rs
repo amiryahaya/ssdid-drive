@@ -1,11 +1,16 @@
 //! Safe wrapper for KAZ-SIGN post-quantum digital signatures
 
 use crate::error::{CryptoError, CryptoResult};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Thread-safe initialization state using OnceLock instead of static mut
 static INIT_RESULT: OnceLock<Result<(), CryptoError>> = OnceLock::new();
+
+/// Mutex to serialize all FFI calls into the C library, which uses
+/// global mutable state (`g_runtime_*`, `g_rand_initialized`) that is
+/// not thread-safe. See sign.c line 153-158 warning comment.
+static FFI_LOCK: Mutex<()> = Mutex::new(());
 
 /// KAZ-SIGN security levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +39,7 @@ impl KeyPair {
 /// Initialize KAZ-SIGN random state
 pub fn init() -> CryptoResult<()> {
     let result = INIT_RESULT.get_or_init(|| {
+        let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
         let code = unsafe { kaz_sign_sys::kaz_sign_init_random() };
         if code != 0 {
             Err(CryptoError::from(code))
@@ -47,11 +53,13 @@ pub fn init() -> CryptoResult<()> {
 
 /// Check if KAZ-SIGN is initialized
 pub fn is_initialized() -> bool {
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
     unsafe { kaz_sign_sys::kaz_sign_is_initialized() == 1 }
 }
 
 /// Get key sizes for a security level
 pub fn get_key_sizes(level: SecurityLevel) -> CryptoResult<(usize, usize)> {
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
     unsafe {
         let params = kaz_sign_sys::kaz_sign_get_level_params(level as i32);
         if params.is_null() {
@@ -64,6 +72,7 @@ pub fn get_key_sizes(level: SecurityLevel) -> CryptoResult<(usize, usize)> {
 
 /// Get signature overhead for a security level
 pub fn get_signature_overhead(level: SecurityLevel) -> CryptoResult<usize> {
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
     unsafe {
         let params = kaz_sign_sys::kaz_sign_get_level_params(level as i32);
         if params.is_null() {
@@ -79,7 +88,17 @@ pub fn generate_keypair(level: SecurityLevel) -> CryptoResult<KeyPair> {
         init()?;
     }
 
-    let (pk_size, sk_size) = get_key_sizes(level)?;
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
+
+    if unsafe { kaz_sign_sys::kaz_sign_is_initialized() != 1 } {
+        return Err(CryptoError::NotInitialized);
+    }
+
+    let params = unsafe { kaz_sign_sys::kaz_sign_get_level_params(level as i32) };
+    if params.is_null() {
+        return Err(CryptoError::InvalidLevel(level as i32));
+    }
+    let (pk_size, sk_size) = unsafe { ((*params).public_key_bytes, (*params).secret_key_bytes) };
 
     let mut public_key = vec![0u8; pk_size];
     let mut secret_key = vec![0u8; sk_size];
@@ -109,7 +128,17 @@ pub fn sign(message: &[u8], secret_key: &[u8], level: SecurityLevel) -> CryptoRe
         init()?;
     }
 
-    let overhead = get_signature_overhead(level)?;
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
+
+    if unsafe { kaz_sign_sys::kaz_sign_is_initialized() != 1 } {
+        return Err(CryptoError::NotInitialized);
+    }
+
+    let params = unsafe { kaz_sign_sys::kaz_sign_get_level_params(level as i32) };
+    if params.is_null() {
+        return Err(CryptoError::InvalidLevel(level as i32));
+    }
+    let overhead = unsafe { (*params).signature_overhead };
     let max_sig_len = overhead + message.len();
 
     let mut signature = vec![0u8; max_sig_len];
@@ -144,7 +173,17 @@ pub fn verify(
         init()?;
     }
 
-    let overhead = get_signature_overhead(level)?;
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
+
+    if unsafe { kaz_sign_sys::kaz_sign_is_initialized() != 1 } {
+        return Err(CryptoError::NotInitialized);
+    }
+
+    let params = unsafe { kaz_sign_sys::kaz_sign_get_level_params(level as i32) };
+    if params.is_null() {
+        return Err(CryptoError::InvalidLevel(level as i32));
+    }
+    let overhead = unsafe { (*params).signature_overhead };
     let max_msg_len = signature.len().saturating_sub(overhead);
 
     let mut message = vec![0u8; max_msg_len];
@@ -174,6 +213,7 @@ pub fn verify(
 
 /// Clean up KAZ-SIGN state
 pub fn cleanup() {
+    let _lock = FFI_LOCK.lock().expect("KAZ-SIGN FFI lock poisoned");
     unsafe {
         kaz_sign_sys::kaz_sign_clear_all();
         kaz_sign_sys::kaz_sign_clear_random();

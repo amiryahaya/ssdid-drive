@@ -37,7 +37,9 @@ public static class CompleteRecovery
         if (setup is null)
             return AppError.NotFound("No active recovery setup found").ToProblemResult();
 
-        if (!string.Equals(setup.KeyProof, req.KeyProof, StringComparison.Ordinal))
+        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(setup.KeyProof);
+        var actualBytes = System.Text.Encoding.UTF8.GetBytes(req.KeyProof);
+        if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes))
             return AppError.Forbidden("Invalid key proof").ToProblemResult();
 
         // Validate base64 KEM public key

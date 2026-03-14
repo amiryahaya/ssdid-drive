@@ -45,6 +45,7 @@ impl Default for AppSettings {
 /// Get current application settings
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> AppResult<AppSettings> {
+    state.require_auth()?;
     tracing::debug!("Getting application settings");
 
     // Load settings from database or return defaults
@@ -63,6 +64,8 @@ pub async fn update_settings(
     settings: AppSettings,
     state: State<'_, AppState>,
 ) -> AppResult<AppSettings> {
+    state.require_auth()?;
+    state.require_unlocked()?;
     tracing::info!("Updating application settings");
 
     // Save settings to database
@@ -87,6 +90,8 @@ pub async fn get_storage_info(state: State<'_, AppState>) -> AppResult<StorageIn
 /// Clear the local cache
 #[tauri::command]
 pub async fn clear_cache(state: State<'_, AppState>) -> AppResult<()> {
+    state.require_auth()?;
+    state.require_unlocked()?;
     tracing::info!("Clearing local cache");
 
     state.database().clear_cache().await?;

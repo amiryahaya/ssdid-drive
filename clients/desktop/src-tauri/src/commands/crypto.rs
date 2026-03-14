@@ -5,7 +5,6 @@ use crate::state::AppState;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use zeroize::Zeroize;
 
 /// Generated key pair response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +94,7 @@ pub async fn decrypt_data(
 
     let plaintext = state.crypto_service().decrypt_data(&ciphertext, &nonce)?;
 
-    Ok(String::from_utf8_lossy(&plaintext).to_string())
+    Ok(String::from_utf8_lossy(&*plaintext).to_string())
 }
 
 /// Sign data with the user's signing key
@@ -356,19 +355,15 @@ pub async fn decapsulate_folder_key(
 
     // Decrypt private keys with master key
     let master_key = state.crypto_service().get_master_key()?;
-    let mut ml_kem_sk = state
+    let ml_kem_sk = state
         .crypto_service()
         .decrypt_private_key(&encrypted_ml_kem_sk, &master_key)?;
-    let mut kaz_kem_sk = state
+    let kaz_kem_sk = state
         .crypto_service()
         .decrypt_private_key(&encrypted_kaz_kem_sk, &master_key)?;
 
-    let ml_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&ml_kem_sk);
-    let kaz_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&kaz_kem_sk);
-
-    // Zeroize decrypted private key bytes
-    ml_kem_sk.zeroize();
-    kaz_kem_sk.zeroize();
+    let ml_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&*ml_kem_sk);
+    let kaz_kem_sk_b64 = base64::engine::general_purpose::STANDARD.encode(&*kaz_kem_sk);
 
     let folder_key = state.crypto_service().decapsulate_folder_key(
         &kem_ciphertext,
@@ -378,7 +373,7 @@ pub async fn decapsulate_folder_key(
     )?;
 
     Ok(FolderKeyDecapsulationResult {
-        folder_key: base64::engine::general_purpose::STANDARD.encode(&folder_key),
+        folder_key: base64::engine::general_purpose::STANDARD.encode(&*folder_key),
     })
 }
 
@@ -415,6 +410,6 @@ pub async fn derive_file_key(
         .derive_file_key(&folder_key_bytes, &file_id)?;
 
     Ok(DerivedFileKeyResult {
-        file_key: base64::engine::general_purpose::STANDARD.encode(&file_key),
+        file_key: base64::engine::general_purpose::STANDARD.encode(&*file_key),
     })
 }

@@ -11,7 +11,7 @@ public static class RevokeShare
     public static void Map(RouteGroupBuilder group) =>
         group.MapDelete("/{id:guid}", Handle);
 
-    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, FileActivityService activity, CancellationToken ct)
+    private static async Task<IResult> Handle(Guid id, AppDbContext db, CurrentUserAccessor accessor, NotificationService notifications, FileActivityService activity, ILogger<object> logger, CancellationToken ct)
     {
         var user = accessor.User!;
 
@@ -38,18 +38,26 @@ public static class RevokeShare
         var recipient = await db.Users.FirstOrDefaultAsync(u => u.Id == recipientId, ct);
         var revokedFromName = recipient?.DisplayName ?? recipient?.Did ?? "unknown";
 
-        db.Shares.Remove(share);
-
-        await notifications.CreateAsync(
-            recipientId,
-            "share_revoked",
-            "Share Revoked",
-            "A share has been revoked",
-            actionType: "share",
-            actionResourceId: id.ToString(),
-            ct: ct);
+        share.RevokedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await notifications.CreateAsync(
+                recipientId,
+                "share_revoked",
+                "Share Revoked",
+                "A share has been revoked",
+                actionType: "share",
+                actionResourceId: id.ToString(),
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail — revocation already committed
+            logger.LogWarning(ex, "Failed to send revocation notification for share {ShareId}", share.Id);
+        }
 
         _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.ShareRevoked,
             shareResourceType, shareResourceId, resourceName, resourceOwnerId,

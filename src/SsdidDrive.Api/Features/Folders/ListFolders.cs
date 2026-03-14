@@ -23,7 +23,7 @@ public static class ListFolders
         var pagination = new PaginationParams(page, pageSize, search);
 
         var sharedFolderIds = (await db.Shares
-            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder")
+            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder" && s.RevokedAt == null)
             .Select(s => new { s.ResourceId, s.ExpiresAt })
             .ToListAsync(ct))
             .Where(s => s.ExpiresAt == null || s.ExpiresAt > now)

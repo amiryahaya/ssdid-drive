@@ -11,13 +11,13 @@ use ssdid_drive_crypto::{
         tiered_kdf_create_salt, tiered_kdf_derive, Argon2Params, KdfProfile, KEY_SIZE,
     },
 };
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 /// Service for cryptographic operations
 pub struct CryptoService {
     initialized: bool,
     /// Current master key (in memory, zeroized on drop)
-    master_key: RwLock<Option<Vec<u8>>>,
+    master_key: RwLock<Option<Zeroizing<Vec<u8>>>>,
 }
 
 impl CryptoService {
@@ -43,15 +43,14 @@ impl CryptoService {
         if key.len() != KEY_SIZE {
             return Err(AppError::Crypto("Invalid master key size".to_string()));
         }
-        *self.master_key.write() = Some(key);
+        *self.master_key.write() = Some(Zeroizing::new(key));
         Ok(())
     }
 
     /// Clear the master key from memory
     pub fn clear_master_key(&self) {
-        if let Some(mut key) = self.master_key.write().take() {
-            key.zeroize();
-        }
+        // Zeroizing handles zeroization on drop automatically
+        self.master_key.write().take();
     }
 
     /// Check if master key is loaded
@@ -61,10 +60,11 @@ impl CryptoService {
 
     /// Get a clone of the master key (for recovery setup)
     /// This is a security-sensitive operation - use carefully
-    pub fn get_master_key(&self) -> AppResult<Vec<u8>> {
+    pub fn get_master_key(&self) -> AppResult<Zeroizing<Vec<u8>>> {
         self.master_key
             .read()
-            .clone()
+            .as_ref()
+            .cloned()
             .ok_or_else(|| AppError::Crypto("Master key not loaded".to_string()))
     }
 
@@ -115,12 +115,12 @@ impl CryptoService {
     }
 
     /// Generate a random master key (32 bytes)
-    pub fn generate_master_key(&self) -> AppResult<Vec<u8>> {
+    pub fn generate_master_key(&self) -> AppResult<Zeroizing<Vec<u8>>> {
         Ok(generate_key())
     }
 
     /// Generate a Data Encryption Key (DEK)
-    pub fn generate_dek(&self) -> AppResult<Vec<u8>> {
+    pub fn generate_dek(&self) -> AppResult<Zeroizing<Vec<u8>>> {
         Ok(generate_key())
     }
 
@@ -134,12 +134,13 @@ impl CryptoService {
         let key = tiered_kdf_derive(password.as_bytes(), &salt)
             .map_err(|e| AppError::Crypto(format!("KDF derivation failed: {}", e)))?;
 
-        Ok((BASE64.encode(&salt), BASE64.encode(&key)))
+        // key is Zeroizing<Vec<u8>>, encode then it auto-zeroizes on drop
+        Ok((BASE64.encode(&salt), BASE64.encode(&*key)))
     }
 
     /// Derive encryption key from password and existing salt.
     /// Automatically detects tiered vs legacy salt format.
-    pub fn derive_encryption_key(&self, password: &str, salt_b64: &str) -> AppResult<Vec<u8>> {
+    pub fn derive_encryption_key(&self, password: &str, salt_b64: &str) -> AppResult<Zeroizing<Vec<u8>>> {
         let salt = BASE64
             .decode(salt_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid salt: {}", e)))?;
@@ -150,7 +151,7 @@ impl CryptoService {
 
     /// Derive encryption key with new salt using tiered KDF.
     /// Desktop always uses Argon2idStandard for new salts.
-    pub fn derive_encryption_key_with_salt(&self, password: &str) -> AppResult<(String, Vec<u8>)> {
+    pub fn derive_encryption_key_with_salt(&self, password: &str) -> AppResult<(String, Zeroizing<Vec<u8>>)> {
         let salt = tiered_kdf_create_salt(KdfProfile::Argon2idStandard);
 
         let key = tiered_kdf_derive(password.as_bytes(), &salt)
@@ -160,7 +161,7 @@ impl CryptoService {
     }
 
     /// Derive a folder Key Encryption Key (KEK) from master key
-    pub fn derive_folder_kek(&self, folder_id: &str) -> AppResult<Vec<u8>> {
+    pub fn derive_folder_kek(&self, folder_id: &str) -> AppResult<Zeroizing<Vec<u8>>> {
         let master_key = self.master_key.read();
         let master_key = master_key
             .as_ref()
@@ -195,7 +196,7 @@ impl CryptoService {
         encrypted_mk_b64: &str,
         nonce_b64: &str,
         enc_key: &[u8],
-    ) -> AppResult<Vec<u8>> {
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
         let encrypted_mk = BASE64
             .decode(encrypted_mk_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid ciphertext: {}", e)))?;
@@ -214,14 +215,17 @@ impl CryptoService {
 
     /// Encrypt a private key with master key
     pub fn encrypt_private_key(&self, private_key: &str, master_key: &[u8]) -> AppResult<String> {
-        let pk_bytes = BASE64
-            .decode(private_key)
-            .map_err(|e| AppError::Crypto(format!("Invalid private key: {}", e)))?;
+        let pk_bytes = Zeroizing::new(
+            BASE64
+                .decode(private_key)
+                .map_err(|e| AppError::Crypto(format!("Invalid private key: {}", e)))?,
+        );
 
-        let ciphertext = encrypt_aes_gcm(&pk_bytes, master_key)
+        let result = encrypt_aes_gcm(&pk_bytes, master_key)
             .map_err(|e| AppError::Crypto(format!("Private key encryption failed: {}", e)))?;
 
-        Ok(BASE64.encode(&ciphertext))
+        // pk_bytes auto-zeroizes on drop
+        Ok(BASE64.encode(&result))
     }
 
     /// Decrypt a private key with master key
@@ -229,7 +233,7 @@ impl CryptoService {
         &self,
         encrypted_pk_b64: &str,
         master_key: &[u8],
-    ) -> AppResult<Vec<u8>> {
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
         let ciphertext = BASE64
             .decode(encrypted_pk_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid encrypted key: {}", e)))?;
@@ -247,7 +251,7 @@ impl CryptoService {
     }
 
     /// Decrypt a DEK with folder KEK
-    pub fn decrypt_dek(&self, encrypted_dek_b64: &str, kek: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn decrypt_dek(&self, encrypted_dek_b64: &str, kek: &[u8]) -> AppResult<Zeroizing<Vec<u8>>> {
         let ciphertext = BASE64
             .decode(encrypted_dek_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid encrypted DEK: {}", e)))?;
@@ -277,7 +281,7 @@ impl CryptoService {
     }
 
     /// Decrypt arbitrary data with the current master key
-    pub fn decrypt_data(&self, ciphertext_b64: &str, nonce_b64: &str) -> AppResult<Vec<u8>> {
+    pub fn decrypt_data(&self, ciphertext_b64: &str, nonce_b64: &str) -> AppResult<Zeroizing<Vec<u8>>> {
         let master_key = self.master_key.read();
         let master_key = master_key
             .as_ref()
@@ -305,7 +309,7 @@ impl CryptoService {
     }
 
     /// Decrypt file data with a DEK
-    pub fn decrypt_file_chunk(&self, encrypted_chunk: &[u8], dek: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn decrypt_file_chunk(&self, encrypted_chunk: &[u8], dek: &[u8]) -> AppResult<Zeroizing<Vec<u8>>> {
         decrypt_aes_gcm(encrypted_chunk, dek)
             .map_err(|e| AppError::Crypto(format!("Chunk decryption failed: {}", e)))
     }
@@ -331,21 +335,31 @@ impl CryptoService {
         ml_dsa_sk_b64: &str,
         kaz_sign_sk_b64: &str,
     ) -> AppResult<SignatureResult> {
-        let ml_dsa_sk = BASE64
-            .decode(ml_dsa_sk_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid ML-DSA key: {}", e)))?;
+        let ml_dsa_decode = BASE64.decode(ml_dsa_sk_b64);
+        let kaz_sign_decode = BASE64.decode(kaz_sign_sk_b64);
 
-        let kaz_sign_sk = BASE64
-            .decode(kaz_sign_sk_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid KAZ-SIGN key: {}", e)))?;
+        let ml_dsa_sk = Zeroizing::new(
+            ml_dsa_decode
+                .map_err(|e| AppError::Crypto(format!("Invalid ML-DSA key: {}", e)))?,
+        );
+
+        let kaz_sign_sk = Zeroizing::new(
+            kaz_sign_decode
+                .map_err(|e| AppError::Crypto(format!("Invalid KAZ-SIGN key: {}", e)))?,
+        );
 
         // Sign with ML-DSA
-        let ml_dsa_sig = ml_dsa::sign(data, &ml_dsa_sk)
-            .map_err(|e| AppError::Crypto(format!("ML-DSA signing failed: {}", e)))?;
+        let ml_dsa_result = ml_dsa::sign(data, &ml_dsa_sk)
+            .map_err(|e| AppError::Crypto(format!("ML-DSA signing failed: {}", e)));
 
         // Sign with KAZ-SIGN
-        let kaz_sign_sig = kaz_sign::sign(data, &kaz_sign_sk, kaz_sign::SecurityLevel::Level256)
-            .map_err(|e| AppError::Crypto(format!("KAZ-SIGN signing failed: {}", e)))?;
+        let kaz_sign_result = kaz_sign::sign(data, &kaz_sign_sk, kaz_sign::SecurityLevel::Level256)
+            .map_err(|e| AppError::Crypto(format!("KAZ-SIGN signing failed: {}", e)));
+
+        // ml_dsa_sk and kaz_sign_sk auto-zeroize on drop
+
+        let ml_dsa_sig = ml_dsa_result?;
+        let kaz_sign_sig = kaz_sign_result?;
 
         // Combine signatures
         let combined_sig = [ml_dsa_sig, kaz_sign_sig].concat();
@@ -410,12 +424,12 @@ impl CryptoService {
     // ==================== Folder Key Management ====================
 
     /// Generate a random 256-bit folder key
-    pub fn generate_folder_key(&self) -> AppResult<Vec<u8>> {
+    pub fn generate_folder_key(&self) -> AppResult<Zeroizing<Vec<u8>>> {
         Ok(generate_key())
     }
 
     /// Generate a random 256-bit file key
-    pub fn generate_file_key(&self) -> AppResult<Vec<u8>> {
+    pub fn generate_file_key(&self) -> AppResult<Zeroizing<Vec<u8>>> {
         Ok(generate_key())
     }
 
@@ -424,7 +438,7 @@ impl CryptoService {
     /// This allows deriving a unique per-file key without storing it separately.
     /// The folder key acts as the input keying material (IKM), and the file ID
     /// is used as the info parameter for domain separation.
-    pub fn derive_file_key(&self, folder_key: &[u8], file_id: &str) -> AppResult<Vec<u8>> {
+    pub fn derive_file_key(&self, folder_key: &[u8], file_id: &str) -> AppResult<Zeroizing<Vec<u8>>> {
         if folder_key.len() != KEY_SIZE {
             return Err(AppError::Crypto(format!(
                 "Invalid folder key size: expected {}, got {}",
@@ -453,12 +467,14 @@ impl CryptoService {
     ) -> AppResult<crate::commands::crypto::FileEncryptionResult> {
         use std::io::{Read, Write};
 
-        let folder_key = BASE64
-            .decode(folder_key_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?;
+        let folder_key = Zeroizing::new(
+            BASE64
+                .decode(folder_key_b64)
+                .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?,
+        );
 
         // Derive a file-specific key from the folder key
-        let mut file_key = self.derive_file_key(&folder_key, file_id)?;
+        let file_key = self.derive_file_key(&folder_key, file_id)?;
 
         // Read plaintext file
         let path = std::path::Path::new(file_path);
@@ -467,9 +483,11 @@ impl CryptoService {
         }
         let mut plaintext = Vec::new();
         std::fs::File::open(path)
-            .map_err(|e| AppError::File(format!("Failed to open file: {}", e)))?
-            .read_to_end(&mut plaintext)
-            .map_err(|e| AppError::File(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| AppError::File(format!("Failed to open file: {}", e)))
+            .and_then(|mut f| {
+                f.read_to_end(&mut plaintext)
+                    .map_err(|e| AppError::File(format!("Failed to read file: {}", e)))
+            })?;
 
         // Encrypt with AES-256-GCM (returns nonce || ciphertext || tag)
         let ciphertext = encrypt_aes_gcm(&plaintext, &file_key)
@@ -482,8 +500,7 @@ impl CryptoService {
         // Wrap the file key with the folder key for storage
         let encrypted_file_key = self.wrap_key(&file_key, &folder_key)?;
 
-        // Zeroize the plaintext file key
-        file_key.zeroize();
+        // folder_key and file_key auto-zeroize on drop
 
         // Write ciphertext to <file_path>.enc
         let ciphertext_path = format!("{}.enc", file_path);
@@ -518,12 +535,15 @@ impl CryptoService {
     ) -> AppResult<crate::commands::crypto::FileDecryptionResult> {
         use std::io::{Read, Write};
 
-        let folder_key = BASE64
-            .decode(folder_key_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?;
+        let folder_key = Zeroizing::new(
+            BASE64
+                .decode(folder_key_b64)
+                .map_err(|e| AppError::Crypto(format!("Invalid folder key: {}", e)))?,
+        );
 
         // Derive the same file-specific key from the folder key
-        let mut file_key = self.derive_file_key(&folder_key, file_id)?;
+        let file_key = self.derive_file_key(&folder_key, file_id)?;
+        // folder_key auto-zeroizes on drop
 
         // Read ciphertext file
         let path = std::path::Path::new(ciphertext_path);
@@ -535,16 +555,17 @@ impl CryptoService {
         }
         let mut ciphertext = Vec::new();
         std::fs::File::open(path)
-            .map_err(|e| AppError::File(format!("Failed to open ciphertext file: {}", e)))?
-            .read_to_end(&mut ciphertext)
-            .map_err(|e| AppError::File(format!("Failed to read ciphertext file: {}", e)))?;
+            .map_err(|e| AppError::File(format!("Failed to open ciphertext file: {}", e)))
+            .and_then(|mut f| {
+                f.read_to_end(&mut ciphertext)
+                    .map_err(|e| AppError::File(format!("Failed to read ciphertext file: {}", e)))
+            })?;
 
         // Decrypt with AES-256-GCM (expects nonce || ciphertext || tag)
-        let mut plaintext = decrypt_aes_gcm(&ciphertext, &file_key)
+        let plaintext = decrypt_aes_gcm(&ciphertext, &file_key)
             .map_err(|e| AppError::Crypto(format!("File decryption failed: {}", e)))?;
 
-        // Zeroize the file key
-        file_key.zeroize();
+        // file_key auto-zeroizes on drop
 
         // Determine output path: strip .enc extension or append .dec
         let plaintext_path = if ciphertext_path.ends_with(".enc") {
@@ -563,8 +584,7 @@ impl CryptoService {
             .flush()
             .map_err(|e| AppError::File(format!("Failed to flush output file: {}", e)))?;
 
-        // Zeroize plaintext in memory
-        plaintext.zeroize();
+        // plaintext (Zeroizing<Vec<u8>>) auto-zeroizes on drop
 
         Ok(crate::commands::crypto::FileDecryptionResult { plaintext_path })
     }
@@ -578,7 +598,7 @@ impl CryptoService {
 
     /// Decrypt a file's content with AES-256-GCM using a file key.
     /// Expects (nonce || ciphertext_with_tag).
-    pub fn decrypt_file_content(&self, ciphertext: &[u8], key: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn decrypt_file_content(&self, ciphertext: &[u8], key: &[u8]) -> AppResult<Zeroizing<Vec<u8>>> {
         decrypt_aes_gcm(ciphertext, key)
             .map_err(|e| AppError::Crypto(format!("File decryption failed: {}", e)))
     }
@@ -593,7 +613,7 @@ impl CryptoService {
 
     /// Unwrap a key using AES-256-GCM.
     /// Input is base64-encoded (nonce || ciphertext_with_tag).
-    pub fn unwrap_key(&self, wrapped_key_b64: &str, wrapping_key: &[u8]) -> AppResult<Vec<u8>> {
+    pub fn unwrap_key(&self, wrapped_key_b64: &str, wrapping_key: &[u8]) -> AppResult<Zeroizing<Vec<u8>>> {
         let wrapped = BASE64
             .decode(wrapped_key_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid wrapped key: {}", e)))?;
@@ -610,13 +630,12 @@ impl CryptoService {
         ml_kem_pk_b64: &str,
         kaz_kem_pk_b64: &str,
     ) -> AppResult<(String, String, String)> {
-        let (kem_ct_b64, mut shared_secret) = self.encapsulate(ml_kem_pk_b64, kaz_kem_pk_b64)?;
+        let (kem_ct_b64, shared_secret) = self.encapsulate(ml_kem_pk_b64, kaz_kem_pk_b64)?;
 
         // AES-wrap the folder key with the KEM shared secret
         let wrapped_folder_key_b64 = self.wrap_key(folder_key, &shared_secret)?;
 
-        // Zeroize shared secret
-        shared_secret.zeroize();
+        // shared_secret auto-zeroizes on drop
 
         Ok((kem_ct_b64, wrapped_folder_key_b64, "ML-KEM-768+KAZ-KEM-256".to_string()))
     }
@@ -629,14 +648,13 @@ impl CryptoService {
         wrapped_folder_key_b64: &str,
         ml_kem_sk_b64: &str,
         kaz_kem_sk_b64: &str,
-    ) -> AppResult<Vec<u8>> {
-        let mut shared_secret = self.decapsulate(kem_ct_b64, ml_kem_sk_b64, kaz_kem_sk_b64)?;
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
+        let shared_secret = self.decapsulate(kem_ct_b64, ml_kem_sk_b64, kaz_kem_sk_b64)?;
 
         // Unwrap the folder key
         let folder_key = self.unwrap_key(wrapped_folder_key_b64, &shared_secret)?;
 
-        // Zeroize shared secret
-        shared_secret.zeroize();
+        // shared_secret auto-zeroizes on drop
 
         Ok(folder_key)
     }
@@ -653,7 +671,7 @@ impl CryptoService {
         recipient_kaz_kem_pk_b64: &str,
     ) -> AppResult<(String, String, String)> {
         // Decrypt folder key with owner's private keys
-        let mut folder_key = self.decapsulate_folder_key(
+        let folder_key = self.decapsulate_folder_key(
             kem_ct_b64,
             wrapped_folder_key_b64,
             owner_ml_kem_sk_b64,
@@ -661,16 +679,12 @@ impl CryptoService {
         )?;
 
         // Re-encapsulate for recipient
-        let result = self.encapsulate_folder_key(
+        // folder_key auto-zeroizes on drop
+        self.encapsulate_folder_key(
             &folder_key,
             recipient_ml_kem_pk_b64,
             recipient_kaz_kem_pk_b64,
-        );
-
-        // Zeroize folder key
-        folder_key.zeroize();
-
-        result
+        )
     }
 
     // ==================== Key Encapsulation ====================
@@ -680,7 +694,7 @@ impl CryptoService {
         &self,
         ml_kem_pk_b64: &str,
         kaz_kem_pk_b64: &str,
-    ) -> AppResult<(String, Vec<u8>)> {
+    ) -> AppResult<(String, Zeroizing<Vec<u8>>)> {
         let ml_kem_pk = BASE64
             .decode(ml_kem_pk_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM public key: {}", e)))?;
@@ -701,9 +715,12 @@ impl CryptoService {
         let combined_ct = [ml_encap.ciphertext.clone(), kaz_encap.ciphertext.clone()].concat();
 
         // Combine shared secrets using HKDF
-        let combined_ss = [ml_encap.shared_secret.clone(), kaz_encap.shared_secret.clone()].concat();
+        let combined_ss = Zeroizing::new(
+            [ml_encap.shared_secret.clone(), kaz_encap.shared_secret.clone()].concat(),
+        );
         let final_ss = hkdf_derive(&combined_ss, None, b"combined-kem", KEY_SIZE)
             .map_err(|e| AppError::Crypto(format!("HKDF failed: {}", e)))?;
+        // combined_ss auto-zeroizes on drop
 
         Ok((BASE64.encode(&combined_ct), final_ss))
     }
@@ -714,18 +731,22 @@ impl CryptoService {
         ciphertext_b64: &str,
         ml_kem_sk_b64: &str,
         kaz_kem_sk_b64: &str,
-    ) -> AppResult<Vec<u8>> {
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
         let ciphertext = BASE64
             .decode(ciphertext_b64)
             .map_err(|e| AppError::Crypto(format!("Invalid ciphertext: {}", e)))?;
 
-        let ml_kem_sk = BASE64
-            .decode(ml_kem_sk_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM secret key: {}", e)))?;
+        let ml_kem_sk = Zeroizing::new(
+            BASE64
+                .decode(ml_kem_sk_b64)
+                .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM secret key: {}", e)))?,
+        );
 
-        let kaz_kem_sk = BASE64
-            .decode(kaz_kem_sk_b64)
-            .map_err(|e| AppError::Crypto(format!("Invalid KAZ-KEM secret key: {}", e)))?;
+        let kaz_kem_sk = Zeroizing::new(
+            BASE64
+                .decode(kaz_kem_sk_b64)
+                .map_err(|e| AppError::Crypto(format!("Invalid KAZ-KEM secret key: {}", e)))?,
+        );
 
         // Split ciphertext
         let ml_kem_ct_len = ml_kem::CIPHERTEXT_SIZE;
@@ -735,24 +756,30 @@ impl CryptoService {
 
         let (ml_kem_ct, kaz_kem_ct) = ciphertext.split_at(ml_kem_ct_len);
 
-        // Decapsulate ML-KEM
+        // Decapsulate ML-KEM -- now returns Zeroizing<Vec<u8>>
         let ml_ss = ml_kem::decapsulate(ml_kem_ct, &ml_kem_sk)
             .map_err(|e| AppError::Crypto(format!("ML-KEM decapsulation failed: {}", e)))?;
 
-        // Decapsulate KAZ-KEM
+        // Decapsulate KAZ-KEM -- now returns Zeroizing<Vec<u8>>
         let kaz_ss = kaz_kem::decapsulate(kaz_kem_ct, &kaz_kem_sk)
             .map_err(|e| AppError::Crypto(format!("KAZ-KEM decapsulation failed: {}", e)))?;
 
+        // ml_kem_sk and kaz_kem_sk auto-zeroize on drop
+
         // Combine shared secrets
-        let combined_ss = [ml_ss, kaz_ss].concat();
+        let combined_ss = Zeroizing::new([&ml_ss[..], &kaz_ss[..]].concat());
+        // ml_ss and kaz_ss auto-zeroize on drop
+
         hkdf_derive(&combined_ss, None, b"combined-kem", KEY_SIZE)
             .map_err(|e| AppError::Crypto(format!("HKDF failed: {}", e)))
+        // combined_ss auto-zeroizes on drop
     }
 }
 
 impl Drop for CryptoService {
     fn drop(&mut self) {
-        self.clear_master_key();
+        // master_key is Zeroizing<Vec<u8>> inside Option, auto-zeroizes on drop
+        self.master_key.write().take();
         ssdid_drive_crypto::cleanup();
     }
 }

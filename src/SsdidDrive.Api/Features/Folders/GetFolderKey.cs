@@ -41,6 +41,7 @@ public static class GetFolderKey
             .Where(s => s.ResourceId == id)
             .Where(s => s.ResourceType == "folder")
             .Where(s => s.SharedWithId == user.Id)
+            .Where(s => s.RevokedAt == null)
             .FirstOrDefaultAsync(ct);
 
         // Filter expired shares in application code (SQLite compatibility)

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// HTTP timeout for file upload operations (10 minutes)
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(600);
@@ -223,13 +223,10 @@ impl FileService {
 
         // Get the folder key by fetching and decapsulating from API
         let folder_id_str = request.folder_id.clone().unwrap_or_else(|| "root".to_string());
-        let mut folder_key = self.get_folder_key(&folder_id_str).await?;
+        let folder_key = self.get_folder_key(&folder_id_str).await?;
 
         // Wrap file key with folder key (AES-256-GCM key wrapping)
         let encrypted_dek = self.crypto_service.wrap_key(&file_key, &folder_key)?;
-
-        // Zeroize folder key immediately after use
-        folder_key.zeroize();
 
         // Encrypt file content in chunks using the file key
         let mut encrypted_chunks = Vec::new();
@@ -479,13 +476,10 @@ impl FileService {
 
         // Step 3: Get folder key via KEM decapsulation, then unwrap file key
         let folder_id = download_info.folder_id.unwrap_or_else(|| "root".to_string());
-        let mut folder_key = self.get_folder_key(&folder_id).await?;
-        let mut dek = self
+        let folder_key = self.get_folder_key(&folder_id).await?;
+        let dek = self
             .crypto_service
             .unwrap_key(&download_info.encrypted_dek, &folder_key)?;
-
-        // Zeroize folder key immediately after use
-        folder_key.zeroize();
 
         // Step 4: Parse and decrypt chunks
         let mut cursor = 0;
@@ -580,8 +574,7 @@ impl FileService {
             .await
             .map_err(|e| AppError::File(format!("Failed to flush file: {}", e)))?;
 
-        // Zeroize sensitive data now that file is written
-        dek.zeroize();
+        // dek is Zeroizing — automatically zeroized on drop
         decrypted_content.zeroize();
 
         // Report completion
@@ -694,27 +687,21 @@ impl FileService {
 
                 // Decrypt preview: get folder key, unwrap file key, decrypt content
                 let folder_id = preview_info.folder_id.unwrap_or_else(|| "root".to_string());
-                let mut folder_key = self.get_folder_key(&folder_id).await?;
-                let mut dek = self
+                let folder_key = self.get_folder_key(&folder_id).await?;
+                let dek = self
                     .crypto_service
                     .unwrap_key(&preview_info.encrypted_dek, &folder_key)?;
-
-                // Zeroize folder key immediately after use
-                folder_key.zeroize();
 
                 // Preview is a single chunk
                 let decrypted_preview = self
                     .crypto_service
                     .decrypt_file_content(&encrypted_preview, &dek)?;
 
-                // Zeroize file key after use
-                dek.zeroize();
-
                 return Ok(FilePreview {
                     file_id: file_id.to_string(),
                     file_name: preview_info.file_name,
                     mime_type: preview_info.mime_type,
-                    preview_data: Some(BASE64.encode(&decrypted_preview)),
+                    preview_data: Some(BASE64.encode(&*decrypted_preview)),
                     can_preview: true,
                 });
             }
@@ -735,7 +722,7 @@ impl FileService {
     /// The API returns the KEM ciphertext and AES-wrapped folder key.
     /// We decapsulate the KEM ciphertext with the user's private keys
     /// to get the shared secret, then unwrap the folder key.
-    async fn get_folder_key(&self, folder_id: &str) -> AppResult<Vec<u8>> {
+    async fn get_folder_key(&self, folder_id: &str) -> AppResult<Zeroizing<Vec<u8>>> {
         // Fetch folder key info from API
         let key_info: FolderKeyInfo = self
             .api_client
@@ -764,8 +751,8 @@ impl FileService {
             .crypto_service
             .decrypt_private_key(&encrypted_kaz_kem_sk, &master_key)?;
 
-        let ml_kem_sk_b64 = BASE64.encode(&ml_kem_sk);
-        let kaz_kem_sk_b64 = BASE64.encode(&kaz_kem_sk);
+        let mut ml_kem_sk_b64 = BASE64.encode(&*ml_kem_sk);
+        let mut kaz_kem_sk_b64 = BASE64.encode(&*kaz_kem_sk);
 
         // Decapsulate and unwrap the folder key
         let folder_key = self.crypto_service.decapsulate_folder_key(
@@ -773,9 +760,11 @@ impl FileService {
             &key_info.wrapped_folder_key,
             &ml_kem_sk_b64,
             &kaz_kem_sk_b64,
-        )?;
+        );
+        ml_kem_sk_b64.zeroize();
+        kaz_kem_sk_b64.zeroize();
 
-        Ok(folder_key)
+        Ok(folder_key?)
     }
 
     /// Get storage information

@@ -61,7 +61,7 @@ public static class CreateShare
             var now = DateTimeOffset.UtcNow;
             var hasWriteShare = (await db.Shares
                 .Where(s => s.ResourceId == req.ResourceId && s.ResourceType == req.ResourceType
-                    && s.SharedWithId == user.Id && s.Permission == "write")
+                    && s.SharedWithId == user.Id && s.Permission == "write" && s.RevokedAt == null)
                 .Select(s => s.ExpiresAt)
                 .ToListAsync(ct))
                 .Any(e => e == null || e > now);
@@ -73,7 +73,7 @@ public static class CreateShare
         // Check for existing share
         var existingShare = await db.Shares.FirstOrDefaultAsync(s =>
             s.ResourceId == req.ResourceId && s.ResourceType == req.ResourceType
-            && s.SharedWithId == req.SharedWithId, ct);
+            && s.SharedWithId == req.SharedWithId && s.RevokedAt == null, ct);
 
         if (existingShare is not null)
             return AppError.Conflict("A share already exists for this resource and user").ToProblemResult();
@@ -97,6 +97,8 @@ public static class CreateShare
             ? (await db.Folders.Where(f => f.Id == req.ResourceId).Select(f => f.Name).FirstOrDefaultAsync(ct) ?? "a folder")
             : (await db.Files.Where(f => f.Id == req.ResourceId).Select(f => f.Name).FirstOrDefaultAsync(ct) ?? "a file");
 
+        await db.SaveChangesAsync(ct);
+
         await notifications.CreateAsync(
             req.SharedWithId,
             "share_created",
@@ -105,8 +107,6 @@ public static class CreateShare
             actionType: "share",
             actionResourceId: share.Id.ToString(),
             ct: ct);
-
-        await db.SaveChangesAsync(ct);
 
         var resourceOwnerId = req.ResourceType == "folder"
             ? await db.Folders.Where(f => f.Id == req.ResourceId).Select(f => f.OwnerId).FirstOrDefaultAsync(ct)
