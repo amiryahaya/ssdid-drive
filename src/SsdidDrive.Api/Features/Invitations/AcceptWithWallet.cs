@@ -86,6 +86,18 @@ public static class AcceptWithWallet
                         UpdatedAt = DateTimeOffset.UtcNow
                     };
                     db.Users.Add(user);
+
+                    // Register SSDID wallet as a login method
+                    db.Logins.Add(new Login
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = user.Id,
+                        Provider = LoginProvider.SsdidWallet,
+                        ProviderSubject = did,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        LinkedAt = DateTimeOffset.UtcNow
+                    });
+
                     try
                     {
                         await db.SaveChangesAsync(ct);

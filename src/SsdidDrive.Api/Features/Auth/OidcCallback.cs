@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -10,10 +11,30 @@ namespace SsdidDrive.Api.Features.Auth;
 
 public static class OidcCallback
 {
-    public static void Map(RouteGroupBuilder group) =>
+    public static void Map(RouteGroupBuilder group)
+    {
         group.MapGet("/oidc/{provider}/callback", Handle)
             .WithMetadata(new SsdidPublicAttribute())
             .RequireRateLimiting("auth");
+
+        group.MapPost("/oidc/exchange", HandleExchange)
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth");
+    }
+
+    /// <summary>
+    /// Error codes used in the redirect URL — the frontend maps these to user-friendly messages.
+    /// Never reflect raw error text from query params.
+    /// </summary>
+    private static class ErrorCodes
+    {
+        public const string NoAccount = "no_account";
+        public const string Suspended = "suspended";
+        public const string SessionLimit = "session_limit";
+        public const string InvalidCode = "invalid_code";
+        public const string InvalidState = "invalid_state";
+        public const string ProviderError = "provider_error";
+    }
 
     private static async Task<IResult> Handle(
         string provider,
@@ -28,30 +49,30 @@ public static class OidcCallback
         CancellationToken ct)
     {
         if (string.IsNullOrEmpty(code))
-            return AppError.BadRequest("Missing authorization code").ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.InvalidCode);
         if (string.IsNullOrEmpty(state))
-            return AppError.BadRequest("Missing state parameter").ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.InvalidState);
 
         // Validate and consume state
         var challengeEntry = sessionStore.ConsumeChallenge("oidc", state);
         if (challengeEntry is null)
-            return AppError.Unauthorized("Invalid or expired state parameter").ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.InvalidState);
 
         var codeVerifier = challengeEntry.Challenge;
         var storedProvider = challengeEntry.KeyId;
 
         if (!string.Equals(storedProvider, provider, StringComparison.OrdinalIgnoreCase))
-            return AppError.Unauthorized("State/provider mismatch").ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.InvalidState);
 
         // Exchange code for ID token
         var tokenResult = await exchanger.ExchangeCodeAsync(provider, code, codeVerifier, ct);
         if (!tokenResult.IsSuccess)
-            return tokenResult.Error!.ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.ProviderError);
 
         // Validate ID token
         var claims = await validator.ValidateAsync(provider, tokenResult.Value!, ct);
         if (!claims.IsSuccess)
-            return claims.Error!.ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.ProviderError);
 
         var oidcClaims = claims.Value!;
         var providerEnum = provider.ToLowerInvariant() switch
@@ -62,7 +83,7 @@ public static class OidcCallback
         };
 
         if (providerEnum is null)
-            return AppError.BadRequest("Unsupported provider").ToProblemResult();
+            return RedirectWithError(config, ErrorCodes.ProviderError);
 
         // Look up existing login
         var existingLogin = await db.Logins
@@ -72,11 +93,11 @@ public static class OidcCallback
                 && l.ProviderSubject == oidcClaims.Subject, ct);
 
         if (existingLogin is null)
-            return RedirectWithError(config, "No account linked to this provider. Register first.");
+            return RedirectWithError(config, ErrorCodes.NoAccount);
 
         var user = existingLogin.Account;
         if (user.Status == UserStatus.Suspended)
-            return RedirectWithError(config, "Account is suspended");
+            return RedirectWithError(config, ErrorCodes.Suspended);
 
         // Check if user is admin/owner in any tenant
         var isAdmin = await db.UserTenants
@@ -84,22 +105,21 @@ public static class OidcCallback
                 && (ut.Role == TenantRole.Owner || ut.Role == TenantRole.Admin), ct);
 
         string sessionValue;
-        bool mfaRequired = false;
-        bool totpSetupRequired = false;
+        string mfaState = "none"; // none | mfa_required | totp_setup_required
 
         if (isAdmin)
         {
             if (user.TotpEnabled)
             {
-                // Admin with TOTP — require MFA verification
+                // Admin with TOTP — require MFA verification (restricted session)
                 sessionValue = $"mfa:{user.Id}";
-                mfaRequired = true;
+                mfaState = "mfa_required";
             }
             else
             {
-                // Admin without TOTP — full session so they can call /totp/setup
-                sessionValue = user.Id.ToString();
-                totpSetupRequired = true;
+                // Admin without TOTP — restricted session for setup only
+                sessionValue = $"setup:{user.Id}";
+                mfaState = "totp_setup_required";
             }
         }
         else
@@ -108,7 +128,7 @@ public static class OidcCallback
         }
 
         // Only stamp LastLoginAt for completed logins (not MFA-pending)
-        if (!mfaRequired)
+        if (mfaState == "none")
         {
             user.LastLoginAt = DateTimeOffset.UtcNow;
             user.UpdatedAt = DateTimeOffset.UtcNow;
@@ -117,26 +137,54 @@ public static class OidcCallback
 
         var sessionToken = sessionStore.CreateSession(sessionValue);
         if (sessionToken is null)
-            return RedirectWithError(config, "Session limit exceeded");
+            return RedirectWithError(config, ErrorCodes.SessionLimit);
 
         await auditService.LogAsync(user.Id,
-            mfaRequired ? "auth.login.oidc.initiated" : "auth.login.oidc",
+            mfaState != "none" ? "auth.login.oidc.initiated" : "auth.login.oidc",
             "user", user.Id,
             $"Provider: {provider} (server-side)", ct);
 
-        // Redirect to admin portal with token
+        // Store session token as a one-time exchange code (never expose token in URL)
+        var exchangeCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        sessionStore.CreateChallenge(exchangeCode, "oidc_exchange", sessionToken, mfaState);
+
+        // Redirect with only the opaque exchange code
         var adminBaseUrl = config["AdminPortal:BaseUrl"] ?? "/admin";
-        var redirectUrl = $"{adminBaseUrl}/auth/callback" +
-            $"?token={Uri.EscapeDataString(sessionToken)}" +
-            $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
-            $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
+        var redirectUrl = $"{adminBaseUrl}/auth/callback?code={Uri.EscapeDataString(exchangeCode)}";
 
         return Results.Redirect(redirectUrl);
     }
 
-    private static IResult RedirectWithError(IConfiguration config, string error)
+    /// <summary>
+    /// Exchange a one-time code for the session token. Called by the admin portal frontend.
+    /// </summary>
+    public record ExchangeRequest(string Code);
+
+    private static Task<IResult> HandleExchange(
+        ExchangeRequest req,
+        ISessionStore sessionStore)
+    {
+        if (string.IsNullOrWhiteSpace(req.Code))
+            return Task.FromResult(AppError.BadRequest("Missing exchange code").ToProblemResult());
+
+        var entry = sessionStore.ConsumeChallenge(req.Code, "oidc_exchange");
+        if (entry is null)
+            return Task.FromResult(AppError.Unauthorized("Invalid or expired code").ToProblemResult());
+
+        var sessionToken = entry.Challenge;
+        var mfaState = entry.KeyId; // "none" | "mfa_required" | "totp_setup_required"
+
+        return Task.FromResult(Results.Ok(new
+        {
+            token = sessionToken,
+            mfa_required = mfaState == "mfa_required",
+            totp_setup_required = mfaState == "totp_setup_required"
+        }));
+    }
+
+    private static IResult RedirectWithError(IConfiguration config, string errorCode)
     {
         var adminBaseUrl = config["AdminPortal:BaseUrl"] ?? "/admin";
-        return Results.Redirect($"{adminBaseUrl}/auth/callback?error={Uri.EscapeDataString(error)}");
+        return Results.Redirect($"{adminBaseUrl}/auth/callback?error={Uri.EscapeDataString(errorCode)}");
     }
 }

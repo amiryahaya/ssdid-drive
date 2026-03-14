@@ -110,6 +110,17 @@ public static class RegisterVerify
             ApplyClaims(user, claims);
             db.Users.Add(user);
 
+            // Register SSDID wallet as a login method
+            db.Logins.Add(new Login
+            {
+                Id = Guid.NewGuid(),
+                AccountId = user.Id,
+                Provider = LoginProvider.SsdidWallet,
+                ProviderSubject = did,
+                CreatedAt = DateTimeOffset.UtcNow,
+                LinkedAt = DateTimeOffset.UtcNow
+            });
+
             if (invitation is not null)
             {
                 // Join the invite's tenant with the assigned role

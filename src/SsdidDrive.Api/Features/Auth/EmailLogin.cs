@@ -25,15 +25,17 @@ public static class EmailLogin
 
         var email = req.Email.Trim().ToLowerInvariant();
 
+        // Always return the same response to prevent user enumeration.
+        // The actual existence/TOTP check happens in TotpVerify.
         var user = await db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email && u.Status == UserStatus.Active, ct);
 
-        if (user is null)
-            return AppError.NotFound("No account with this email").ToProblemResult();
-
-        if (!user.TotpEnabled)
-            return AppError.BadRequest("TOTP is not set up for this account").ToProblemResult();
+        if (user is null || !user.TotpEnabled)
+        {
+            // Simulate the same timing as a real lookup
+            return Results.Ok(new { requires_totp = true, email });
+        }
 
         return Results.Ok(new { requires_totp = true, email });
     }

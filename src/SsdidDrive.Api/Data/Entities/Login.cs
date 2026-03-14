@@ -1,6 +1,6 @@
 namespace SsdidDrive.Api.Data.Entities;
 
-public enum LoginProvider { Email, Google, Microsoft }
+public enum LoginProvider { Email, Google, Microsoft, SsdidWallet }
 
 public class Login
 {

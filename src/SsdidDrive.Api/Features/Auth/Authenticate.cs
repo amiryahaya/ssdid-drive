@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
 
@@ -38,6 +39,23 @@ public static class Authenticate
                     {
                         try
                         {
+                            // Auto-link SSDID wallet login for existing users
+                            var hasWalletLogin = await db.Logins
+                                .AnyAsync(l => l.AccountId == user.Id
+                                    && l.Provider == LoginProvider.SsdidWallet);
+                            if (!hasWalletLogin)
+                            {
+                                db.Logins.Add(new Login
+                                {
+                                    Id = Guid.NewGuid(),
+                                    AccountId = user.Id,
+                                    Provider = LoginProvider.SsdidWallet,
+                                    ProviderSubject = did,
+                                    CreatedAt = DateTimeOffset.UtcNow,
+                                    LinkedAt = DateTimeOffset.UtcNow
+                                });
+                            }
+
                             user.LastLoginAt = DateTimeOffset.UtcNow;
                             await db.SaveChangesAsync();
                         }

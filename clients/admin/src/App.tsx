@@ -3,6 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
+import AuthCallbackPage from './pages/AuthCallbackPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
 import TenantsPage from './pages/TenantsPage'
@@ -75,7 +76,7 @@ function AuthenticatedApp() {
   )
 }
 
-function App() {
+function AppRoutes() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const initialize = useAuthStore((s) => s.initialize)
   const [ready, setReady] = useState(false)
@@ -87,9 +88,20 @@ function App() {
   if (!ready) return null
 
   return (
+    <Routes>
+      {/* OIDC callback — accessible regardless of auth state */}
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      {/* All other routes */}
+      <Route path="/*" element={isAuthenticated ? <AuthenticatedApp /> : <LoginPage />} />
+    </Routes>
+  )
+}
+
+function App() {
+  return (
     <ErrorBoundary>
       <BrowserRouter basename="/admin">
-        {isAuthenticated ? <AuthenticatedApp /> : <LoginPage />}
+        <AppRoutes />
       </BrowserRouter>
     </ErrorBoundary>
   )

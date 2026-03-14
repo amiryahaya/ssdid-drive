@@ -52,12 +52,18 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         // Detect session type and resolve user
         User? user;
         bool mfaPending = false;
+        bool setupPending = false;
 
         var effectiveValue = sessionValue;
         if (sessionValue.StartsWith("mfa:", StringComparison.Ordinal))
         {
             mfaPending = true;
             effectiveValue = sessionValue[4..];
+        }
+        else if (sessionValue.StartsWith("setup:", StringComparison.Ordinal))
+        {
+            setupPending = true;
+            effectiveValue = sessionValue[6..];
         }
 
         if (Guid.TryParse(effectiveValue, out var accountId))
@@ -84,13 +90,14 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         }
 
         // If MFA pending, only allow TOTP verify and TOTP setup endpoints
-        if (mfaPending)
+        if (mfaPending || setupPending)
         {
             var path = context.Request.Path.Value ?? "";
 
             if (!AllowedMfaPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)))
             {
-                await WriteProblem(context, 403, "MFA verification required");
+                await WriteProblem(context, 403,
+                    mfaPending ? "MFA verification required" : "TOTP setup required");
                 return;
             }
         }
