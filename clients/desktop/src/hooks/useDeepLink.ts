@@ -18,7 +18,7 @@ interface DeepLinkPayload {
 }
 
 interface ParsedDeepLink {
-  action: 'invite' | 'share' | 'recovery' | 'file' | 'folder' | 'unknown';
+  action: 'invite' | 'share' | 'recovery' | 'file' | 'folder' | 'auth' | 'unknown';
   id: string;
   params?: Record<string, string>;
 }
@@ -54,6 +54,7 @@ function parseDeepLink(url: string): ParsedDeepLink {
       case 'recovery':
       case 'file':
       case 'folder':
+      case 'auth':
         return { action, id, params };
       default:
         return { action: 'unknown', id: '', params };
@@ -140,6 +141,50 @@ export function useDeepLink() {
         case 'folder':
           // Navigate to the specific folder
           navigate(`/files/${parsed.id}`);
+          break;
+
+        case 'auth':
+          // OIDC callback: ssdid-drive://auth/callback?provider=google&id_token=xxx
+          if (parsed.id === 'callback' && parsed.params?.provider && parsed.params?.id_token) {
+            info({
+              title: 'Completing sign-in',
+              description: 'Verifying your identity...',
+            });
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const response = await invoke<{
+                token: string;
+                mfa_required?: boolean;
+                totp_setup_required?: boolean;
+              }>('verify_oidc_token', {
+                provider: parsed.params.provider,
+                idToken: parsed.params.id_token,
+                invitationToken: null,
+              });
+
+              // Session is saved by Rust command, refresh auth state
+              const { useAuthStore } = await import('@/stores/authStore');
+              await useAuthStore.getState().checkAuth();
+
+              if (response.totp_setup_required) {
+                navigate('/login/totp-setup');
+              } else if (response.mfa_required) {
+                navigate('/login/email');
+              } else {
+                success({
+                  title: 'Signed in',
+                  description: 'Welcome back!',
+                });
+                navigate('/files');
+              }
+            } catch (err) {
+              showError({
+                title: 'Sign-in failed',
+                description: err instanceof Error ? err.message : 'Authentication failed',
+              });
+              navigate('/login');
+            }
+          }
           break;
 
         case 'unknown':

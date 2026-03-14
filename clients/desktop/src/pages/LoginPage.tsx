@@ -1,17 +1,35 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { OidcButtons } from '@/components/auth/OidcButtons';
 import { QrChallenge } from '@/components/auth/QrChallenge';
+import { Button } from '@/components/ui/Button';
+import { Mail, ChevronDown, ChevronUp } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { loginWithSession, error, clearError } = useAuthStore();
+  const { loginWithSession, loginWithOidc, error, clearError, isLoading } = useAuthStore();
+  const [showQr, setShowQr] = useState(false);
+  const [oidcLoading, setOidcLoading] = useState<'google' | 'microsoft' | null>(null);
 
   const handleAuthenticated = async (sessionToken: string) => {
     try {
       await loginWithSession(sessionToken);
       navigate('/files');
     } catch {
-      // Error is handled by store
+      // Error handled by store
+    }
+  };
+
+  const handleOidcLogin = async (provider: 'google' | 'microsoft') => {
+    setOidcLoading(provider);
+    try {
+      await loginWithOidc(provider);
+      // Browser opens — continue via deep link callback
+    } catch {
+      // Error handled by store
+    } finally {
+      setOidcLoading(null);
     }
   };
 
@@ -23,11 +41,11 @@ export function LoginPage() {
           <img
             src="/app-icon.png"
             alt="SSDID Drive"
-            className="h-32 w-32 rounded-2xl mb-4"
+            className="h-24 w-24 rounded-2xl mb-4"
           />
           <h1 className="text-2xl font-bold">SSDID Drive</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Sign in with your SSDID Wallet
+            Sign in to your account
           </p>
         </div>
 
@@ -35,35 +53,58 @@ export function LoginPage() {
         {error && (
           <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded-lg">
             {error}
-            <button
-              onClick={clearError}
-              className="ml-2 underline hover:no-underline"
-            >
+            <button onClick={clearError} className="ml-2 underline hover:no-underline">
               Dismiss
             </button>
           </div>
         )}
 
-        {/* QR Challenge */}
-        <QrChallenge action="authenticate" onAuthenticated={handleAuthenticated} />
+        {/* Email login */}
+        <Button
+          variant="default"
+          className="w-full h-11 mb-3"
+          onClick={() => navigate('/login/email')}
+          disabled={isLoading}
+        >
+          <Mail className="h-5 w-5 mr-2" />
+          Sign in with Email
+        </Button>
 
-        {/* Download link */}
-        <div className="mt-6 text-center text-sm">
-          <p className="text-muted-foreground">
-            Don't have SSDID Wallet?{' '}
-            <a
-              href="https://ssdid.io/wallet"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-medium"
-            >
-              Download it &rarr;
-            </a>
-          </p>
+        {/* Divider */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        {/* OIDC buttons */}
+        <OidcButtons
+          onProviderClick={handleOidcLogin}
+          disabled={isLoading}
+          loading={oidcLoading}
+        />
+
+        {/* SSDID Wallet (legacy, collapsible) */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowQr(!showQr)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mx-auto"
+          >
+            {showQr ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            Sign in with SSDID Wallet
+          </button>
+          {showQr && (
+            <div className="mt-4">
+              <QrChallenge action="authenticate" onAuthenticated={handleAuthenticated} />
+            </div>
+          )}
         </div>
 
         {/* Register link */}
-        <div className="mt-2 text-center text-sm">
+        <div className="mt-6 text-center text-sm">
           <p className="text-muted-foreground">
             New to SSDID Drive?{' '}
             <Link to="/register" className="text-primary hover:underline font-medium">
@@ -83,16 +124,9 @@ export function LoginPage() {
 
         {/* Recovery link */}
         <div className="mt-2 text-center text-sm">
-          <p className="text-muted-foreground">
-            <Link to="/recover" className="text-muted-foreground hover:text-foreground">
-              Lost your device? Recover your account
-            </Link>
-          </p>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-4 text-center text-sm text-muted-foreground">
-          <p>Protected with post-quantum cryptography</p>
+          <Link to="/recover" className="text-muted-foreground hover:text-foreground text-sm">
+            Lost your device? Recover your account
+          </Link>
         </div>
       </div>
     </div>

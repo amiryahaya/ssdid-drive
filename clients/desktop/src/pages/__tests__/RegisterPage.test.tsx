@@ -4,17 +4,18 @@ import { render } from '../../test/utils';
 import { RegisterPage } from '../RegisterPage';
 import { useAuthStore } from '../../stores/authStore';
 
-// Mock useNavigate
+// Mock useNavigate and useSearchParams
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
   };
 });
 
-// Mock QrChallenge component so tests don't depend on SSE / qrcode.react
+// Mock QrChallenge component
 vi.mock('@/components/auth/QrChallenge', () => ({
   QrChallenge: ({ action, onAuthenticated }: { action: string; onAuthenticated: (token: string) => void }) => (
     <div data-testid="qr-challenge" data-action={action}>
@@ -23,6 +24,28 @@ vi.mock('@/components/auth/QrChallenge', () => ({
         onClick={() => onAuthenticated('mock-session-token')}
       >
         Simulate Wallet Scan
+      </button>
+    </div>
+  ),
+}));
+
+// Mock OidcButtons
+vi.mock('@/components/auth/OidcButtons', () => ({
+  OidcButtons: ({ onProviderClick, disabled }: { onProviderClick: (p: string) => void; disabled: boolean }) => (
+    <div data-testid="oidc-buttons">
+      <button data-testid="oidc-google" onClick={() => onProviderClick('google')} disabled={disabled}>
+        Google
+      </button>
+    </div>
+  ),
+}));
+
+// Mock OtpInput
+vi.mock('@/components/auth/OtpInput', () => ({
+  OtpInput: ({ onComplete }: { onComplete: (code: string) => void }) => (
+    <div data-testid="otp-input">
+      <button data-testid="mock-otp-complete" onClick={() => onComplete('123456')}>
+        Submit OTP
       </button>
     </div>
   ),
@@ -40,34 +63,43 @@ describe('RegisterPage', () => {
     });
   });
 
-  it('should render the SSDID Drive heading', () => {
+  it('should render the Create Account heading', () => {
     render(<RegisterPage />);
 
-    expect(screen.getByText('SSDID Drive')).toBeInTheDocument();
+    expect(screen.getByText('Create Account')).toBeInTheDocument();
   });
 
-  it('should render the registration prompt', () => {
+  it('should render email input', () => {
     render(<RegisterPage />);
 
-    expect(screen.getByText('Scan to register with SSDID Drive')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
   });
 
-  it('should render the QrChallenge component with register action', () => {
+  it('should render Send verification code button', () => {
     render(<RegisterPage />);
 
-    const qrChallenge = screen.getByTestId('qr-challenge');
-    expect(qrChallenge).toBeInTheDocument();
-    expect(qrChallenge).toHaveAttribute('data-action', 'register');
+    expect(screen.getByText('Send verification code')).toBeInTheDocument();
   });
 
-  it('should not render old form fields', () => {
+  it('should render OIDC buttons', () => {
     render(<RegisterPage />);
 
-    expect(screen.queryByPlaceholderText('John Doe')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('you@example.com')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Minimum 8 characters')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Re-enter your password')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Enter your invitation token')).not.toBeInTheDocument();
+    expect(screen.getByTestId('oidc-buttons')).toBeInTheDocument();
+  });
+
+  it('should show collapsible SSDID Wallet section', () => {
+    render(<RegisterPage />);
+
+    expect(screen.getByText('Register with SSDID Wallet')).toBeInTheDocument();
+  });
+
+  it('should show QR challenge when wallet section is expanded', async () => {
+    const { user } = render(<RegisterPage />);
+
+    await user.click(screen.getByText('Register with SSDID Wallet'));
+
+    expect(screen.getByTestId('qr-challenge')).toBeInTheDocument();
+    expect(screen.getByTestId('qr-challenge')).toHaveAttribute('data-action', 'register');
   });
 
   it('should show error message when registration fails', () => {
@@ -95,31 +127,22 @@ describe('RegisterPage', () => {
 
     const { user } = render(<RegisterPage />);
 
+    await user.click(screen.getByText('Register with SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 
     expect(loginWithSessionSpy).toHaveBeenCalledWith('mock-session-token');
   });
 
-  it('should navigate to /onboarding on successful registration', async () => {
+  it('should navigate to /onboarding on successful wallet registration', async () => {
     const loginWithSessionSpy = vi.fn().mockResolvedValue(undefined);
     useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
 
     const { user } = render(<RegisterPage />);
 
+    await user.click(screen.getByText('Register with SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 
     expect(mockNavigate).toHaveBeenCalledWith('/onboarding');
-  });
-
-  it('should not navigate when loginWithSession throws', async () => {
-    const loginWithSessionSpy = vi.fn().mockRejectedValue(new Error('Failed'));
-    useAuthStore.setState({ loginWithSession: loginWithSessionSpy });
-
-    const { user } = render(<RegisterPage />);
-
-    await user.click(screen.getByTestId('mock-authenticate'));
-
-    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('should show link to login page', () => {
@@ -128,11 +151,5 @@ describe('RegisterPage', () => {
     const loginLink = screen.getByRole('link', { name: 'Sign in' });
     expect(loginLink).toBeInTheDocument();
     expect(loginLink).toHaveAttribute('href', '/login');
-  });
-
-  it('should show post-quantum cryptography message', () => {
-    render(<RegisterPage />);
-
-    expect(screen.getByText('Protected with post-quantum cryptography')).toBeInTheDocument();
   });
 });

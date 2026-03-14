@@ -20,6 +20,8 @@ import { InvitationsPage } from '@/pages/InvitationsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { JoinTenantPage } from '@/pages/JoinTenantPage';
 import { RecoveryPage } from '@/pages/RecoveryPage';
+import { EmailLoginPage } from '@/pages/EmailLoginPage';
+import { TotpSetupPage } from '@/pages/TotpSetupPage';
 import { UnlockScreen } from '@/components/auth/UnlockScreen';
 import { Toaster } from '@/components/ui/toaster';
 import { OfflineBanner } from '@/components/common/OfflineBanner';
@@ -131,6 +133,18 @@ function App() {
               <LoginPage />
             </PublicRoute>
           }
+        />
+        <Route
+          path="/login/email"
+          element={
+            <PublicRoute>
+              <EmailLoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/login/totp-setup"
+          element={<TotpSetupPage />}
         />
         <Route
           path="/register"

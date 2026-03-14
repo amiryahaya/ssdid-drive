@@ -42,6 +42,10 @@ vi.mock('../../components/recovery/PendingRecoveryRequests', () => ({
   PendingRecoveryRequests: () => <div data-testid="pending-recovery-requests">Pending Requests</div>,
 }));
 
+vi.mock('../../components/settings/LinkedLoginsSection', () => ({
+  LinkedLoginsSection: () => <div data-testid="linked-logins-section">Linked Logins</div>,
+}));
+
 const mockStorageInfo = {
   cacheSize: 1024 * 1024 * 50, // 50 MB
   totalUsed: 1024 * 1024 * 100,
