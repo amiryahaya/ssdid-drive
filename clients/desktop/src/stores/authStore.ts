@@ -79,14 +79,9 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
         } catch (error) {
-          // If the backend command isn't wired yet, set authenticated state
-          // based on the token being present (temporary until backend is ready)
-          console.warn('login_with_session not available yet, using fallback:', error);
-          set({
-            isAuthenticated: true,
-            isLocked: false,
-            isLoading: false,
-          });
+          const message = error instanceof Error ? error.message : String(error);
+          set({ error: message, isLoading: false });
+          throw error;
         }
       },
 

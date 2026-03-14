@@ -26,6 +26,8 @@ export function EmailLoginPage() {
       const result = await emailLogin(email.trim());
       if (result.requiresTotp) {
         setStep('totp');
+      } else {
+        navigate('/files');
       }
     } catch {
       // Error handled by store
