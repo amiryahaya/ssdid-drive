@@ -76,24 +76,21 @@ public static class EmailRegisterVerify
             token: invitationToken,
             ct: ct);
 
-        return result.Match(
-            ok =>
-            {
-                var token = sessionStore.CreateSession(user.Id.ToString());
-                if (token is null)
-                    return AppError.ServiceUnavailable("Session limit exceeded").ToProblemResult();
+        if (!result.IsSuccess)
+            return result.Error!.ToProblemResult();
 
-                // Audit log
-                _ = auditService.LogAsync(user.Id, "auth.register.email", "user", user.Id, null, ct);
+        var sessionToken = sessionStore.CreateSession(user.Id.ToString());
+        if (sessionToken is null)
+            return AppError.ServiceUnavailable("Session limit exceeded").ToProblemResult();
 
-                return Results.Ok(new
-                {
-                    token,
-                    account_id = user.Id,
-                    email = user.Email,
-                    requires_totp_setup = true,
-                });
-            },
-            err => err.ToProblemResult());
+        await auditService.LogAsync(user.Id, "auth.register.email", "user", user.Id, null, ct);
+
+        return Results.Ok(new
+        {
+            token = sessionToken,
+            account_id = user.Id,
+            email = user.Email,
+            requires_totp_setup = true,
+        });
     }
 }
