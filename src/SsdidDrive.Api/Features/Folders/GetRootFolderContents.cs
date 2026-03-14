@@ -65,7 +65,7 @@ public static class GetRootFolderContents
 
         // Get shared folder IDs for this user
         var sharedFolderIds = (await db.Shares
-            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder")
+            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "folder" && s.RevokedAt == null)
             .Select(s => new { s.ResourceId, s.ExpiresAt })
             .ToListAsync(ct))
             .Where(s => s.ExpiresAt == null || s.ExpiresAt > now)
@@ -94,7 +94,7 @@ public static class GetRootFolderContents
 
         // Get shared file IDs for this user
         var sharedFileIds = (await db.Shares
-            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "file")
+            .Where(s => s.SharedWithId == user.Id && s.ResourceType == "file" && s.RevokedAt == null)
             .Select(s => new { s.ResourceId, s.ExpiresAt })
             .ToListAsync(ct))
             .Where(s => s.ExpiresAt == null || s.ExpiresAt > now)

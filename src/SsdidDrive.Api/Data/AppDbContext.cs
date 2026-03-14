@@ -148,6 +148,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             e.HasIndex(s => new { s.ResourceId, s.ResourceType });
             e.HasIndex(s => s.SharedWithId);
+            e.HasIndex(s => new { s.SharedWithId, s.ResourceId })
+                .HasFilter("\"RevokedAt\" IS NULL")
+                .HasDatabaseName("ix_shares_active");
 
             e.HasOne(s => s.SharedBy)
                 .WithMany()

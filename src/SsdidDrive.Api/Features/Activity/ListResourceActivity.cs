@@ -30,7 +30,7 @@ public static class ListResourceActivity
             .AnyAsync(f => f.Id == id && f.OwnerId == user.Id && f.TenantId == tenantId, ct);
 
         var hasShare = !isFileOwner && !isFolderOwner && await db.Shares
-            .AnyAsync(s => s.ResourceId == id && s.SharedWithId == user.Id
+            .AnyAsync(s => s.ResourceId == id && s.SharedWithId == user.Id && s.RevokedAt == null
                 && (db.Files.Any(f => f.Id == id && f.Folder.TenantId == tenantId)
                     || db.Folders.Any(f => f.Id == id && f.TenantId == tenantId)), ct);
 

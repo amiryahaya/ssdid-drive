@@ -17,6 +17,9 @@ public static class UpdateSharePermission
     {
         var user = accessor.User!;
 
+        if (user.TenantId is null)
+            return AppError.BadRequest("User does not belong to a tenant").ToProblemResult();
+
         var share = await db.Shares.FirstOrDefaultAsync(s => s.Id == id, ct);
 
         if (share is null)
@@ -43,7 +46,7 @@ public static class UpdateSharePermission
         var sharedWithUser = await db.Users.FirstOrDefaultAsync(u => u.Id == share.SharedWithId, ct);
         var userName = sharedWithUser?.DisplayName ?? sharedWithUser?.Did ?? "unknown";
 
-        _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.SharePermissionChanged,
+        _ = activity.LogAsync(user.Id, user.TenantId.Value, FileActivityEventType.SharePermissionChanged,
             share.ResourceType, share.ResourceId, resourceName, resourceOwnerId,
             new { user_name = userName, old_permission = oldPermission, new_permission = req.Permission }, ct);
 

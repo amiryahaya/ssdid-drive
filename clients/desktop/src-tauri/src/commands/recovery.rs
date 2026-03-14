@@ -47,7 +47,7 @@ pub async fn get_recovery_status(state: State<'_, AppState>) -> AppResult<Recove
 /// for wrapping each share into a `RecoveryFile` and persisting/distributing them.
 #[tauri::command]
 pub async fn split_master_key_command(
-    master_key_hex: String,
+    mut master_key_hex: String,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<(u8, String)>> {
     state.require_auth()?;
@@ -55,6 +55,7 @@ pub async fn split_master_key_command(
 
     let mut raw = hex::decode(&master_key_hex)
         .map_err(|e| AppError::Crypto(format!("Invalid master key hex: {}", e)))?;
+    master_key_hex.zeroize();
     if raw.len() != 32 {
         raw.zeroize();
         return Err(AppError::Crypto(format!(
@@ -87,9 +88,9 @@ pub async fn split_master_key_command(
 #[tauri::command]
 pub async fn reconstruct_master_key_command(
     index1: u8,
-    data1_b64: String,
+    mut data1_b64: String,
     index2: u8,
-    data2_b64: String,
+    mut data2_b64: String,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -99,9 +100,14 @@ pub async fn reconstruct_master_key_command(
     let mut d1 = BASE64
         .decode(&data1_b64)
         .map_err(|e| AppError::Crypto(format!("Invalid share 1 base64: {}", e)))?;
+    data1_b64.zeroize();
     let mut d2 = BASE64
         .decode(&data2_b64)
-        .map_err(|e| AppError::Crypto(format!("Invalid share 2 base64: {}", e)))?;
+        .map_err(|e| {
+            d1.zeroize();
+            AppError::Crypto(format!("Invalid share 2 base64: {}", e))
+        })?;
+    data2_b64.zeroize();
 
     let mut key = RecoveryService::reconstruct_master_key(index1, &d1, index2, &d2)?;
     d1.zeroize();
@@ -143,12 +149,15 @@ pub async fn parse_recovery_file_command(
     RecoveryService::parse_recovery_file(&contents)
 }
 
-/// Retrieve the server-held share for recovery (unauthenticated — DID-based).
+/// Retrieve the server-held share for recovery.
 #[tauri::command]
 pub async fn get_server_share(
     did: String,
     state: State<'_, AppState>,
 ) -> AppResult<crate::services::ServerShareResponse> {
+    state.require_auth()?;
+    state.require_unlocked()?;
+
     tracing::info!("Getting server share for DID recovery");
 
     state.recovery_service().get_server_share(&did).await
@@ -163,6 +172,9 @@ pub async fn complete_recovery(
     kem_public_key: String,
     state: State<'_, AppState>,
 ) -> AppResult<crate::services::CompleteRecoveryResponse> {
+    state.require_auth()?;
+    state.require_unlocked()?;
+
     tracing::info!("Completing recovery: old_did={}", old_did);
 
     state
@@ -178,6 +190,7 @@ pub async fn delete_recovery_setup(state: State<'_, AppState>) -> AppResult<()> 
     state.require_unlocked()?;
 
     tracing::info!("Deleting recovery setup");
+
 
     state.recovery_service().delete_setup().await
 }

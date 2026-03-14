@@ -19,6 +19,7 @@ pub mod shamir;
 pub mod symmetric;
 
 pub use error::{CryptoError, CryptoResult};
+pub use zeroize::Zeroizing;
 
 /// Initialize all cryptographic subsystems
 ///

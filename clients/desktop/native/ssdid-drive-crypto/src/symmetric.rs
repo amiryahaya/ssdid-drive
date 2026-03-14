@@ -14,7 +14,7 @@ use aes_gcm::{
 use argon2::Argon2;
 use hkdf::Hkdf;
 use sha2::{Sha256, Sha384};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// AES-256-GCM nonce size (96 bits)
 pub const NONCE_SIZE: usize = 12;
@@ -59,7 +59,7 @@ pub fn encrypt_aes_gcm(plaintext: &[u8], key: &[u8]) -> CryptoResult<Vec<u8>> {
 /// Decrypt data using AES-256-GCM
 ///
 /// Expects nonce || ciphertext || tag
-pub fn decrypt_aes_gcm(ciphertext: &[u8], key: &[u8]) -> CryptoResult<Vec<u8>> {
+pub fn decrypt_aes_gcm(ciphertext: &[u8], key: &[u8]) -> CryptoResult<Zeroizing<Vec<u8>>> {
     if key.len() != KEY_SIZE {
         return Err(CryptoError::InvalidKeySize {
             expected: KEY_SIZE,
@@ -81,7 +81,7 @@ pub fn decrypt_aes_gcm(ciphertext: &[u8], key: &[u8]) -> CryptoResult<Vec<u8>> {
         .decrypt(nonce, ciphertext_data)
         .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
 
-    Ok(plaintext)
+    Ok(Zeroizing::new(plaintext))
 }
 
 /// Derive a key using HKDF-SHA256
@@ -90,14 +90,14 @@ pub fn hkdf_derive(
     salt: Option<&[u8]>,
     info: &[u8],
     output_len: usize,
-) -> CryptoResult<Vec<u8>> {
+) -> CryptoResult<Zeroizing<Vec<u8>>> {
     let hkdf = Hkdf::<Sha256>::new(salt, ikm);
     let mut output = vec![0u8; output_len];
 
     hkdf.expand(info, &mut output)
         .map_err(|e| CryptoError::KeyDerivationFailed(e.to_string()))?;
 
-    Ok(output)
+    Ok(Zeroizing::new(output))
 }
 
 /// Argon2id parameters
@@ -124,7 +124,7 @@ pub fn argon2_derive(
     password: &[u8],
     salt: &[u8],
     params: &Argon2Params,
-) -> CryptoResult<Vec<u8>> {
+) -> CryptoResult<Zeroizing<Vec<u8>>> {
     let argon2 = Argon2::new(
         argon2::Algorithm::Argon2id,
         argon2::Version::V0x13,
@@ -143,7 +143,7 @@ pub fn argon2_derive(
         .hash_password_into(password, salt, &mut output)
         .map_err(|e| CryptoError::KeyDerivationFailed(e.to_string()))?;
 
-    Ok(output)
+    Ok(Zeroizing::new(output))
 }
 
 /// Generate a random salt
@@ -154,10 +154,10 @@ pub fn generate_salt(len: usize) -> Vec<u8> {
 }
 
 /// Generate a random key
-pub fn generate_key() -> Vec<u8> {
+pub fn generate_key() -> Zeroizing<Vec<u8>> {
     let mut key = vec![0u8; KEY_SIZE];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut key);
-    key
+    Zeroizing::new(key)
 }
 
 // ==================== Tiered KDF ====================
@@ -237,7 +237,7 @@ const BCRYPT_HKDF_INFO: &[u8] = b"bcrypt-derived-key";
 ///
 /// 1. Bcrypt hash (cost=13) → 24-byte output
 /// 2. HKDF-SHA-384 stretch to 32 bytes
-pub fn bcrypt_hkdf_derive(password: &[u8], salt: &[u8]) -> CryptoResult<Vec<u8>> {
+pub fn bcrypt_hkdf_derive(password: &[u8], salt: &[u8]) -> CryptoResult<Zeroizing<Vec<u8>>> {
     // bcrypt requires exactly 16-byte salt
     if salt.len() != TIERED_KDF_SALT_SIZE {
         return Err(CryptoError::KeyDerivationFailed(
@@ -261,7 +261,7 @@ pub fn bcrypt_hkdf_derive(password: &[u8], salt: &[u8]) -> CryptoResult<Vec<u8>>
     // Zeroize intermediate bcrypt output
     bcrypt_output.zeroize();
 
-    Ok(output)
+    Ok(Zeroizing::new(output))
 }
 
 /// Create a salt with profile byte prepended.
@@ -283,7 +283,7 @@ pub fn tiered_kdf_create_salt(profile: KdfProfile) -> Vec<u8> {
 /// For backward compatibility: if the salt is not 17 bytes or the first
 /// byte is not a valid profile, falls back to legacy Argon2id-standard
 /// with the raw salt.
-pub fn tiered_kdf_derive(password: &[u8], salt_with_profile: &[u8]) -> CryptoResult<Vec<u8>> {
+pub fn tiered_kdf_derive(password: &[u8], salt_with_profile: &[u8]) -> CryptoResult<Zeroizing<Vec<u8>>> {
     // Check if this is a tiered salt (17 bytes, valid profile byte)
     if salt_with_profile.len() == TIERED_KDF_WIRE_SALT_SIZE {
         if let Ok(profile) = KdfProfile::from_byte(salt_with_profile[0]) {

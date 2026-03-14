@@ -16,7 +16,7 @@ public static class GetShare
         var share = await db.Shares
             .Include(s => s.SharedBy)
             .Include(s => s.SharedWith)
-            .FirstOrDefaultAsync(s => s.Id == id, ct);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RevokedAt == null, ct);
 
         if (share is null || (share.SharedById != user.Id && share.SharedWithId != user.Id))
             return AppError.NotFound("Share not found").ToProblemResult();

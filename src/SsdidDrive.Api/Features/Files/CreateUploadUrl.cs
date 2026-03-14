@@ -32,6 +32,11 @@ public static class CreateUploadUrl
         if (user.TenantId is null)
             return AppError.BadRequest("User does not belong to a tenant").ToProblemResult();
 
+        if (request.BlobSize <= 0 || request.BlobSize > 5L * 1024 * 1024 * 1024)
+            return AppError.BadRequest("Invalid blob size").ToProblemResult();
+        if (request.ChunkCount <= 0 || request.ChunkCount > 10_000)
+            return AppError.BadRequest("Invalid chunk count").ToProblemResult();
+
         if (!Guid.TryParse(request.FolderId, out var folderId))
             return AppError.BadRequest("Invalid folder ID").ToProblemResult();
 
@@ -47,7 +52,7 @@ public static class CreateUploadUrl
         {
             var hasWriteShare = (await db.Shares
                 .Where(s => s.ResourceId == folderId && s.ResourceType == "folder"
-                    && s.SharedWithId == user.Id && s.Permission == "write")
+                    && s.SharedWithId == user.Id && s.Permission == "write" && s.RevokedAt == null)
                 .Select(s => new { s.ExpiresAt })
                 .ToListAsync(ct))
                 .Any(s => s.ExpiresAt == null || s.ExpiresAt > now);

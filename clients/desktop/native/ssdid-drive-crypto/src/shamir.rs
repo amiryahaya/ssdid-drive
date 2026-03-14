@@ -5,7 +5,7 @@
 
 use crate::error::{CryptoError, CryptoResult};
 use rand::RngCore;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, Zeroizing, ZeroizeOnDrop};
 
 /// A share of a secret
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
@@ -156,7 +156,7 @@ pub fn split(secret: &[u8], k: u8, n: u8) -> CryptoResult<Vec<Share>> {
 ///
 /// # Returns
 /// The reconstructed secret
-pub fn combine(shares: &[Share]) -> CryptoResult<Vec<u8>> {
+pub fn combine(shares: &[Share]) -> CryptoResult<Zeroizing<Vec<u8>>> {
     if shares.is_empty() {
         return Err(CryptoError::InvalidParam("No shares provided".into()));
     }
@@ -217,7 +217,7 @@ pub fn combine(shares: &[Share]) -> CryptoResult<Vec<u8>> {
         secret.push(value);
     }
 
-    Ok(secret)
+    Ok(Zeroizing::new(secret))
 }
 
 #[cfg(test)]

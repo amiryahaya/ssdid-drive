@@ -19,7 +19,7 @@ public static class ListCreatedShares
         // Order client-side for cross-database compatibility
         // (SQLite cannot ORDER BY DateTimeOffset columns).
         var allShares = (await db.Shares
-            .Where(s => s.SharedById == user.Id)
+            .Where(s => s.SharedById == user.Id && s.RevokedAt == null)
             .Include(s => s.SharedWith)
             .Select(s => new
             {

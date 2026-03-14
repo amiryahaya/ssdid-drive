@@ -35,7 +35,7 @@ public static class DownloadFile
             || (await db.Shares
                 .Where(s => ((s.ResourceId == id && s.ResourceType == "file")
                     || (s.ResourceId == file.FolderId && s.ResourceType == "folder"))
-                    && s.SharedWithId == user.Id)
+                    && s.SharedWithId == user.Id && s.RevokedAt == null)
                 .Select(s => s.ExpiresAt)
                 .ToListAsync(ct))
                 .Any(e => e == null || e > now);

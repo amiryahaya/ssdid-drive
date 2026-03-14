@@ -43,7 +43,7 @@ public static class UploadFile
             // Materialize first, then filter expiry client-side (InMemory/SQLite compatibility)
             hasWriteShare = (await db.Shares
                 .Where(s => s.ResourceId == folderId && s.ResourceType == "folder"
-                    && s.SharedWithId == user.Id && s.Permission == "write")
+                    && s.SharedWithId == user.Id && s.Permission == "write" && s.RevokedAt == null)
                 .Select(s => new { s.ExpiresAt })
                 .ToListAsync(ct))
                 .Any(s => s.ExpiresAt == null || s.ExpiresAt > now);
@@ -55,6 +55,10 @@ public static class UploadFile
 
         if (file.Length == 0)
             return AppError.BadRequest("File is empty").ToProblemResult();
+
+        const long MaxFileSizeBytes = 5L * 1024 * 1024 * 1024; // 5 GB
+        if (file.Length > MaxFileSizeBytes)
+            return AppError.BadRequest($"File exceeds maximum allowed size").ToProblemResult();
 
         if (string.IsNullOrWhiteSpace(encrypted_file_key))
             return AppError.BadRequest("Encrypted file key is required").ToProblemResult();

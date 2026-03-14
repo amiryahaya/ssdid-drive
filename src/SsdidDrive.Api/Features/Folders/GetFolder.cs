@@ -27,7 +27,7 @@ public static class GetFolder
         var now = DateTimeOffset.UtcNow;
         var hasAccess = folder.OwnerId == user.Id
             || (await db.Shares
-                .Where(s => s.ResourceId == id && s.ResourceType == "folder" && s.SharedWithId == user.Id)
+                .Where(s => s.ResourceId == id && s.ResourceType == "folder" && s.SharedWithId == user.Id && s.RevokedAt == null)
                 .Select(s => s.ExpiresAt)
                 .ToListAsync(ct))
                 .Any(e => e == null || e > now);

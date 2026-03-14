@@ -22,7 +22,7 @@ public static class ListReceivedShares
         // Order client-side for cross-database compatibility
         // (SQLite cannot ORDER BY DateTimeOffset columns).
         var allShares = (await db.Shares
-            .Where(s => s.SharedWithId == user.Id)
+            .Where(s => s.SharedWithId == user.Id && s.RevokedAt == null)
             .Include(s => s.SharedBy)
             .Select(s => new
             {

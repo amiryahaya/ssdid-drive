@@ -16,6 +16,7 @@ use ssdid_drive_crypto::{
     symmetric::{decrypt_aes_gcm, hkdf_derive, KEY_SIZE},
 };
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 /// Default PII service URL
 const DEFAULT_PII_SERVICE_URL: &str = "http://localhost:4001/api/v1";
@@ -289,9 +290,9 @@ impl PiiServiceClient {
             self.unwrap_dek(wrapped_dek_b64, ml_ct_b64, response.kaz_kem_ciphertext.as_deref())?
         } else if let Some(session_key_b64) = &response.session_key {
             // DEK provided directly (legacy/fallback mode)
-            BASE64
+            Zeroizing::new(BASE64
                 .decode(session_key_b64)
-                .map_err(|e| AppError::Crypto(format!("Invalid session key: {}", e)))?
+                .map_err(|e| AppError::Crypto(format!("Invalid session key: {}", e)))?)
         } else {
             return Err(AppError::Crypto(
                 "No DEK available in response (neither wrapped_dek nor session_key)".to_string(),
@@ -325,7 +326,7 @@ impl PiiServiceClient {
         wrapped_dek_b64: &str,
         ml_kem_ct_b64: &str,
         kaz_kem_ct_b64: Option<&str>,
-    ) -> AppResult<Vec<u8>> {
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
         let ml_kem_sk = self
             .ml_kem_secret_key
             .read()
@@ -360,7 +361,10 @@ impl PiiServiceClient {
                 .map_err(|e| AppError::Crypto(format!("KAZ-KEM decapsulation failed: {}", e)))?;
 
             // Combine ML-KEM and KAZ-KEM shared secrets
-            [ml_ss, kaz_ss].concat()
+            let mut combined = Vec::with_capacity(ml_ss.len() + kaz_ss.len());
+            combined.extend_from_slice(&ml_ss);
+            combined.extend_from_slice(&kaz_ss);
+            Zeroizing::new(combined)
         } else {
             ml_ss
         };

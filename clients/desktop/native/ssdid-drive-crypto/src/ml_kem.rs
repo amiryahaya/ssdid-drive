@@ -5,7 +5,7 @@
 use crate::error::{CryptoError, CryptoResult};
 use pqcrypto_mlkem::mlkem768;
 use pqcrypto_traits::kem::{Ciphertext, PublicKey, SecretKey, SharedSecret};
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroizing, ZeroizeOnDrop};
 
 /// ML-KEM-768 public key size
 pub const PUBLIC_KEY_SIZE: usize = 1184;
@@ -66,7 +66,7 @@ pub fn encapsulate(public_key: &[u8]) -> CryptoResult<Encapsulation> {
 }
 
 /// Decapsulate ciphertext using ML-KEM-768
-pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Vec<u8>> {
+pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Zeroizing<Vec<u8>>> {
     if ciphertext.len() != CIPHERTEXT_SIZE {
         return Err(CryptoError::Unknown(format!(
             "Invalid ciphertext size: expected {}, got {}",
@@ -90,7 +90,7 @@ pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Vec<u8>
 
     let ss = mlkem768::decapsulate(&ct, &sk);
 
-    Ok(ss.as_bytes().to_vec())
+    Ok(Zeroizing::new(ss.as_bytes().to_vec()))
 }
 
 #[cfg(test)]

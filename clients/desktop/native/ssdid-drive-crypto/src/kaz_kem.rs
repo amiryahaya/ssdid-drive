@@ -1,11 +1,15 @@
 //! Safe wrapper for KAZ-KEM post-quantum key encapsulation
 
 use crate::error::{CryptoError, CryptoResult};
-use std::sync::OnceLock;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use std::sync::{Mutex, OnceLock};
+use zeroize::{Zeroize, Zeroizing, ZeroizeOnDrop};
 
 /// Thread-safe initialization state using OnceLock instead of static mut
 static INIT_RESULT: OnceLock<Result<(), CryptoError>> = OnceLock::new();
+
+/// Mutex to serialize all FFI calls into the C library, which uses
+/// global mutable state (`g_state`) that is not thread-safe.
+static FFI_LOCK: Mutex<()> = Mutex::new(());
 
 /// KAZ-KEM security levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +46,7 @@ pub struct Encapsulation {
 /// Initialize KAZ-KEM with specified security level
 pub fn init(level: SecurityLevel) -> CryptoResult<()> {
     let result = INIT_RESULT.get_or_init(|| {
+        let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
         let code = unsafe { kaz_kem_sys::kaz_kem_init(level as i32) };
         if code != 0 {
             Err(CryptoError::from(code))
@@ -55,37 +60,44 @@ pub fn init(level: SecurityLevel) -> CryptoResult<()> {
 
 /// Check if KAZ-KEM is initialized
 pub fn is_initialized() -> bool {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe { kaz_kem_sys::kaz_kem_is_initialized() == 1 }
 }
 
 /// Get public key size in bytes
 pub fn public_key_bytes() -> usize {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe { kaz_kem_sys::kaz_kem_publickey_bytes() }
 }
 
 /// Get secret key size in bytes
 pub fn secret_key_bytes() -> usize {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe { kaz_kem_sys::kaz_kem_privatekey_bytes() }
 }
 
 /// Get ciphertext size in bytes
 pub fn ciphertext_bytes() -> usize {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe { kaz_kem_sys::kaz_kem_ciphertext_bytes() }
 }
 
 /// Get shared secret size in bytes
 pub fn shared_secret_bytes() -> usize {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe { kaz_kem_sys::kaz_kem_shared_secret_bytes() }
 }
 
 /// Generate a KAZ-KEM key pair
 pub fn generate_keypair() -> CryptoResult<KeyPair> {
-    if !is_initialized() {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
+
+    if unsafe { kaz_kem_sys::kaz_kem_is_initialized() != 1 } {
         return Err(CryptoError::NotInitialized);
     }
 
-    let pk_size = public_key_bytes();
-    let sk_size = secret_key_bytes();
+    let pk_size = unsafe { kaz_kem_sys::kaz_kem_publickey_bytes() };
+    let sk_size = unsafe { kaz_kem_sys::kaz_kem_privatekey_bytes() };
 
     let mut public_key = vec![0u8; pk_size];
     let mut secret_key = vec![0u8; sk_size];
@@ -110,11 +122,13 @@ pub fn generate_keypair() -> CryptoResult<KeyPair> {
 
 /// Encapsulate a random shared secret for a recipient's public key
 pub fn encapsulate(public_key: &[u8]) -> CryptoResult<Encapsulation> {
-    if !is_initialized() {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
+
+    if unsafe { kaz_kem_sys::kaz_kem_is_initialized() != 1 } {
         return Err(CryptoError::NotInitialized);
     }
 
-    let expected_pk_size = public_key_bytes();
+    let expected_pk_size = unsafe { kaz_kem_sys::kaz_kem_publickey_bytes() };
     if public_key.len() != expected_pk_size {
         return Err(CryptoError::InvalidKeySize {
             expected: expected_pk_size,
@@ -122,8 +136,8 @@ pub fn encapsulate(public_key: &[u8]) -> CryptoResult<Encapsulation> {
         });
     }
 
-    let ct_size = ciphertext_bytes();
-    let ss_size = shared_secret_bytes();
+    let ct_size = unsafe { kaz_kem_sys::kaz_kem_ciphertext_bytes() };
+    let ss_size = unsafe { kaz_kem_sys::kaz_kem_shared_secret_bytes() };
 
     // Generate random shared secret
     let mut shared_secret = vec![0u8; ss_size];
@@ -161,12 +175,14 @@ pub fn encapsulate(public_key: &[u8]) -> CryptoResult<Encapsulation> {
 }
 
 /// Decapsulate ciphertext using secret key to recover shared secret
-pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Vec<u8>> {
-    if !is_initialized() {
+pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Zeroizing<Vec<u8>>> {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
+
+    if unsafe { kaz_kem_sys::kaz_kem_is_initialized() != 1 } {
         return Err(CryptoError::NotInitialized);
     }
 
-    let expected_sk_size = secret_key_bytes();
+    let expected_sk_size = unsafe { kaz_kem_sys::kaz_kem_privatekey_bytes() };
     if secret_key.len() != expected_sk_size {
         return Err(CryptoError::InvalidKeySize {
             expected: expected_sk_size,
@@ -174,7 +190,7 @@ pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Vec<u8>
         });
     }
 
-    let ss_size = shared_secret_bytes();
+    let ss_size = unsafe { kaz_kem_sys::kaz_kem_shared_secret_bytes() };
     let mut shared_secret = vec![0u8; ss_size];
     let mut ss_len: u64 = 0;
 
@@ -194,11 +210,12 @@ pub fn decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> CryptoResult<Vec<u8>
     }
 
     shared_secret.truncate(ss_len as usize);
-    Ok(shared_secret)
+    Ok(Zeroizing::new(shared_secret))
 }
 
 /// Clean up KAZ-KEM state
 pub fn cleanup() {
+    let _lock = FFI_LOCK.lock().expect("KAZ-KEM FFI lock poisoned");
     unsafe {
         kaz_kem_sys::kaz_kem_cleanup();
     }

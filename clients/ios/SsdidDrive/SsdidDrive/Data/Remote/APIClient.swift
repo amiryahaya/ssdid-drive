@@ -87,8 +87,9 @@ actor APIClient: APIClientProtocol {
     private weak var tenantRepository: (any TenantRepository)?
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
-    private var isRefreshingToken = false
+    private var refreshTask: Task<Void, Error>?
     private let sslPinningDelegate: SSLPinningDelegate
+    private lazy var iso8601Formatter: ISO8601DateFormatter = ISO8601DateFormatter()
 
     // MARK: - Initialization
 
@@ -189,9 +190,10 @@ actor APIClient: APIClientProtocol {
         mimeType: String,
         fileName: String,
         additionalFields: [String: String]? = nil,
-        progress: @escaping (Double) -> Void
+        progress: @escaping (Double) -> Void,
+        isRetryAfterRefresh: Bool = false
     ) async throws -> Data {
-        guard var urlComponents = URLComponents(string: baseURL + endpoint) else {
+        guard let urlComponents = URLComponents(string: baseURL + endpoint) else {
             throw APIError.invalidURL
         }
 
@@ -244,6 +246,12 @@ actor APIClient: APIClientProtocol {
                 throw APIError.invalidResponse
             }
 
+            // Handle 401 with token refresh (only retry once)
+            if httpResponse.statusCode == 401 && !isRetryAfterRefresh {
+                try await refreshTokenAndRetry()
+                return try await upload(endpoint, fileURL: fileURL, mimeType: mimeType, fileName: fileName, additionalFields: additionalFields, progress: progress, isRetryAfterRefresh: true)
+            }
+
             try validateResponse(httpResponse, data: data)
             return data
         } catch let error as APIError {
@@ -256,7 +264,8 @@ actor APIClient: APIClientProtocol {
     /// Download a file with progress
     func download(
         _ endpoint: String,
-        progress: @escaping (Double) -> Void
+        progress: @escaping (Double) -> Void,
+        isRetryAfterRefresh: Bool = false
     ) async throws -> Data {
         guard let url = URL(string: baseURL + endpoint) else {
             throw APIError.invalidURL
@@ -278,6 +287,12 @@ actor APIClient: APIClientProtocol {
                 throw APIError.invalidResponse
             }
 
+            // Handle 401 with token refresh (only retry once)
+            if httpResponse.statusCode == 401 && !isRetryAfterRefresh {
+                try await refreshTokenAndRetry()
+                return try await download(endpoint, progress: progress, isRetryAfterRefresh: true)
+            }
+
             try validateResponse(httpResponse, data: data)
             return data
         } catch let error as APIError {
@@ -294,7 +309,8 @@ actor APIClient: APIClientProtocol {
         method: HTTPMethod,
         body: Encodable?,
         queryItems: [URLQueryItem]?,
-        requiresAuth: Bool
+        requiresAuth: Bool,
+        isRetryAfterRefresh: Bool = false
     ) async throws -> Data {
         guard var urlComponents = URLComponents(string: baseURL + endpoint) else {
             throw APIError.invalidURL
@@ -332,10 +348,10 @@ actor APIClient: APIClientProtocol {
                 throw APIError.invalidResponse
             }
 
-            // Handle 401 with token refresh
-            if httpResponse.statusCode == 401 && requiresAuth {
+            // Handle 401 with token refresh (only retry once to prevent infinite recursion)
+            if httpResponse.statusCode == 401 && requiresAuth && !isRetryAfterRefresh {
                 try await refreshTokenAndRetry()
-                return try await makeRequest(endpoint, method: method, body: body, queryItems: queryItems, requiresAuth: requiresAuth)
+                return try await makeRequest(endpoint, method: method, body: body, queryItems: queryItems, requiresAuth: requiresAuth, isRetryAfterRefresh: true)
             }
 
             try validateResponse(httpResponse, data: data)
@@ -377,7 +393,7 @@ actor APIClient: APIClientProtocol {
         }
 
         // Add timestamp
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = iso8601Formatter.string(from: Date())
         request.setValue(timestamp, forHTTPHeaderField: Constants.API.Headers.timestamp)
     }
 
@@ -413,36 +429,43 @@ actor APIClient: APIClientProtocol {
     }
 
     private func refreshTokenAndRetry() async throws {
-        guard !isRefreshingToken else {
-            // Wait for ongoing refresh
-            try await Task.sleep(nanoseconds: 500_000_000)
+        // If a refresh is already in flight, wait for it
+        if let existing = refreshTask {
+            try await existing.value
             return
         }
 
-        isRefreshingToken = true
-        defer { isRefreshingToken = false }
+        let task = Task<Void, Error> {
+            defer { self.refreshTask = nil }
 
-        guard let refreshToken = keychainManager.refreshToken else {
-            throw APIError.tokenRefreshFailed
+            guard let refreshToken = keychainManager.refreshToken else {
+                throw APIError.tokenRefreshFailed
+            }
+
+            // Call refresh endpoint with isRetryAfterRefresh: true
+            // to prevent recursive retry if the refresh endpoint itself returns 401
+            let refreshRequest = RefreshTokenRequest(refreshToken: refreshToken)
+
+            do {
+                let responseData = try await makeRequest(
+                    Constants.API.Endpoints.refreshToken,
+                    method: .post,
+                    body: refreshRequest,
+                    queryItems: nil,
+                    requiresAuth: false,
+                    isRetryAfterRefresh: true
+                )
+
+                let tokens = try decoder.decode(AuthTokens.self, from: responseData)
+                keychainManager.accessToken = tokens.accessToken
+                keychainManager.refreshToken = tokens.refreshToken
+            } catch {
+                throw APIError.tokenRefreshFailed
+            }
         }
 
-        // Call refresh endpoint
-        let refreshRequest = RefreshTokenRequest(refreshToken: refreshToken)
-
-        do {
-            let response: AuthTokens = try await request(
-                Constants.API.Endpoints.refreshToken,
-                method: .post,
-                body: refreshRequest,
-                requiresAuth: false
-            )
-
-            // Update tokens
-            keychainManager.accessToken = response.accessToken
-            keychainManager.refreshToken = response.refreshToken
-        } catch {
-            throw APIError.tokenRefreshFailed
-        }
+        refreshTask = task
+        try await task.value
     }
 }
 
@@ -554,8 +577,11 @@ final class SSLPinningDelegate: NSObject, URLSessionDelegate {
             return nil
         }
 
-        // Add ASN.1 header for RSA public keys if needed
-        let keyWithHeader = addRSAHeader(to: publicKeyData)
+        // Add ASN.1 header for known key types
+        guard let keyWithHeader = addRSAHeader(to: publicKeyData) else {
+            // Unknown key type — cannot produce a correct hash
+            return nil
+        }
 
         // Compute SHA-256 hash
         let hash = SHA256.hash(data: keyWithHeader)
@@ -564,7 +590,7 @@ final class SSLPinningDelegate: NSObject, URLSessionDelegate {
 
     /// Add ASN.1 header for RSA public keys
     /// This is needed because SecKeyCopyExternalRepresentation returns raw key data without the header
-    private func addRSAHeader(to keyData: Data) -> Data {
+    private func addRSAHeader(to keyData: Data) -> Data? {
         // RSA 2048-bit public key ASN.1 header
         let rsa2048Header: [UInt8] = [
             0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09,
@@ -606,8 +632,8 @@ final class SSLPinningDelegate: NSObject, URLSessionDelegate {
         case 97: // ECDSA P-384
             header = ecdsaP384Header
         default:
-            // Unknown key type, return as-is
-            return keyData
+            // Unknown key type, cannot produce a correct hash
+            return nil
         }
 
         return Data(header) + keyData

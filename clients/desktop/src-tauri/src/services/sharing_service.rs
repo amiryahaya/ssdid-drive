@@ -9,7 +9,7 @@ use crate::services::{ApiClient, CryptoService};
 use crate::storage::Database;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use std::sync::Arc;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// Service for file sharing operations
 pub struct SharingService {
@@ -110,11 +110,11 @@ impl SharingService {
             .crypto_service
             .decrypt_private_key(&encrypted_kaz_kem_sk, &master_key)?;
 
-        let ml_kem_sk_b64 = BASE64.encode(&ml_kem_sk);
-        let kaz_kem_sk_b64 = BASE64.encode(&kaz_kem_sk);
+        let mut ml_kem_sk_b64 = BASE64.encode(&*ml_kem_sk);
+        let mut kaz_kem_sk_b64 = BASE64.encode(&*kaz_kem_sk);
 
         // Step 4: Re-encapsulate folder key for recipient
-        let (encrypted_share_key, encrypted_folder_key_for_recipient, kem_algorithm) = self
+        let re_encap_result = self
             .crypto_service
             .re_encapsulate_folder_key(
                 &folder_info.encrypted_folder_key,
@@ -123,7 +123,11 @@ impl SharingService {
                 &kaz_kem_sk_b64,
                 &recipient_keys.ml_kem_pk,
                 &recipient_keys.kaz_kem_pk,
-            )?;
+            );
+        ml_kem_sk_b64.zeroize();
+        kaz_kem_sk_b64.zeroize();
+        let (encrypted_share_key, encrypted_folder_key_for_recipient, kem_algorithm) =
+            re_encap_result?;
 
         // Step 5: Create signature of the share grant (required for authenticity)
         let signature = if let Some((ml_dsa_sk, kaz_sign_sk)) = signing_keys {
@@ -292,7 +296,7 @@ impl SharingService {
         encrypted_folder_key: &str,
         ml_kem_sk: &str,
         kaz_kem_sk: &str,
-    ) -> AppResult<Vec<u8>> {
+    ) -> AppResult<Zeroizing<Vec<u8>>> {
         // Decapsulate KEM to get shared secret, then unwrap folder key
         let folder_key = self.crypto_service.decapsulate_folder_key(
             encrypted_share_key,

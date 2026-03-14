@@ -17,6 +17,7 @@ pub struct SyncStateResponse {
 /// Get current sync status
 #[tauri::command]
 pub async fn get_sync_status(state: State<'_, AppState>) -> Result<SyncStateResponse, String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     let sync = state.sync_service();
 
     Ok(SyncStateResponse {
@@ -32,6 +33,7 @@ pub async fn set_online_status(
     state: State<'_, AppState>,
     online: bool,
 ) -> Result<(), String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     state.sync_service().set_online(online);
     Ok(())
 }
@@ -42,6 +44,7 @@ pub async fn get_cached_files(
     state: State<'_, AppState>,
     folder_id: Option<String>,
 ) -> Result<Vec<CachedFile>, String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     state
         .sync_service()
         .get_cached_files(folder_id.as_deref())
@@ -53,6 +56,7 @@ pub async fn get_cached_files(
 pub async fn get_pending_sync_count(
     state: State<'_, AppState>,
 ) -> Result<usize, String> {
+    state.require_auth().map_err(|e| e.to_string())?;
     state
         .sync_service()
         .get_pending_count()
@@ -62,6 +66,8 @@ pub async fn get_pending_sync_count(
 /// Trigger manual sync (processes pending operations)
 #[tauri::command]
 pub async fn trigger_sync(state: State<'_, AppState>) -> Result<(), String> {
+    state.require_auth().map_err(|e| e.to_string())?;
+    state.require_unlocked().map_err(|e| e.to_string())?;
     let sync = state.sync_service();
 
     if !sync.is_online() {
@@ -200,6 +206,8 @@ pub async fn trigger_sync(state: State<'_, AppState>) -> Result<(), String> {
 /// Clear sync queue (discard pending operations)
 #[tauri::command]
 pub async fn clear_sync_queue(state: State<'_, AppState>) -> Result<(), String> {
+    state.require_auth().map_err(|e| e.to_string())?;
+    state.require_unlocked().map_err(|e| e.to_string())?;
     let sync = state.sync_service();
     let operations = sync.get_pending_operations().map_err(|e| e.to_string())?;
 

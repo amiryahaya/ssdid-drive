@@ -7,6 +7,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use std::future::Future;
 use std::pin::Pin;
+use zeroize::Zeroize;
 
 /// Default API base URL (production)
 const DEFAULT_API_BASE_URL: &str = "https://drive.ssdid.my/api";
@@ -75,7 +76,11 @@ impl ApiClient {
 
     /// Set the authentication token
     pub fn set_auth_token(&self, token: Option<String>) {
-        *self.auth_token.write() = token;
+        let mut guard = self.auth_token.write();
+        if let Some(ref mut old) = *guard {
+            old.zeroize();
+        }
+        *guard = token;
     }
 
     /// Get the current auth token
@@ -272,12 +277,14 @@ impl ApiClient {
     /// Attempt to refresh the token using the registered callback
     /// Returns true if refresh was successful, false otherwise
     async fn try_refresh_token(&self) -> bool {
-        // Check if we're already refreshing to prevent recursion
+        // Atomically check-and-set the refreshing flag in a single write lock
+        // to prevent TOCTOU race between read and write
         {
-            let is_refreshing = self.is_refreshing.read();
+            let mut is_refreshing = self.is_refreshing.write();
             if *is_refreshing {
                 return false;
             }
+            *is_refreshing = true;
         }
 
         // Get the refresh callback
@@ -287,8 +294,6 @@ impl ApiClient {
         };
 
         if let Some(refresh_fn) = callback {
-            // Set refreshing flag
-            *self.is_refreshing.write() = true;
 
             // Attempt refresh
             let result = refresh_fn().await;
@@ -308,6 +313,8 @@ impl ApiClient {
                 }
             }
         } else {
+            // No callback registered, clear the refreshing flag
+            *self.is_refreshing.write() = false;
             false
         }
     }
@@ -376,7 +383,11 @@ impl ApiClient {
     fn sanitize_message(message: &str) -> String {
         // Truncate to reasonable length
         let truncated = if message.len() > 200 {
-            format!("{}...", &message[..197])
+            let mut end = 197;
+            while !message.is_char_boundary(end) && end > 0 {
+                end -= 1;
+            }
+            format!("{}...", &message[..end])
         } else {
             message.to_string()
         };
