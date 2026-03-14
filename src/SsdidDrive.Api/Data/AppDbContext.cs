@@ -19,6 +19,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
     public DbSet<FileActivity> FileActivities => Set<FileActivity>();
     public DbSet<Login> Logins => Set<Login>();
+    public DbSet<ExtensionService> ExtensionServices => Set<ExtensionService>();
+    public DbSet<TenantRequest> TenantRequests => Set<TenantRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -347,6 +349,56 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(a => a.ActorId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ExtensionService>(e =>
+        {
+            e.ToTable("extension_services");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.Name).HasMaxLength(256).IsRequired();
+            e.Property(x => x.ServiceKey).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Permissions).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+            e.Property(x => x.Enabled).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+
+            e.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TenantRequest>(e =>
+        {
+            e.ToTable("tenant_requests");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(x => x.OrganizationName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RequesterEmail).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(1024);
+            e.Property(x => x.Status).HasMaxLength(32)
+                .HasDefaultValue(TenantRequestStatus.Pending)
+                .HasConversion(
+                    v => v.ToString().ToLowerInvariant(),
+                    v => Enum.Parse<TenantRequestStatus>(v, true));
+            e.Property(x => x.RejectionReason).HasMaxLength(1024);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.RequesterAccountId);
+
+            e.HasOne(x => x.RequesterAccount)
+                .WithMany()
+                .HasForeignKey(x => x.RequesterAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(x => x.Reviewer)
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedBy)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Login>(e =>
