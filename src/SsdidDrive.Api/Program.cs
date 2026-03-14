@@ -381,6 +381,7 @@ app.MapNotificationFeature();
 app.MapRecoveryFeature();
 app.MapCredentialFeature();
 app.MapAdminFeature();
+app.MapBootstrap();
 app.MapActivityFeature();
 app.MapAccountFeature();
 app.MapExtensionServiceFeature();

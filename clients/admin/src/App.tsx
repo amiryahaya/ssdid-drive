@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallbackPage'
+import BootstrapPage from './pages/BootstrapPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
 import TenantsPage from './pages/TenantsPage'
@@ -80,9 +81,16 @@ function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const initialize = useAuthStore((s) => s.initialize)
   const [ready, setReady] = useState(false)
+  const [bootstrapRequired, setBootstrapRequired] = useState(false)
 
   useEffect(() => {
-    initialize().finally(() => setReady(true))
+    Promise.all([
+      initialize(),
+      fetch('/api/admin/bootstrap/status')
+        .then(r => r.json())
+        .then(data => setBootstrapRequired(data.required))
+        .catch(() => setBootstrapRequired(false)),
+    ]).finally(() => setReady(true))
   }, [initialize])
 
   if (!ready) return null
@@ -92,7 +100,13 @@ function App() {
       <BrowserRouter basename="/admin">
         <Routes>
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="*" element={isAuthenticated ? <AuthenticatedApp /> : <LoginPage />} />
+          <Route path="*" element={
+            bootstrapRequired
+              ? <BootstrapPage />
+              : isAuthenticated
+                ? <AuthenticatedApp />
+                : <LoginPage />
+          } />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

@@ -27,7 +27,8 @@ export function formatStorageQuota(bytes: number | null): string {
   return `${bytes} B`
 }
 
-export function truncateDid(did: string): string {
+export function truncateDid(did: string | null): string {
+  if (!did) return '\u2014'
   if (did.length <= 24) return did
   return `${did.slice(0, 16)}...${did.slice(-8)}`
 }
