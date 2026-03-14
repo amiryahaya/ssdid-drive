@@ -159,6 +159,7 @@ builder.Services.AddScoped<OtpService>();
 builder.Services.AddSingleton<TotpService>();
 builder.Services.AddSingleton<TotpEncryption>();
 builder.Services.AddSingleton<OidcTokenValidator>();
+builder.Services.AddSingleton<OidcCodeExchanger>();
 builder.Services.AddScoped<ExtensionServiceContext>();
 builder.Services.AddSingleton<HmacReplayCache>();
 
