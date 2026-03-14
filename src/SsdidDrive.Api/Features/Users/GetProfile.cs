@@ -10,6 +10,12 @@ public static class GetProfile
     private static IResult Handle(CurrentUserAccessor accessor)
     {
         var user = accessor.User!;
+
+        // Fields are editable only when empty (not populated by a login provider)
+        var editableFields = new List<string>();
+        if (string.IsNullOrWhiteSpace(user.DisplayName)) editableFields.Add("display_name");
+        if (string.IsNullOrWhiteSpace(user.Email)) editableFields.Add("email");
+
         return Results.Ok(new
         {
             user.Id,
@@ -18,7 +24,8 @@ public static class GetProfile
             user.Email,
             status = user.Status.ToString().ToLowerInvariant(),
             system_role = user.SystemRole?.ToString(),
-            user.CreatedAt
+            user.CreatedAt,
+            editable_fields = editableFields
         });
     }
 }

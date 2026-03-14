@@ -22,8 +22,21 @@ public static class UpdateProfile
         if (user is null)
             return AppError.NotFound("User not found").ToProblemResult();
 
-        if (req.DisplayName is not null) user.DisplayName = req.DisplayName;
-        if (req.Email is not null) user.Email = req.Email;
+        // Only allow updating fields that are currently empty
+        if (req.DisplayName is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(user.DisplayName))
+                return AppError.BadRequest("Display name is already set and cannot be changed").ToProblemResult();
+            user.DisplayName = req.DisplayName;
+        }
+
+        if (req.Email is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(user.Email))
+                return AppError.BadRequest("Email is already set and cannot be changed").ToProblemResult();
+            user.Email = req.Email;
+        }
+
         user.UpdatedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync();
