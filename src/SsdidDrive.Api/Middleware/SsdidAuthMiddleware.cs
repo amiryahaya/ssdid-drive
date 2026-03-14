@@ -76,11 +76,18 @@ public class SsdidAuthMiddleware(RequestDelegate next)
             return;
         }
 
-        // If MFA pending, only allow TOTP verify endpoint
+        // If MFA pending, only allow TOTP verify and TOTP setup endpoints
         if (mfaPending)
         {
             var path = context.Request.Path.Value ?? "";
-            if (!path.Equals("/api/auth/totp/verify", StringComparison.OrdinalIgnoreCase))
+            var allowedMfaPaths = new[]
+            {
+                "/api/auth/totp/verify",
+                "/api/auth/totp/setup",
+                "/api/auth/totp/setup/confirm"
+            };
+
+            if (!allowedMfaPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)))
             {
                 await WriteProblem(context, 403, "MFA verification required");
                 return;
