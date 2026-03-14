@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  KAZSIGN_VERSION: v2.0.0
-  KAZKEM_VERSION: v2.0.0
+  KAZSIGN_VERSION: v2.0.2
+  KAZKEM_VERSION: v2.0.2
 
 jobs:
   build:

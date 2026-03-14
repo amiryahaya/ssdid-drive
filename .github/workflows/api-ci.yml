@@ -14,7 +14,7 @@ on:
       - 'tests/SsdidDrive.Api.Tests/**'
 
 env:
-  KAZSIGN_VERSION: v2.0.0
+  KAZSIGN_VERSION: v2.0.2
 
 jobs:
   build-and-test:
