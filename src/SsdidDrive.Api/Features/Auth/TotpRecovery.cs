@@ -13,7 +13,8 @@ public static class TotpRecovery
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/totp/recovery", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth-recovery");
 
     private static async Task<IResult> Handle(
         Request req,

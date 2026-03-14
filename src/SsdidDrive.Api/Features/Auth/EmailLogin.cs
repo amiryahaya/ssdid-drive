@@ -12,7 +12,8 @@ public static class EmailLogin
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/email/login", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth");
 
     private static async Task<IResult> Handle(
         Request req,

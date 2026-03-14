@@ -14,7 +14,8 @@ public static class OidcVerify
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/oidc/verify", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth");
 
     private static async Task<IResult> Handle(
         Request req,

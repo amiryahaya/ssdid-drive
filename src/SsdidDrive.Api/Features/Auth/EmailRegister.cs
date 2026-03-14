@@ -13,7 +13,8 @@ public static class EmailRegister
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/email/register", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth-otp");
 
     private static async Task<IResult> Handle(
         Request req,

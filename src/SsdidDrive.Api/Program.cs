@@ -230,6 +230,51 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         });
     });
+
+    // Email OTP send — 5 per IP per hour
+    options.AddPolicy("auth-otp", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
+    // TOTP verify — 5 per IP per 15 minutes
+    options.AddPolicy("auth-totp", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(15),
+            QueueLimit = 0
+        });
+    });
+
+    // TOTP recovery — 3 per IP per hour
+    options.AddPolicy("auth-recovery", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 3,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
 });
 
 // ── OpenAPI ──

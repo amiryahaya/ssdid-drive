@@ -14,7 +14,8 @@ public static class TotpRecoveryVerify
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/totp/recovery/verify", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth-recovery");
 
     private static async Task<IResult> Handle(
         Request req,

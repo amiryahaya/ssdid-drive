@@ -14,7 +14,8 @@ public static class TotpVerify
 
     public static void Map(RouteGroupBuilder group) =>
         group.MapPost("/totp/verify", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth-totp");
 
     private static async Task<IResult> Handle(
         Request req,
