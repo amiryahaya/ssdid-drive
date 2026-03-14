@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -39,9 +41,42 @@ public static class HmacSignatureHelper
     }
 }
 
-public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware> logger)
+public class HmacReplayCache
+{
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _seen = new();
+    private DateTimeOffset _lastCleanup = DateTimeOffset.UtcNow;
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(2);
+
+    public bool HasBeenSeen(Guid serviceId, string timestamp, string signature)
+    {
+        CleanupIfNeeded();
+        var key = $"{serviceId}:{timestamp}:{signature}";
+        return !_seen.TryAdd(key, DateTimeOffset.UtcNow);
+    }
+
+    private void CleanupIfNeeded()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastCleanup < CleanupInterval) return;
+        _lastCleanup = now;
+
+        var cutoff = now - TimeSpan.FromMinutes(6);
+        foreach (var kvp in _seen)
+        {
+            if (kvp.Value < cutoff)
+                _seen.TryRemove(kvp.Key, out _);
+        }
+    }
+}
+
+public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware> logger, HmacReplayCache replayCache)
 {
     private static readonly TimeSpan MaxTimestampAge = TimeSpan.FromMinutes(5);
+
+    private static readonly JsonSerializerOptions ProblemJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
 
     public async Task InvokeAsync(HttpContext context, AppDbContext db, ExtensionServiceContext serviceContext, TotpEncryption encryption)
     {
@@ -51,38 +86,33 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
 
         if (string.IsNullOrEmpty(serviceIdHeader) || string.IsNullOrEmpty(timestampHeader) || string.IsNullOrEmpty(signatureHeader))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Missing HMAC authentication headers" });
+            await WriteProblem(context, 401, "Missing HMAC authentication headers");
             return;
         }
 
         if (!Guid.TryParse(serviceIdHeader, out var serviceId))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Invalid X-Service-Id format" });
+            await WriteProblem(context, 401, "Invalid X-Service-Id format");
             return;
         }
 
         if (!DateTimeOffset.TryParse(timestampHeader, out var timestamp))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Invalid X-Timestamp format" });
+            await WriteProblem(context, 401, "Invalid X-Timestamp format");
             return;
         }
 
         var age = DateTimeOffset.UtcNow - timestamp;
         if (age > MaxTimestampAge || age < -TimeSpan.FromMinutes(1))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Timestamp outside acceptable range" });
+            await WriteProblem(context, 401, "Timestamp outside acceptable range");
             return;
         }
 
         var service = await db.ExtensionServices.FirstOrDefaultAsync(s => s.Id == serviceId);
         if (service is null || !service.Enabled)
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Service not found or disabled" });
+            await WriteProblem(context, 401, "Service not found or disabled");
             return;
         }
 
@@ -95,8 +125,7 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
         catch
         {
             logger.LogError("Failed to decrypt service key for service {ServiceId}", serviceId);
-            context.Response.StatusCode = 500;
-            await context.Response.WriteAsJsonAsync(new { error = "Internal server error" });
+            await WriteProblem(context, 500, "Internal server error");
             return;
         }
 
@@ -113,8 +142,13 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
 
         if (!HmacSignatureHelper.VerifySignature(secret, timestampHeader, method, pathAndQuery, bodyHash, signatureHeader))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(new { error = "Invalid HMAC signature" });
+            await WriteProblem(context, 401, "Invalid HMAC signature");
+            return;
+        }
+
+        if (replayCache.HasBeenSeen(serviceId, timestampHeader, signatureHeader))
+        {
+            await WriteProblem(context, 401, "Duplicate request (replay detected)");
             return;
         }
 
@@ -124,16 +158,45 @@ public class HmacAuthMiddleware(RequestDelegate next, ILogger<HmacAuthMiddleware
             permissions = JsonSerializer.Deserialize<Dictionary<string, bool>>(service.Permissions)
                 ?? new Dictionary<string, bool>();
         }
-        catch { /* default to empty permissions */ }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Malformed permissions JSON for service {ServiceId}", serviceId);
+        }
 
         serviceContext.ServiceId = service.Id;
         serviceContext.TenantId = service.TenantId;
         serviceContext.ServiceName = service.Name;
         serviceContext.Permissions = permissions;
 
-        service.LastUsedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(CancellationToken.None);
+        try
+        {
+            service.LastUsedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to update LastUsedAt for service {ServiceId}", serviceId);
+        }
 
         await next(context);
+    }
+
+    private static Task WriteProblem(HttpContext context, int status, string detail)
+    {
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/problem+json";
+        var title = status switch
+        {
+            401 => "Unauthorized",
+            500 => "Internal Server Error",
+            _ => "Error"
+        };
+        return context.Response.WriteAsJsonAsync(new ProblemDetails
+        {
+            Type = $"https://httpstatuses.com/{status}",
+            Title = title,
+            Status = status,
+            Detail = detail
+        }, ProblemJsonOptions);
     }
 }

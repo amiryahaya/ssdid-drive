@@ -9,8 +9,10 @@ namespace SsdidDrive.Api.Features.TenantRequests;
 
 public static partial class ApproveRequest
 {
+    private const int MaxSlugAttempts = 100;
+
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPost("/tenant-requests/{id:guid}/approve", Handle);
+        group.MapPost("/{id:guid}/approve", Handle);
 
     private static async Task<IResult> Handle(
         Guid id,
@@ -33,6 +35,8 @@ public static partial class ApproveRequest
         var counter = 1;
         while (await db.Tenants.AnyAsync(t => t.Slug == slug, ct))
         {
+            if (counter > MaxSlugAttempts)
+                return AppError.Conflict("Unable to generate a unique slug for this organization name").ToProblemResult();
             slug = $"{baseSlug}-{counter}";
             counter++;
         }
@@ -62,7 +66,14 @@ public static partial class ApproveRequest
         request.ReviewedBy = accessor.UserId;
         request.ReviewedAt = DateTimeOffset.UtcNow;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return AppError.Conflict("Failed to create tenant — a concurrent operation may have conflicted. Please retry.").ToProblemResult();
+        }
 
         await audit.LogAsync(accessor.UserId, "tenant.request.approved", "TenantRequest", request.Id,
             $"Approved tenant request for '{request.OrganizationName}', created tenant {tenant.Id}", ct);

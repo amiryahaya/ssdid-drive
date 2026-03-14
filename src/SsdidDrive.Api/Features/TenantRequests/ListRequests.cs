@@ -7,7 +7,7 @@ namespace SsdidDrive.Api.Features.TenantRequests;
 public static class ListRequests
 {
     public static void Map(RouteGroupBuilder group) =>
-        group.MapGet("/tenant-requests", Handle);
+        group.MapGet("/", Handle);
 
     private static async Task<IResult> Handle(
         AppDbContext db,

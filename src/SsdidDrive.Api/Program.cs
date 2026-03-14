@@ -160,6 +160,7 @@ builder.Services.AddSingleton<TotpService>();
 builder.Services.AddSingleton<TotpEncryption>();
 builder.Services.AddSingleton<OidcTokenValidator>();
 builder.Services.AddScoped<ExtensionServiceContext>();
+builder.Services.AddSingleton<HmacReplayCache>();
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
@@ -348,10 +349,18 @@ app.UseCors();
 app.UseRateLimiter();
 app.MapHealthChecks("/health/redis");
 
+// HMAC middleware for extension service consumer-facing API routes.
+// These routes use HMAC-SHA256 authentication instead of Bearer tokens.
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api/ext"),
+    branch => branch.UseMiddleware<HmacAuthMiddleware>());
+
 // Auth middleware — endpoints marked [SsdidPublic] skip authentication.
 // All /api endpoints go through the middleware; it checks endpoint metadata.
+// Exclude /api/ext routes which use HMAC auth above.
 app.UseWhen(
-    context => context.Request.Path.StartsWithSegments("/api"),
+    context => context.Request.Path.StartsWithSegments("/api")
+               && !context.Request.Path.StartsWithSegments("/api/ext"),
     branch => branch.UseMiddleware<SsdidAuthMiddleware>());
 
 // ── Features ──

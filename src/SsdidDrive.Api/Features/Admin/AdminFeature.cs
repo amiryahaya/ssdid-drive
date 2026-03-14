@@ -33,8 +33,9 @@ public static class AdminFeature
         CreateAdminInvitation.Map(group);
         ListAdminInvitations.Map(group);
         RevokeAdminInvitation.Map(group);
-        ListRequests.Map(group);
-        ApproveRequest.Map(group);
-        RejectRequest.Map(group);
+        var requestsGroup = group.MapGroup("/tenant-requests");
+        ListRequests.Map(requestsGroup);
+        ApproveRequest.Map(requestsGroup);
+        RejectRequest.Map(requestsGroup);
     }
 }

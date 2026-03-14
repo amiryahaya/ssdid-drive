@@ -174,6 +174,55 @@ public class ExtensionServiceTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task UpdateService_MemberRole_ReturnsForbidden()
+    {
+        var (ownerClient, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+        var (memberClient, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId);
+
+        var createResp = await ownerClient.PostAsJsonAsync("/api/tenant/services", new { name = "Update Auth Test", permissions = new { files_read = true } }, Json);
+        var createBody = await createResp.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var serviceId = createBody.GetProperty("id").GetString();
+
+        var response = await memberClient.PutAsJsonAsync($"/api/tenant/services/{serviceId}", new
+        {
+            permissions = new { files_read = true, files_write = true },
+            enabled = false
+        }, Json);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RevokeService_MemberRole_ReturnsForbidden()
+    {
+        var (ownerClient, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+        var (memberClient, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId);
+
+        var createResp = await ownerClient.PostAsJsonAsync("/api/tenant/services", new { name = "Revoke Auth Test", permissions = new { files_read = true } }, Json);
+        var createBody = await createResp.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var serviceId = createBody.GetProperty("id").GetString();
+
+        var response = await memberClient.DeleteAsync($"/api/tenant/services/{serviceId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RotateSecret_MemberRole_ReturnsForbidden()
+    {
+        var (ownerClient, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
+        var (memberClient, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId);
+
+        var createResp = await ownerClient.PostAsJsonAsync("/api/tenant/services", new { name = "Rotate Auth Test", permissions = new { files_read = true } }, Json);
+        var createBody = await createResp.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var serviceId = createBody.GetProperty("id").GetString();
+
+        var response = await memberClient.PostAsync($"/api/tenant/services/{serviceId}/rotate", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RotatedKey_InvalidatesOldSignatures()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);

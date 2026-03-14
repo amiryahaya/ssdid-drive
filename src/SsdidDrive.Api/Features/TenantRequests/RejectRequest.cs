@@ -8,7 +8,7 @@ namespace SsdidDrive.Api.Features.TenantRequests;
 public static class RejectRequest
 {
     public static void Map(RouteGroupBuilder group) =>
-        group.MapPost("/tenant-requests/{id:guid}/reject", Handle);
+        group.MapPost("/{id:guid}/reject", Handle);
 
     private record RejectRequestBody(string? Reason);
 
