@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Middleware;
@@ -33,25 +34,57 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         }
 
         var token = authHeader["Bearer ".Length..];
-        var did = sessionStore.GetSession(token);
+        var sessionValue = sessionStore.GetSession(token);
 
-        if (did is null)
+        if (sessionValue is null)
         {
             await WriteProblem(context, 401, "Invalid or expired session");
             return;
         }
 
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Did == did);
+        // Detect session type and resolve user
+        User? user;
+        bool mfaPending = false;
+
+        var effectiveValue = sessionValue;
+        if (sessionValue.StartsWith("mfa:", StringComparison.Ordinal))
+        {
+            mfaPending = true;
+            effectiveValue = sessionValue[4..];
+        }
+
+        if (Guid.TryParse(effectiveValue, out var accountId))
+        {
+            // New auth: session value is Account.Id (UUID)
+            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == accountId);
+        }
+        else
+        {
+            // Legacy SSDID auth: session value is DID string
+            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Did == sessionValue);
+        }
+
         if (user is null)
         {
-            await WriteProblem(context, 401, "No account linked to this DID");
+            await WriteProblem(context, 401, "No account found for this session");
             return;
         }
 
-        if (user.Status == Data.Entities.UserStatus.Suspended)
+        if (user.Status == UserStatus.Suspended)
         {
             await WriteProblem(context, 403, "Account is suspended");
             return;
+        }
+
+        // If MFA pending, only allow TOTP verify endpoint
+        if (mfaPending)
+        {
+            var path = context.Request.Path.Value ?? "";
+            if (!path.Equals("/api/auth/totp/verify", StringComparison.OrdinalIgnoreCase))
+            {
+                await WriteProblem(context, 403, "MFA verification required");
+                return;
+            }
         }
 
         accessor.UserId = user.Id;
@@ -59,6 +92,7 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         accessor.User = user;
         accessor.SessionToken = token;
         accessor.SystemRole = user.SystemRole;
+        accessor.MfaPending = mfaPending;
 
         await next(context);
     }
