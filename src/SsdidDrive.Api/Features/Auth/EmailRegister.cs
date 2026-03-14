@@ -41,6 +41,11 @@ public static class EmailRegister
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();
 
+        // If invitation specifies an email, the registration email must match
+        if (!string.IsNullOrEmpty(invitation.Email)
+            && !string.Equals(invitation.Email, email, StringComparison.OrdinalIgnoreCase))
+            return AppError.Forbidden($"This invitation is for {invitation.Email}").ToProblemResult();
+
         var existingUser = await db.Users
             .FirstOrDefaultAsync(u => u.Email == email, ct);
 

@@ -120,8 +120,14 @@ public static class OidcVerify
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();
 
+        // If invitation specifies an email, the OIDC email must match
+        if (!string.IsNullOrEmpty(invitation.Email)
+            && !string.Equals(invitation.Email, oidcClaims.Email, StringComparison.OrdinalIgnoreCase))
+            return AppError.Forbidden($"This invitation is for {invitation.Email}").ToProblemResult();
+
         var newUser = new User
         {
+            Id = Guid.NewGuid(),
             Email = oidcClaims.Email,
             DisplayName = oidcClaims.Name,
             EmailVerified = true,
