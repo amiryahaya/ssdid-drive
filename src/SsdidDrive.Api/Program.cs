@@ -155,6 +155,7 @@ else
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddSingleton<TotpService>();
 builder.Services.AddSingleton<TotpEncryption>();
+builder.Services.AddSingleton<OidcTokenValidator>();
 
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
