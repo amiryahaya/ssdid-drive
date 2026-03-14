@@ -1,5 +1,6 @@
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data.Entities;
+using SsdidDrive.Api.Features.TenantRequests;
 
 namespace SsdidDrive.Api.Features.Admin;
 
@@ -32,5 +33,9 @@ public static class AdminFeature
         CreateAdminInvitation.Map(group);
         ListAdminInvitations.Map(group);
         RevokeAdminInvitation.Map(group);
+        var requestsGroup = group.MapGroup("/tenant-requests");
+        ListRequests.Map(requestsGroup);
+        ApproveRequest.Map(requestsGroup);
+        RejectRequest.Map(requestsGroup);
     }
 }

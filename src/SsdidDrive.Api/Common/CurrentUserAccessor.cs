@@ -10,4 +10,5 @@ public class CurrentUserAccessor
     public string? SessionToken { get; set; }
     public Data.Entities.SystemRole? SystemRole { get; set; }
     public bool MfaPending { get; set; }
+    public Guid? TenantId { get; set; }
 }
