@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Tests.Unit;
@@ -13,7 +14,7 @@ public class TotpEncryptionTests
                 ["Auth:TotpEncryptionKey"] = key ?? Convert.ToBase64String(new byte[32])
             })
             .Build();
-        return new TotpEncryption(config);
+        return new TotpEncryption(config, NullLogger<TotpEncryption>.Instance);
     }
 
     [Fact]
@@ -61,7 +62,7 @@ public class TotpEncryptionTests
             })
             .Build();
 
-        var sut = new TotpEncryption(config);
+        var sut = new TotpEncryption(config, NullLogger<TotpEncryption>.Instance);
         var plaintext = "test-secret";
 
         // Should work with auto-generated key
