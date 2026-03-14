@@ -63,20 +63,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'ga'
 
-      - name: Restore
-        run: |
-          dotnet restore src/SsdidDrive.Api/SsdidDrive.Api.csproj
-          dotnet restore tests/SsdidDrive.Api.Tests/
-
-      - name: Build
-        run: |
-          dotnet build src/SsdidDrive.Api/SsdidDrive.Api.csproj --no-restore -c Release
-          dotnet build tests/SsdidDrive.Api.Tests/ --no-restore -c Release
+      - name: Restore & Build
+        run: dotnet build tests/SsdidDrive.Api.Tests/ -c Release
 
       - name: Test
-        run: dotnet test tests/SsdidDrive.Api.Tests/ --no-build -c Release --logger "trx;LogFileName=results.trx"
+        run: dotnet run --project tests/SsdidDrive.Api.Tests/ -c Release --no-build
         env:
           ConnectionStrings__Default: "Host=localhost;Database=ssdid_drive_test;Username=ssdid;Password=ssdid_test"
           ConnectionStrings__Redis: "localhost:6379"
