@@ -88,7 +88,7 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         }
 
         accessor.UserId = user.Id;
-        accessor.Did = user.Did;
+        accessor.Did = user.Did ?? "";
         accessor.User = user;
         accessor.SessionToken = token;
         accessor.SystemRole = user.SystemRole;

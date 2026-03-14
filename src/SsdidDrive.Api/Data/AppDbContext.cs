@@ -27,7 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.ToTable("users");
             e.HasKey(u => u.Id);
             e.Property(u => u.Id).HasDefaultValueSql("gen_random_uuid()");
-            e.Property(u => u.Did).HasMaxLength(256).IsRequired();
+            e.Property(u => u.Did).HasMaxLength(256);
             e.Property(u => u.DisplayName).HasMaxLength(256);
             e.Property(u => u.Email).HasMaxLength(160);
             e.Property(u => u.Status).HasMaxLength(32)
@@ -43,8 +43,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
             e.Property(u => u.UpdatedAt).HasDefaultValueSql("now()");
 
-            e.HasIndex(u => u.Did).IsUnique();
+            e.HasIndex(u => u.Did).IsUnique().HasFilter("\"Did\" IS NOT NULL");
             e.HasIndex(u => u.Status);
+            e.HasIndex(x => x.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
 
             e.HasOne(u => u.Tenant)
                 .WithMany(t => t.Users)
