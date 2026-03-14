@@ -73,6 +73,6 @@ impl AuthService {
 
     /// Get the current user from the API
     pub async fn get_current_user(&self) -> AppResult<User> {
-        self.api_client.get::<User>("/users/me").await
+        self.api_client.get::<User>("/me").await
     }
 }
