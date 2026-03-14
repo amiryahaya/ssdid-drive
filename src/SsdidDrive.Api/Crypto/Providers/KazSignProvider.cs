@@ -16,6 +16,12 @@ public class KazSignProvider : ICryptoProvider, IDisposable
     private const SecurityLevel DefaultLevel = SecurityLevel.Level128;
 
     /// <summary>
+    /// Global lock for all native KAZ-Sign calls. The C library uses global mutable state
+    /// (RNG, precomputed tables) that is not thread-safe — concurrent calls cause SIGSEGV.
+    /// </summary>
+    private static readonly object NativeLock = new();
+
+    /// <summary>
     /// OID 1.3.6.1.4.1.62395.1.1.2 encoded as DER value bytes.
     /// </summary>
     private static readonly byte[] OidPubKeyValue =
@@ -26,23 +32,29 @@ public class KazSignProvider : ICryptoProvider, IDisposable
     public (byte[] PublicKey, byte[] PrivateKey) GenerateKeyPair(string? variant = null)
     {
         var level = ParseLevel(variant);
-        using var signer = new KazSigner(level);
-        signer.GenerateKeyPair(out var rawPublicKey, out var secretKey);
-        var spkiPublicKey = WrapInSpki(rawPublicKey);
-        return (spkiPublicKey, secretKey);
+        lock (NativeLock)
+        {
+            using var signer = new KazSigner(level);
+            signer.GenerateKeyPair(out var rawPublicKey, out var secretKey);
+            var spkiPublicKey = WrapInSpki(rawPublicKey);
+            return (spkiPublicKey, secretKey);
+        }
     }
 
     public byte[] Sign(byte[] message, byte[] privateKey, string? variant = null)
     {
         var level = ParseLevel(variant);
-        using var signer = new KazSigner(level);
-        // Use non-detached sign (single SHA) to match the registry's Java verifier.
-        // SignDetached does double SHA which the registry cannot verify.
-        var fullSig = signer.Sign(message, privateKey);
-        // Extract only S1||S2||S3 (signature overhead bytes), discard appended message
-        var sigOnly = new byte[signer.SignatureOverhead];
-        Array.Copy(fullSig, sigOnly, signer.SignatureOverhead);
-        return signer.SignatureToWire(sigOnly);
+        lock (NativeLock)
+        {
+            using var signer = new KazSigner(level);
+            // Use non-detached sign (single SHA) to match the registry's Java verifier.
+            // SignDetached does double SHA which the registry cannot verify.
+            var fullSig = signer.Sign(message, privateKey);
+            // Extract only S1||S2||S3 (signature overhead bytes), discard appended message
+            var sigOnly = new byte[signer.SignatureOverhead];
+            Array.Copy(fullSig, sigOnly, signer.SignatureOverhead);
+            return signer.SignatureToWire(sigOnly);
+        }
     }
 
     public bool Verify(byte[] message, byte[] signature, byte[] publicKey, string? variant = null)
@@ -65,12 +77,15 @@ public class KazSignProvider : ICryptoProvider, IDisposable
                 rawSig = signature;
 
             var level = InferLevelFromRawPublicKey(rawPk);
-            using var signer = new KazSigner(level);
-            // Use non-detached verify to match sign(): reconstruct S1||S2||S3||message
-            var fullSig = new byte[rawSig.Length + message.Length];
-            Array.Copy(rawSig, fullSig, rawSig.Length);
-            Array.Copy(message, 0, fullSig, rawSig.Length, message.Length);
-            return signer.Verify(fullSig, rawPk, out _);
+            lock (NativeLock)
+            {
+                using var signer = new KazSigner(level);
+                // Use non-detached verify to match sign(): reconstruct S1||S2||S3||message
+                var fullSig = new byte[rawSig.Length + message.Length];
+                Array.Copy(rawSig, fullSig, rawSig.Length);
+                Array.Copy(message, 0, fullSig, rawSig.Length, message.Length);
+                return signer.Verify(fullSig, rawPk, out _);
+            }
         }
         catch (KazSignException)
         {

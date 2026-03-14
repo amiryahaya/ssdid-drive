@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) return String((error as { message: unknown }).message);
+  return String(error);
+}
+
 interface User {
   id: string;
   email: string;
@@ -79,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -146,7 +153,7 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Not authenticated');
           }
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -162,7 +169,7 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Biometric unlock failed');
           }
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -176,7 +183,7 @@ export const useAuthStore = create<AuthState>()(
           const user = await invoke<User>('update_profile', { name });
           set({ user, isLoading: false });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -199,7 +206,7 @@ export const useAuthStore = create<AuthState>()(
           const devices = await invoke<Device[]>('list_devices');
           set({ devices });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message });
           throw error;
         }
@@ -211,7 +218,7 @@ export const useAuthStore = create<AuthState>()(
           await invoke('send_otp', { email, invitationToken: invitationToken ?? null });
           set({ isLoading: false });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -229,7 +236,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false });
           return { totpSetupRequired: response.totp_setup_required };
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -245,7 +252,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false });
           return { requiresTotp: response.requires_totp };
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -258,7 +265,7 @@ export const useAuthStore = create<AuthState>()(
           // Browser opens — auth continues via deep link callback
           set({ isLoading: false });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }
@@ -272,7 +279,7 @@ export const useAuthStore = create<AuthState>()(
           await get().checkAuth();
           set({ isLoading: false });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = extractErrorMessage(error);
           set({ error: message, isLoading: false });
           throw error;
         }

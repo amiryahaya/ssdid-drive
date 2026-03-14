@@ -2,30 +2,34 @@ import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { OtpInput } from '@/components/auth/OtpInput';
-import { OidcButtons } from '@/components/auth/OidcButtons';
-import { QrChallenge } from '@/components/auth/QrChallenge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
-import { Loader2, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, ArrowLeft, Ticket, Mail, Shield } from 'lucide-react';
 
-type Step = 'email' | 'otp';
+type Step = 'invite' | 'email' | 'otp';
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const inviteToken = searchParams.get('invite') || '';
+  const initialInvite = searchParams.get('invite') || '';
 
-  const { sendOtp, verifyOtp, loginWithSession, loginWithOidc, isLoading, error, clearError } = useAuthStore();
+  const { sendOtp, verifyOtp, isLoading, error, clearError } = useAuthStore();
 
-  const [step, setStep] = useState<Step>('email');
+  const [step, setStep] = useState<Step>(initialInvite ? 'email' : 'invite');
+  const [inviteToken, setInviteToken] = useState(initialInvite);
   const [email, setEmail] = useState('');
-  const [showQr, setShowQr] = useState(false);
+
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteToken.trim()) return;
+    setStep('email');
+  };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     try {
-      await sendOtp(email.trim(), inviteToken || undefined);
+      await sendOtp(email.trim(), inviteToken.trim());
       setStep('otp');
     } catch {
       // Error handled by store
@@ -34,7 +38,7 @@ export function RegisterPage() {
 
   const handleOtpComplete = async (code: string) => {
     try {
-      const result = await verifyOtp(email, code, inviteToken || undefined);
+      const result = await verifyOtp(email, code, inviteToken.trim());
       if (result.totpSetupRequired) {
         navigate('/login/totp-setup');
       } else {
@@ -45,116 +49,144 @@ export function RegisterPage() {
     }
   };
 
-  const handleOidcRegister = async (provider: 'google' | 'microsoft') => {
-    try {
-      await loginWithOidc(provider);
-      // Browser opens — registration continues via deep link callback
-    } catch {
-      // Error handled by store
-    }
-  };
+  const stepIcon = step === 'invite'
+    ? <Ticket className="h-7 w-7 text-blue-600" />
+    : step === 'email'
+      ? <Mail className="h-7 w-7 text-blue-600" />
+      : <Shield className="h-7 w-7 text-blue-600" />;
 
-  const handleQrAuthenticated = async (sessionToken: string) => {
-    try {
-      await loginWithSession(sessionToken);
-      navigate('/onboarding');
-    } catch {
-      // Error handled by store
-    }
-  };
+  const stepTitle = step === 'invite'
+    ? 'Enter Invitation Code'
+    : step === 'email'
+      ? 'Create Account'
+      : 'Verify Email';
+
+  const stepSubtitle = step === 'invite'
+    ? 'You need an invitation to register'
+    : step === 'email'
+      ? 'Enter your email to receive a verification code'
+      : `Code sent to ${email}`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10">
-      <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-xl border">
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-            <UserPlus className="h-8 w-8 text-primary" />
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div className="w-full max-w-sm">
+        <div className="border border-gray-200 rounded-xl p-8 shadow-sm">
+          {/* Header */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="h-14 w-14 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
+              {stepIcon}
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">{stepTitle}</h1>
+            <p className="text-sm text-gray-500 mt-1 text-center">{stepSubtitle}</p>
           </div>
-          <h1 className="text-2xl font-bold">Create Account</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {step === 'email' ? 'Register for SSDID Drive' : 'Enter the verification code sent to your email'}
-          </p>
-        </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded-lg">
-            {error}
-            <button onClick={clearError} className="ml-2 underline hover:no-underline">Dismiss</button>
-          </div>
-        )}
+          {/* Error */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+              {error}
+              <button onClick={clearError} className="ml-2 underline hover:no-underline cursor-pointer">
+                Dismiss
+              </button>
+            </div>
+          )}
 
-        {step === 'email' && (
-          <>
-            <form onSubmit={handleEmailSubmit} className="space-y-4">
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                autoFocus
-              />
-              {inviteToken && (
-                <div className="text-sm text-muted-foreground bg-muted rounded-lg p-3">
-                  Registering with invitation code
-                </div>
-              )}
-              <Button type="submit" className="w-full" disabled={isLoading || !email.trim()}>
-                {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending code...</> : 'Send verification code'}
+          {/* Step: Invitation */}
+          {step === 'invite' && (
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 mb-1">
+                  Invitation Code
+                </label>
+                <Input
+                  id="invite-code"
+                  type="text"
+                  placeholder="Paste your invitation code"
+                  value={inviteToken}
+                  onChange={(e) => setInviteToken(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-11 cursor-pointer"
+                disabled={!inviteToken.trim()}
+              >
+                Continue
               </Button>
             </form>
+          )}
 
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or register with</span>
+          {/* Step: Email */}
+          {step === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              <div className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3 flex items-center gap-2">
+                <Ticket className="h-4 w-4 shrink-0" />
+                <span className="truncate">Invitation: {inviteToken.slice(0, 20)}...</span>
               </div>
-            </div>
-
-            <OidcButtons onProviderClick={handleOidcRegister} disabled={isLoading} />
-
-            <div className="mt-4">
-              <button
-                onClick={() => setShowQr(!showQr)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mx-auto"
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-11 cursor-pointer"
+                disabled={isLoading || !email.trim()}
               >
-                {showQr ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                Register with SSDID Wallet
+                {isLoading ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending code...</>
+                ) : (
+                  'Send verification code'
+                )}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setStep('invite'); clearError(); }}
+                className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mx-auto cursor-pointer transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Change invitation code
               </button>
-              {showQr && (
-                <div className="mt-4">
-                  <QrChallenge action="register" onAuthenticated={handleQrAuthenticated} />
+            </form>
+          )}
+
+          {/* Step: OTP */}
+          {step === 'otp' && (
+            <div className="space-y-6">
+              <OtpInput onComplete={handleOtpComplete} disabled={isLoading} error={error ?? undefined} />
+              {isLoading && (
+                <div className="flex justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
                 </div>
               )}
+              <button
+                onClick={() => { setStep('email'); clearError(); }}
+                className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mx-auto cursor-pointer transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Use a different email
+              </button>
             </div>
-          </>
-        )}
+          )}
 
-        {step === 'otp' && (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground text-center">
-              Code sent to <strong>{email}</strong>
+          {/* Sign in link */}
+          <div className="mt-6 text-center text-sm">
+            <p className="text-gray-500">
+              Already have an account?{' '}
+              <Link to="/login" className="text-blue-600 hover:underline font-medium">
+                Sign in
+              </Link>
             </p>
-            <OtpInput onComplete={handleOtpComplete} disabled={isLoading} error={error ?? undefined} />
-            {isLoading && (
-              <div className="flex justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            <button
-              onClick={() => { setStep('email'); clearError(); }}
-              className="text-sm text-muted-foreground hover:text-foreground mx-auto block"
-            >
-              Use a different email
-            </button>
           </div>
-        )}
-
-        <div className="mt-6 text-center text-sm">
-          <p className="text-muted-foreground">
-            Already registered?{' '}
-            <Link to="/login" className="text-primary hover:underline font-medium">Sign in</Link>
-          </p>
         </div>
       </div>
     </div>
