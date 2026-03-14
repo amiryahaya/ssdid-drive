@@ -191,6 +191,7 @@ pub async fn delete_recovery_setup(state: State<'_, AppState>) -> AppResult<()> 
 
     tracing::info!("Deleting recovery setup");
 
+
     state.recovery_service().delete_setup().await
 }
 

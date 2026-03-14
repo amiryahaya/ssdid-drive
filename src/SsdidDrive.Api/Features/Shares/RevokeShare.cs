@@ -59,6 +59,7 @@ public static class RevokeShare
             logger.LogWarning(ex, "Failed to send revocation notification for share {ShareId}", share.Id);
         }
 
+
         _ = activity.LogAsync(user.Id, user.TenantId!.Value, FileActivityEventType.ShareRevoked,
             shareResourceType, shareResourceId, resourceName, resourceOwnerId,
             new { revoked_from_id = recipientId, revoked_from_name = revokedFromName }, ct);
