@@ -512,8 +512,8 @@ export const tauriService = {
     return invoke('oidc_login', { provider });
   },
 
-  async verifyOidcToken(provider: string, idToken: string, invitationToken?: string): Promise<OidcLoginResponse> {
-    return invoke('verify_oidc_token', { provider, idToken, invitationToken: invitationToken ?? null });
+  async verifyOidcToken(provider: string, idToken: string, nonce?: string, invitationToken?: string): Promise<OidcLoginResponse> {
+    return invoke('verify_oidc_token', { provider, idToken, nonce: nonce ?? null, invitationToken: invitationToken ?? null });
   },
 
   // ==================== TOTP Commands ====================

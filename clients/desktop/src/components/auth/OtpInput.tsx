@@ -51,7 +51,7 @@ export function OtpInput({ onComplete, disabled = false, error, length = 6 }: Ot
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
     if (!pasted) return;
 
-    const newValues = [...values];
+    const newValues = Array(length).fill('');
     for (let i = 0; i < pasted.length; i++) {
       newValues[i] = pasted[i];
     }
@@ -77,7 +77,7 @@ export function OtpInput({ onComplete, disabled = false, error, length = 6 }: Ot
             value={value}
             onChange={(e) => handleChange(index, e.target.value)}
             onKeyDown={(e) => handleKeyDown(index, e)}
-            onPaste={index === 0 ? handlePaste : undefined}
+            onPaste={handlePaste}
             disabled={disabled}
             className={`w-11 h-13 text-center text-xl font-mono rounded-lg border-2 bg-background transition-colors
               focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary

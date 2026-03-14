@@ -50,6 +50,8 @@ export function TotpSetupPage() {
     await navigator.clipboard.writeText(secret);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    // Clear sensitive secret from clipboard after 30 seconds
+    setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), 30000);
   };
 
   const handleDone = () => {

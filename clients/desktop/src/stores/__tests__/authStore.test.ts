@@ -50,15 +50,15 @@ describe('authStore', () => {
       expect(useAuthStore.getState().isLoading).toBe(false);
     });
 
-    it('should fall back to authenticated state when backend is not wired', async () => {
-      // The store has a fallback: if login_with_session command is not available,
-      // it still sets isAuthenticated to true
+    it('should set error and rethrow when login_with_session fails', async () => {
       mockInvoke.mockRejectedValueOnce(new Error('command not found'));
 
-      await useAuthStore.getState().loginWithSession('session-token-123');
+      await expect(
+        useAuthStore.getState().loginWithSession('session-token-123')
+      ).rejects.toThrow('command not found');
 
-      expect(useAuthStore.getState().isAuthenticated).toBe(true);
-      expect(useAuthStore.getState().isLocked).toBe(false);
+      expect(useAuthStore.getState().error).toBe('command not found');
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
       expect(useAuthStore.getState().isLoading).toBe(false);
     });
   });

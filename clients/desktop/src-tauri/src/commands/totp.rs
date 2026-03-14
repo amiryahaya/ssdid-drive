@@ -65,14 +65,7 @@ pub async fn totp_verify(
         .post_unauth("/auth/totp/verify", &Body { email, code })
         .await?;
 
-    // Save session token
-    state.auth_service().save_session(&response.token)?;
-    state.unlock();
-
-    // Fetch and cache user
-    if let Ok(user) = state.auth_service().get_current_user().await {
-        state.set_current_user(Some(user));
-    }
+    state.complete_login(&response.token).await?;
 
     Ok(response)
 }

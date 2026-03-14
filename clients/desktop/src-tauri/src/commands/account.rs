@@ -1,6 +1,6 @@
 //! Account management commands (linked logins)
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -65,8 +65,10 @@ pub async fn unlink_login(
     login_id: String,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
+    let parsed_id = uuid::Uuid::parse_str(&login_id)
+        .map_err(|_| AppError::Validation("Invalid login ID".into()))?;
     state
         .api_client()
-        .delete_no_content(&format!("/account/logins/{}", login_id))
+        .delete_no_content(&format!("/account/logins/{}", parsed_id))
         .await
 }

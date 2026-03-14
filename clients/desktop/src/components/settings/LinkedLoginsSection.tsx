@@ -19,8 +19,8 @@ export function LinkedLoginsSection() {
     try {
       const result = await tauriService.listLogins();
       setLogins(result);
-    } catch {
-      // API may not be implemented yet
+    } catch (e) {
+      showError({ title: 'Failed to load logins', description: String(e) });
     } finally {
       setIsLoading(false);
     }
