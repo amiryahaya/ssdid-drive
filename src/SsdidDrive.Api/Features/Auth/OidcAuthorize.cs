@@ -15,6 +15,7 @@ public static class OidcAuthorize
 
     private static IResult Handle(
         string provider,
+        string? redirect_uri,
         ISessionStore sessionStore,
         OidcCodeExchanger exchanger)
     {
@@ -27,8 +28,13 @@ public static class OidcAuthorize
 
         var (url, state, codeVerifier) = result.Value;
 
-        // Store state → (codeVerifier, provider) mapping via challenge store (consumed on callback)
-        sessionStore.CreateChallenge("oidc", state, codeVerifier, provider);
+        // Store state → (codeVerifier, provider) mapping via challenge store.
+        // Embed redirect_uri in the codeVerifier payload so OidcCallback can route
+        // back to the correct client (admin portal vs desktop deep link).
+        var challengePayload = string.IsNullOrEmpty(redirect_uri)
+            ? codeVerifier
+            : $"{codeVerifier}|{redirect_uri}";
+        sessionStore.CreateChallenge("oidc", state, challengePayload, provider);
 
         return Results.Redirect(url);
     }

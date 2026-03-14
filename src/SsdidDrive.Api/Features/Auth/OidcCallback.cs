@@ -37,8 +37,22 @@ public static class OidcCallback
         if (challengeEntry is null)
             return AppError.Unauthorized("Invalid or expired state parameter").ToProblemResult();
 
-        var codeVerifier = challengeEntry.Challenge;
+        // Challenge payload may contain redirect_uri: "codeVerifier|redirect_uri"
+        var challengePayload = challengeEntry.Challenge;
         var storedProvider = challengeEntry.KeyId;
+        string codeVerifier;
+        string? clientRedirectUri = null;
+
+        var pipeIndex = challengePayload.IndexOf('|');
+        if (pipeIndex >= 0)
+        {
+            codeVerifier = challengePayload[..pipeIndex];
+            clientRedirectUri = challengePayload[(pipeIndex + 1)..];
+        }
+        else
+        {
+            codeVerifier = challengePayload;
+        }
 
         if (!string.Equals(storedProvider, provider, StringComparison.OrdinalIgnoreCase))
             return AppError.Unauthorized("State/provider mismatch").ToProblemResult();
@@ -72,11 +86,11 @@ public static class OidcCallback
                 && l.ProviderSubject == oidcClaims.Subject, ct);
 
         if (existingLogin is null)
-            return RedirectWithError(config, "No account linked to this provider. Register first.");
+            return RedirectWithError(config, "No account linked to this provider. Register first.", clientRedirectUri);
 
         var user = existingLogin.Account;
         if (user.Status == UserStatus.Suspended)
-            return RedirectWithError(config, "Account is suspended");
+            return RedirectWithError(config, "Account is suspended", clientRedirectUri);
 
         // Check if user is admin/owner in any tenant
         var isAdmin = await db.UserTenants
@@ -117,25 +131,46 @@ public static class OidcCallback
 
         var sessionToken = sessionStore.CreateSession(sessionValue);
         if (sessionToken is null)
-            return RedirectWithError(config, "Session limit exceeded");
+            return RedirectWithError(config, "Session limit exceeded", clientRedirectUri);
 
         await auditService.LogAsync(user.Id,
             mfaRequired ? "auth.login.oidc.initiated" : "auth.login.oidc",
             "user", user.Id,
             $"Provider: {provider} (server-side)", ct);
 
-        // Redirect to admin portal with token
-        var adminBaseUrl = config["AdminPortal:BaseUrl"] ?? "/admin";
-        var redirectUrl = $"{adminBaseUrl}/auth/callback" +
-            $"?token={Uri.EscapeDataString(sessionToken)}" +
-            $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
-            $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
+        // Redirect to the originating client
+        var baseUrl = clientRedirectUri ?? config["AdminPortal:BaseUrl"] ?? "/admin";
+        string redirectUrl;
+
+        if (clientRedirectUri is not null)
+        {
+            // Desktop deep link: append token as query param
+            var separator = clientRedirectUri.Contains('?') ? "&" : "?";
+            redirectUrl = $"{clientRedirectUri}{separator}" +
+                $"token={Uri.EscapeDataString(sessionToken)}" +
+                $"&provider={Uri.EscapeDataString(provider)}" +
+                $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
+                $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
+        }
+        else
+        {
+            // Admin portal
+            redirectUrl = $"{baseUrl}/auth/callback" +
+                $"?token={Uri.EscapeDataString(sessionToken)}" +
+                $"&mfa_required={mfaRequired.ToString().ToLowerInvariant()}" +
+                $"&totp_setup_required={totpSetupRequired.ToString().ToLowerInvariant()}";
+        }
 
         return Results.Redirect(redirectUrl);
     }
 
-    private static IResult RedirectWithError(IConfiguration config, string error)
+    private static IResult RedirectWithError(IConfiguration config, string error, string? clientRedirectUri = null)
     {
+        if (clientRedirectUri is not null)
+        {
+            var separator = clientRedirectUri.Contains('?') ? "&" : "?";
+            return Results.Redirect($"{clientRedirectUri}{separator}error={Uri.EscapeDataString(error)}");
+        }
         var adminBaseUrl = config["AdminPortal:BaseUrl"] ?? "/admin";
         return Results.Redirect($"{adminBaseUrl}/auth/callback?error={Uri.EscapeDataString(error)}");
     }
