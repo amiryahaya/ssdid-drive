@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include <openssl/bn.h>
 #include <openssl/evp.h>
@@ -151,14 +152,28 @@ typedef struct {
 } kaz_runtime_params_t;
 
 /* Runtime parameter caches for each level.
- * THREAD SAFETY: These globals are lazily initialized and NOT thread-safe.
- * Concurrent calls to kaz_sign_*_ex() for the same level may race on
- * initialization. Call kaz_sign_init_random() from a single thread before
- * concurrent use, or protect all kaz_sign_* calls with an external mutex.
+ * THREAD SAFETY: Each level is protected by its own mutex. Concurrent calls
+ * to kaz_sign_*_ex() are safe — the mutex serializes init and use.
  * Do NOT call kaz_sign_clear_level/clear_all while other threads are active. */
 static kaz_runtime_params_t g_runtime_128 = { .initialized = 0 };
 static kaz_runtime_params_t g_runtime_192 = { .initialized = 0 };
 static kaz_runtime_params_t g_runtime_256 = { .initialized = 0 };
+
+/* Per-level mutexes for thread-safe access to runtime params */
+static pthread_mutex_t g_mutex_128 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mutex_192 = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mutex_256 = PTHREAD_MUTEX_INITIALIZER;
+
+/* Get the mutex for a security level */
+static pthread_mutex_t *get_level_mutex(kaz_sign_level_t level)
+{
+    switch (level) {
+        case KAZ_LEVEL_128: return &g_mutex_128;
+        case KAZ_LEVEL_192: return &g_mutex_192;
+        case KAZ_LEVEL_256: return &g_mutex_256;
+        default: return NULL;
+    }
+}
 
 /* ============================================================================
  * Helper Functions
@@ -315,7 +330,12 @@ static int level_to_index(kaz_sign_level_t level)
     }
 }
 
-/* Initialize runtime parameters for a specific level */
+/*
+ * Thread-safe lazy initialization of runtime parameters.
+ * Caller MUST hold the per-level mutex (get_level_mutex) when calling this.
+ * After this returns successfully, rp->initialized == 1 and all rp->* fields
+ * are immutable — safe to read from any thread without holding the mutex.
+ */
 static int init_runtime_params(kaz_runtime_params_t *rp, kaz_sign_level_t level)
 {
     int ret = KAZ_SIGN_ERROR_MEMORY;
@@ -399,22 +419,51 @@ static void clear_runtime_params(kaz_runtime_params_t *rp)
  * Public API: Level Management
  * ============================================================================ */
 
-/* Public API: Initialize a specific security level */
+/*
+ * Thread-safe lazy init: lock, check, init if needed, unlock.
+ * After success, rp->* fields are immutable and safe to read lock-free.
+ */
+static int ensure_level_initialized(kaz_sign_level_t level)
+{
+    kaz_runtime_params_t *rp = get_runtime_params(level);
+    if (!rp) return KAZ_SIGN_ERROR_INVALID;
+
+    /* Fast path: already initialized (read is safe — initialized is only
+     * set to 1 under mutex and never reverted except in clear_*) */
+    if (rp->initialized) return KAZ_SIGN_SUCCESS;
+
+    pthread_mutex_t *mtx = get_level_mutex(level);
+    if (!mtx) return KAZ_SIGN_ERROR_INVALID;
+
+    pthread_mutex_lock(mtx);
+    int ret = init_runtime_params(rp, level);
+    pthread_mutex_unlock(mtx);
+    return ret;
+}
+
+/* Public API: Initialize a specific security level (thread-safe) */
 int kaz_sign_init_level(kaz_sign_level_t level)
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
-    if (!rp) {
+    pthread_mutex_t *mtx = get_level_mutex(level);
+    if (!rp || !mtx) {
         return KAZ_SIGN_ERROR_INVALID;
     }
-    return init_runtime_params(rp, level);
+    pthread_mutex_lock(mtx);
+    int ret = init_runtime_params(rp, level);
+    pthread_mutex_unlock(mtx);
+    return ret;
 }
 
-/* Public API: Clear a specific security level */
+/* Public API: Clear a specific security level (thread-safe) */
 void kaz_sign_clear_level(kaz_sign_level_t level)
 {
     kaz_runtime_params_t *rp = get_runtime_params(level);
-    if (rp) {
+    pthread_mutex_t *mtx = get_level_mutex(level);
+    if (rp && mtx) {
+        pthread_mutex_lock(mtx);
         clear_runtime_params(rp);
+        pthread_mutex_unlock(mtx);
     }
 }
 
@@ -486,9 +535,9 @@ int kaz_sign_hash_ex(kaz_sign_level_t level,
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    /* Initialize if needed */
-    if (!rp->initialized) {
-        int ret = init_runtime_params(rp, level);
+    /* Thread-safe lazy initialization */
+    {
+        int ret = ensure_level_initialized(level);
         if (ret != KAZ_SIGN_SUCCESS) {
             return ret;
         }
@@ -570,12 +619,10 @@ int kaz_sign_keypair_ex(kaz_sign_level_t level,
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    /* Initialize if needed */
-    if (!rp->initialized) {
-        ret = init_runtime_params(rp, level);
-        if (ret != KAZ_SIGN_SUCCESS) {
-            return ret;
-        }
+    /* Thread-safe lazy initialization */
+    ret = ensure_level_initialized(level);
+    if (ret != KAZ_SIGN_SUCCESS) {
+        return ret;
     }
 
     params = rp->params;
@@ -715,12 +762,10 @@ int kaz_sign_signature_ex(kaz_sign_level_t level,
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    /* Initialize if needed */
-    if (!rp->initialized) {
-        ret = init_runtime_params(rp, level);
-        if (ret != KAZ_SIGN_SUCCESS) {
-            return ret;
-        }
+    /* Thread-safe lazy initialization */
+    ret = ensure_level_initialized(level);
+    if (ret != KAZ_SIGN_SUCCESS) {
+        return ret;
     }
 
     params = rp->params;
@@ -962,9 +1007,9 @@ int kaz_sign_verify_ex(kaz_sign_level_t level,
         return KAZ_SIGN_ERROR_INVALID;
     }
 
-    /* Initialize if needed */
-    if (!rp->initialized) {
-        int init_ret = init_runtime_params(rp, level);
+    /* Thread-safe lazy initialization */
+    {
+        int init_ret = ensure_level_initialized(level);
         if (init_ret != KAZ_SIGN_SUCCESS) {
             return init_ret;
         }

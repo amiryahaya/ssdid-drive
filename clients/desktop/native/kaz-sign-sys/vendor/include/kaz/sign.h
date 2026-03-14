@@ -26,11 +26,11 @@ extern "C" {
 
 #define KAZ_SIGN_VERSION_MAJOR     2
 #define KAZ_SIGN_VERSION_MINOR     0
-#define KAZ_SIGN_VERSION_PATCH     0
-#define KAZ_SIGN_VERSION_STRING    "2.0.0"
+#define KAZ_SIGN_VERSION_PATCH     1
+#define KAZ_SIGN_VERSION_STRING    "2.0.1"
 
 /* Version as single integer: (major * 10000) + (minor * 100) + patch */
-#define KAZ_SIGN_VERSION_NUMBER    20000
+#define KAZ_SIGN_VERSION_NUMBER    20001
 
 /* ============================================================================
  * Runtime level selection

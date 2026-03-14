@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include <openssl/bn.h>
 #include <openssl/rand.h>
@@ -97,6 +98,12 @@ typedef struct {
 
 static kaz_kem_state_t g_state = {0};
 
+/* Mutex for thread-safe access to g_state.
+ * KAZ-KEM uses a single global state (not per-level), so one mutex suffices.
+ * After kaz_kem_init() completes, g_state fields are immutable (read-only)
+ * until kaz_kem_cleanup() is called — concurrent operations are safe. */
+static pthread_mutex_t g_kem_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* ============================================================================
  * Forward Declarations
  * ============================================================================ */
@@ -180,7 +187,7 @@ static void kaz_kem_clear_state(void)
 }
 
 /**
- * Initialize KAZ-KEM with a specific security level.
+ * Initialize KAZ-KEM with a specific security level (thread-safe).
  */
 int kaz_kem_init(int level)
 {
@@ -201,8 +208,11 @@ int kaz_kem_init(int level)
             return KAZ_KEM_ERROR_INVALID_LEVEL;
     }
 
+    pthread_mutex_lock(&g_kem_mutex);
+
     /* If already initialized with same level, skip */
     if (g_state.initialized && g_state.params == params) {
+        pthread_mutex_unlock(&g_kem_mutex);
         return KAZ_KEM_SUCCESS;
     }
 
@@ -215,6 +225,7 @@ int kaz_kem_init(int level)
     /* Initialize BN context */
     g_state.bn_ctx = BN_CTX_new();
     if (!g_state.bn_ctx) {
+        pthread_mutex_unlock(&g_kem_mutex);
         return KAZ_KEM_ERROR_MEMORY;
     }
 
@@ -228,6 +239,7 @@ int kaz_kem_init(int level)
     if (!g_state.N || !g_state.g1 || !g_state.g2 ||
         !g_state.Og1N || !g_state.Og2N) {
         kaz_kem_clear_state();
+        pthread_mutex_unlock(&g_kem_mutex);
         return KAZ_KEM_ERROR_MEMORY;
     }
 
@@ -248,10 +260,12 @@ int kaz_kem_init(int level)
     if (!BN_MONT_CTX_set(g_state.mont_ctx, g_state.N, g_state.bn_ctx)) goto error;
 
     g_state.initialized = 1;
+    pthread_mutex_unlock(&g_kem_mutex);
     return KAZ_KEM_SUCCESS;
 
 error:
     kaz_kem_clear_state();
+    pthread_mutex_unlock(&g_kem_mutex);
     return KAZ_KEM_ERROR_OPENSSL;
 }
 
@@ -303,7 +317,9 @@ size_t kaz_kem_shared_secret_bytes(void)
 
 void kaz_kem_cleanup(void)
 {
+    pthread_mutex_lock(&g_kem_mutex);
     kaz_kem_clear_state();
+    pthread_mutex_unlock(&g_kem_mutex);
 }
 
 /**
@@ -328,7 +344,7 @@ const char* kaz_kem_version(void)
 #ifdef KAZ_KEM_VERSION
     return KAZ_KEM_VERSION;
 #else
-    return "2.0.0";
+    return "1.0.1";
 #endif
 }
 
@@ -871,7 +887,7 @@ int kaz_kem_privkey_from_wire(const unsigned char *wire, size_t wire_len,
 
 int KAZ_KEM_KEYGEN(unsigned char *pk, unsigned char *sk)
 {
-    /* Auto-initialize with compile-time level if not already initialized */
+    /* Thread-safe auto-initialize with compile-time level */
     if (!g_state.initialized) {
         int ret = kaz_kem_init(KAZ_SECURITY_LEVEL);
         if (ret != KAZ_KEM_SUCCESS) return ret;
