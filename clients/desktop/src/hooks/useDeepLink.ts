@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
 import { useAuthStore } from '@/stores/authStore';
@@ -182,7 +182,7 @@ export function useDeepLink() {
               if (response.totp_setup_required) {
                 navigate('/login/totp-setup');
               } else if (response.mfa_required) {
-                navigate('/login/totp-setup');
+                navigate('/login/totp-verify');
               } else {
                 success({
                   title: 'Signed in',
@@ -212,16 +212,22 @@ export function useDeepLink() {
     [isAuthenticated, navigate, success, showError, info]
   );
 
+  // Keep a ref to the latest handleDeepLink to avoid stale closures when replaying
+  const handleDeepLinkRef = useRef(handleDeepLink);
+  useEffect(() => {
+    handleDeepLinkRef.current = handleDeepLink;
+  }, [handleDeepLink]);
+
   // Handle pending deep link after authentication
   useEffect(() => {
     if (isAuthenticated) {
       const pendingLink = sessionStorage.getItem('pendingDeepLink');
       if (pendingLink) {
         sessionStorage.removeItem('pendingDeepLink');
-        handleDeepLink(pendingLink);
+        handleDeepLinkRef.current(pendingLink);
       }
     }
-  }, [isAuthenticated, handleDeepLink]);
+  }, [isAuthenticated]);
 
   // Listen for deep link events from Tauri
   useEffect(() => {

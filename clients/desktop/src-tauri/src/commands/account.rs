@@ -47,6 +47,14 @@ pub async fn link_oidc_login(
     id_token: String,
     state: State<'_, AppState>,
 ) -> AppResult<serde_json::Value> {
+    const ALLOWED_PROVIDERS: &[&str] = &["google", "microsoft"];
+    if !ALLOWED_PROVIDERS.contains(&provider.as_str()) {
+        return Err(AppError::Validation(format!(
+            "Unsupported OIDC provider: {}",
+            provider
+        )));
+    }
+
     #[derive(Serialize)]
     struct Body {
         provider: String,
