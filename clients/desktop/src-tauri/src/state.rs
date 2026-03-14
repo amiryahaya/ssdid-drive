@@ -53,6 +53,9 @@ pub struct AppState {
 
     /// Whether the app is locked (requires unlock)
     is_locked: RwLock<bool>,
+
+    /// Pending OIDC nonce for deep link spoofing protection
+    oidc_nonce: RwLock<Option<String>>,
 }
 
 impl AppState {
@@ -182,6 +185,7 @@ impl AppState {
             database,
             keyring,
             is_locked: RwLock::new(!has_session),
+            oidc_nonce: RwLock::new(None),
         })
     }
 
@@ -215,6 +219,24 @@ impl AppState {
     pub fn unlock(&self) {
         *self.is_locked.write() = false;
         tracing::info!("Application unlocked");
+    }
+
+    /// Generate and store a nonce for OIDC deep link verification
+    pub fn generate_oidc_nonce(&self) -> String {
+        let nonce = uuid::Uuid::new_v4().to_string();
+        *self.oidc_nonce.write() = Some(nonce.clone());
+        nonce
+    }
+
+    /// Validate and consume the OIDC nonce (single-use)
+    pub fn validate_oidc_nonce(&self, nonce: &str) -> bool {
+        let mut stored = self.oidc_nonce.write();
+        if stored.as_deref() == Some(nonce) {
+            *stored = None;
+            true
+        } else {
+            false
+        }
     }
 
     /// Complete login: save session, unlock, and fetch+cache user

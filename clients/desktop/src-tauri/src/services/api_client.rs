@@ -115,8 +115,10 @@ impl ApiClient {
             .send()
             .await?;
 
-        // Check for 401 and attempt refresh
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        // Check for 401 and attempt refresh (skip for auth endpoints)
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            && !endpoint.starts_with("/auth/")
+        {
             if self.try_refresh_token().await {
                 // Retry request with new token
                 let retry_response = self
@@ -172,8 +174,10 @@ impl ApiClient {
             .send()
             .await?;
 
-        // Check for 401 and attempt refresh
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        // Check for 401 and attempt refresh (skip for auth endpoints)
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            && !endpoint.starts_with("/auth/")
+        {
             if self.try_refresh_token().await {
                 // Retry request with new token
                 let retry_response = self
@@ -195,8 +199,10 @@ impl ApiClient {
             .send()
             .await?;
 
-        // Check for 401 and attempt refresh
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        // Check for 401 and attempt refresh (skip for auth endpoints)
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            && !endpoint.starts_with("/auth/")
+        {
             if self.try_refresh_token().await {
                 // Retry request with new token
                 let retry_response = self
@@ -217,8 +223,10 @@ impl ApiClient {
             .send()
             .await?;
 
-        // Check for 401 and attempt refresh
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        // Check for 401 and attempt refresh (skip for auth endpoints)
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            && !endpoint.starts_with("/auth/")
+        {
             if self.try_refresh_token().await {
                 // Retry request with new token
                 let retry_response = self

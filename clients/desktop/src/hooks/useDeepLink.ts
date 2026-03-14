@@ -144,7 +144,7 @@ export function useDeepLink() {
           break;
 
         case 'auth':
-          // OIDC callback: ssdid-drive://auth/callback?provider=google&id_token=xxx
+          // OIDC callback: ssdid-drive://auth/callback?nonce=Z&provider=google&id_token=xxx
           if (parsed.id === 'callback' && parsed.params?.provider && parsed.params?.id_token) {
             // Validate provider against allowlist
             const ALLOWED_PROVIDERS = ['google', 'microsoft'];
@@ -172,6 +172,7 @@ export function useDeepLink() {
               }>('verify_oidc_token', {
                 provider: parsed.params.provider,
                 idToken: parsed.params.id_token,
+                nonce: parsed.params.nonce || null,
                 invitationToken: null,
               });
 
