@@ -22,6 +22,7 @@ public static class EmailRegisterVerify
         OtpService otpService,
         ISessionStore sessionStore,
         AuditService auditService,
+        InvitationAcceptanceService acceptanceService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Code))
@@ -32,6 +33,11 @@ public static class EmailRegisterVerify
 
         var email = req.Email.Trim().ToLowerInvariant();
 
+        // Verify OTP before doing anything else
+        if (!await otpService.VerifyAsync(email, "register", req.Code, ct))
+            return AppError.Unauthorized("Invalid or expired verification code").ToProblemResult();
+
+        // Look up invitation to get tenantId for the new user
         var invitationToken = req.InvitationToken!.Trim();
         var invitation = await db.Invitations
             .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
@@ -41,9 +47,7 @@ public static class EmailRegisterVerify
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();
 
-        if (!await otpService.VerifyAsync(email, "register", req.Code, ct))
-            return AppError.Unauthorized("Invalid or expired verification code").ToProblemResult();
-
+        // Create user
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -63,31 +67,33 @@ public static class EmailRegisterVerify
             ProviderSubject = email,
         });
 
-        invitation.Status = InvitationStatus.Accepted;
-        invitation.InvitedUserId = user.Id;
-        invitation.AcceptedAt = DateTimeOffset.UtcNow;
-
-        db.UserTenants.Add(new UserTenant
-        {
-            UserId = user.Id,
-            TenantId = invitation.TenantId,
-            Role = invitation.Role,
-        });
-
         await db.SaveChangesAsync(ct);
 
-        var token = sessionStore.CreateSession(user.Id.ToString());
-        if (token is null)
-            return AppError.ServiceUnavailable("Session limit exceeded").ToProblemResult();
+        // Delegate invitation acceptance to shared service
+        var result = await acceptanceService.AcceptAsync(
+            user.Id,
+            email,
+            token: invitationToken,
+            ct: ct);
 
-        await auditService.LogAsync(user.Id, "auth.register.email", "user", user.Id, null, ct);
+        return result.Match(
+            ok =>
+            {
+                var token = sessionStore.CreateSession(user.Id.ToString());
+                if (token is null)
+                    return AppError.ServiceUnavailable("Session limit exceeded").ToProblemResult();
 
-        return Results.Ok(new
-        {
-            token,
-            account_id = user.Id,
-            email = user.Email,
-            requires_totp_setup = true,
-        });
+                // Audit log
+                _ = auditService.LogAsync(user.Id, "auth.register.email", "user", user.Id, null, ct);
+
+                return Results.Ok(new
+                {
+                    token,
+                    account_id = user.Id,
+                    email = user.Email,
+                    requires_totp_setup = true,
+                });
+            },
+            err => err.ToProblemResult());
     }
 }
