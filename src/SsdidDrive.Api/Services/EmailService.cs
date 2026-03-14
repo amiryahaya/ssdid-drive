@@ -6,12 +6,22 @@ namespace SsdidDrive.Api.Services;
 public interface IEmailService
 {
     Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message);
+    Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default);
 }
 
-public sealed class NullEmailService : IEmailService
+public sealed class NullEmailService(ILogger<NullEmailService> logger) : IEmailService
 {
     public Task SendInvitationAsync(string toEmail, string tenantName, string role, string shortCode, string? message)
-        => Task.CompletedTask;
+    {
+        logger.LogInformation("Invitation for {Email} to {Tenant} (code: {Code})", toEmail, tenantName, shortCode);
+        return Task.CompletedTask;
+    }
+
+    public Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default)
+    {
+        logger.LogInformation("OTP for {Email}: {Code}", toEmail, code);
+        return Task.CompletedTask;
+    }
 }
 
 public class EmailService : IEmailService
@@ -79,6 +89,41 @@ public class EmailService : IEmailService
         {
             _logger.LogError(ex, "Failed to send invitation email to {Email}", toEmail);
             // Don't throw — invitation is created regardless of email delivery
+        }
+    }
+
+    public async Task SendOtpAsync(string toEmail, string code, CancellationToken ct = default)
+    {
+        var safeCode = WebUtility.HtmlEncode(code);
+
+        var html = $"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+                <h2 style="color: #111827; margin-bottom: 8px;">Your Verification Code</h2>
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: center;">
+                    <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #111827; margin: 0; font-family: monospace;">{safeCode}</p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+                <p style="color: #9ca3af; font-size: 12px; text-align: center;">SSDID Drive — Post-quantum secure file storage</p>
+            </div>
+            """;
+
+        var emailMessage = new EmailMessage
+        {
+            From = _fromAddress,
+            Subject = "SSDID Drive - Verification Code"
+        };
+        emailMessage.To.Add(toEmail);
+        emailMessage.HtmlBody = html;
+
+        try
+        {
+            await _resend.EmailSendAsync(emailMessage, ct);
+            _logger.LogInformation("OTP email sent to {Email}", toEmail);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send OTP email to {Email}", toEmail);
         }
     }
 }

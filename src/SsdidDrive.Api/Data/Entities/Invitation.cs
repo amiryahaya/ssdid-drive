@@ -16,6 +16,7 @@ public class Invitation
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public string? AcceptedByDid { get; set; }             // DID of the user who accepted via wallet
+    public Guid? AcceptedByAccountId { get; set; }
     public DateTimeOffset? AcceptedAt { get; set; }         // When the invitation was accepted
 
     public Tenant Tenant { get; set; } = null!;

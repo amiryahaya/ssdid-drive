@@ -18,6 +18,7 @@ using SsdidDrive.Api.Features.Activity;
 using SsdidDrive.Api.Features.Admin;
 using SsdidDrive.Api.Features.Recovery;
 using SsdidDrive.Api.Features.Users;
+using SsdidDrive.Api.Features.Account;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Ssdid;
@@ -146,6 +147,17 @@ else
     builder.Services.AddHealthChecks();
 }
 
+// ── OTP Store ──
+if (!string.IsNullOrEmpty(redisConnection))
+    builder.Services.AddSingleton<IOtpStore, RedisOtpStore>();
+else
+    builder.Services.AddSingleton<IOtpStore, InMemoryOtpStore>();
+
+builder.Services.AddScoped<OtpService>();
+builder.Services.AddSingleton<TotpService>();
+builder.Services.AddSingleton<TotpEncryption>();
+builder.Services.AddSingleton<OidcTokenValidator>();
+
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
     var registryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
@@ -214,6 +226,51 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
+    // Email OTP send — 5 per IP per hour
+    options.AddPolicy("auth-otp", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
+    // TOTP verify — 5 per IP per 15 minutes
+    options.AddPolicy("auth-totp", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(15),
+            QueueLimit = 0
+        });
+    });
+
+    // TOTP recovery — 3 per IP per hour
+    options.AddPolicy("auth-recovery", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 3,
             Window = TimeSpan.FromHours(1),
             QueueLimit = 0
         });
@@ -309,6 +366,7 @@ app.MapRecoveryFeature();
 app.MapCredentialFeature();
 app.MapAdminFeature();
 app.MapActivityFeature();
+app.MapAccountFeature();
 
 // ── Serve admin SPA ──
 var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");

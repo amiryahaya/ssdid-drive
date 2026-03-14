@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SsdidDrive.Api.Data;
@@ -11,9 +12,11 @@ using SsdidDrive.Api.Data;
 namespace SsdidDrive.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260314064851_AddLoginEntityAndTotpColumns")]
+    partial class AddLoginEntityAndTotpColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -376,9 +379,6 @@ namespace SsdidDrive.Api.Migrations
                     b.Property<DateTimeOffset?>("AcceptedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("AcceptedByAccountId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("AcceptedByDid")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -706,6 +706,7 @@ namespace SsdidDrive.Api.Migrations
                         .HasDefaultValueSql("now()");
 
                     b.Property<string>("Did")
+                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
@@ -774,12 +775,7 @@ namespace SsdidDrive.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Did")
-                        .IsUnique()
-                        .HasFilter("\"Did\" IS NOT NULL");
-
-                    b.HasIndex("Email")
-                        .IsUnique()
-                        .HasFilter("\"Email\" IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("Status");
 

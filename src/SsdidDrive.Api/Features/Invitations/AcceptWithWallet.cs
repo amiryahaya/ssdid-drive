@@ -116,7 +116,7 @@ public static class AcceptWithWallet
                     .Where(i => i.Id == invitation.Id && i.Status == InvitationStatus.Pending)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(i => i.Status, InvitationStatus.Accepted)
-                        .SetProperty(i => i.InvitedUserId, user.Id)
+                        .SetProperty(i => i.InvitedUserId, user!.Id)
                         .SetProperty(i => i.AcceptedByDid, did)
                         .SetProperty(i => i.AcceptedAt, DateTimeOffset.UtcNow)
                         .SetProperty(i => i.UpdatedAt, DateTimeOffset.UtcNow), ct);
@@ -127,7 +127,7 @@ public static class AcceptWithWallet
                 // 11. Create UserTenant (handle concurrent duplicate)
                 db.UserTenants.Add(new UserTenant
                 {
-                    UserId = user.Id,
+                    UserId = user!.Id,
                     TenantId = invitation.TenantId,
                     Role = invitation.Role,
                     CreatedAt = DateTimeOffset.UtcNow
@@ -138,7 +138,7 @@ public static class AcceptWithWallet
                     invitation.InvitedById,
                     "invitation_accepted",
                     "Invitation Accepted",
-                    $"{user.DisplayName ?? user.Did} accepted your invitation",
+                    $"{user.DisplayName ?? user.Did ?? "A user"} accepted your invitation",
                     actionType: "invitation",
                     actionResourceId: invitation.Id.ToString(),
                     ct: ct);

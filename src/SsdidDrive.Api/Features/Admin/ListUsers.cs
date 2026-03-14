@@ -21,7 +21,7 @@ public static class ListUsers
             var search = pagination.Search.ToLower();
             query = query.Where(u =>
                 (u.DisplayName != null && u.DisplayName.ToLower().Contains(search)) ||
-                u.Did.ToLower().Contains(search) ||
+                (u.Did != null && u.Did.ToLower().Contains(search)) ||
                 (u.Email != null && u.Email.ToLower().Contains(search)));
         }
 
