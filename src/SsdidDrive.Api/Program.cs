@@ -146,6 +146,14 @@ else
     builder.Services.AddHealthChecks();
 }
 
+// ── OTP Store ──
+if (!string.IsNullOrEmpty(redisConnection))
+    builder.Services.AddSingleton<IOtpStore, RedisOtpStore>();
+else
+    builder.Services.AddSingleton<IOtpStore, InMemoryOtpStore>();
+
+builder.Services.AddScoped<OtpService>();
+
 builder.Services.AddHttpClient<RegistryClient>(client =>
 {
     var registryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
