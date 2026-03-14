@@ -8,9 +8,13 @@ namespace SsdidDrive.Api.Services;
 public class OidcCodeExchanger
 {
     private readonly Dictionary<string, OidcProviderConfig> _providers;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<OidcCodeExchanger> _logger;
 
-    public OidcCodeExchanger(IConfiguration config)
+    public OidcCodeExchanger(IConfiguration config, HttpClient httpClient, ILogger<OidcCodeExchanger> logger)
     {
+        _httpClient = httpClient;
+        _logger = logger;
         _providers = new Dictionary<string, OidcProviderConfig>(StringComparer.OrdinalIgnoreCase)
         {
             ["google"] = new(
@@ -38,7 +42,8 @@ public class OidcCodeExchanger
         if (!_providers.TryGetValue(provider, out var config))
             return null;
 
-        if (string.IsNullOrEmpty(config.ClientId) || string.IsNullOrEmpty(config.ClientSecret))
+        if (string.IsNullOrEmpty(config.ClientId) || string.IsNullOrEmpty(config.ClientSecret)
+            || string.IsNullOrEmpty(config.RedirectUri))
             return null;
 
         var codeVerifier = GenerateCodeVerifier();
@@ -83,12 +88,15 @@ public class OidcCodeExchanger
             ["code_verifier"] = codeVerifier,
         };
 
-        using var httpClient = new HttpClient();
-        var response = await httpClient.PostAsync(config.TokenUrl, new FormUrlEncodedContent(body), ct);
+        var response = await _httpClient.PostAsync(config.TokenUrl, new FormUrlEncodedContent(body), ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);
 
         if (!response.IsSuccessStatusCode)
-            return AppError.Unauthorized($"Token exchange failed: {response.StatusCode}");
+        {
+            _logger.LogWarning("OIDC token exchange failed for provider {Provider}: {Status} {Body}",
+                provider, response.StatusCode, responseBody);
+            return AppError.Unauthorized("Token exchange failed");
+        }
 
         var json = JsonSerializer.Deserialize<JsonElement>(responseBody);
         if (!json.TryGetProperty("id_token", out var idTokenProp))

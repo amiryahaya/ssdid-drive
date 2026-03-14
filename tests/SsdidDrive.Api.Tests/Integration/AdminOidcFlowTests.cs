@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,8 +31,10 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
 
         var response = await client.PostAsync("/api/auth/totp/setup", null);
 
-        // Should succeed (not 403 MFA required)
-        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+        // MFA gate should not block — expect 200 with TOTP secret
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.True(body.TryGetProperty("secret", out _));
     }
 
     [Fact]
@@ -40,7 +44,7 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
 
         var response = await client.PostAsJsonAsync("/api/auth/totp/setup/confirm", new { code = "000000" }, Json);
 
-        // Should NOT be 403 "MFA verification required" — any other error is fine
+        // Should NOT be 403 "MFA verification required" — code validation error is expected
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -143,6 +147,7 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
         Assert.Contains("response_type=code", location);
         Assert.Contains("code_challenge=", location);
         Assert.Contains("state=", location);
+        Assert.Contains("redirect_uri=", location);
     }
 
     [Fact]
@@ -187,6 +192,11 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
         var state = query["state"];
         Assert.False(string.IsNullOrEmpty(state));
 
+        // State should be URL-safe (no +, /, = chars)
+        Assert.DoesNotContain("+", state);
+        Assert.DoesNotContain("/", state);
+        Assert.DoesNotContain("=", state);
+
         // Verify state is consumable from session store
         using var scope = _factory.Services.CreateScope();
         var sessionStore = scope.ServiceProvider.GetRequiredService<ISessionStore>();
@@ -194,6 +204,14 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
         Assert.NotNull(challenge);
         Assert.Equal("google", challenge.KeyId);
         Assert.False(string.IsNullOrEmpty(challenge.Challenge)); // code verifier
+
+        // Verify PKCE: code_challenge in URL = SHA256(code_verifier)
+        var codeVerifier = challenge.Challenge;
+        var expectedChallenge = Convert.ToBase64String(
+                SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var actualChallenge = query["code_challenge"];
+        Assert.Equal(expectedChallenge, actualChallenge);
     }
 
     // ── OidcCallback Tests ──
@@ -253,6 +271,27 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
         var response = await client.GetAsync("/api/auth/oidc/facebook/callback?code=fake&state=fake");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OidcCallback_CrossProviderState_ReturnsUnauthorized()
+    {
+        // Get a valid Google state token
+        var noRedirectClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        var authzResp = await noRedirectClient.GetAsync("/api/auth/oidc/google/authorize");
+        var location = authzResp.Headers.Location!.ToString();
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(location).Query);
+        var googleState = query["state"]!;
+
+        // Present the Google state to the Microsoft callback endpoint
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync(
+            $"/api/auth/oidc/microsoft/callback?code=fake-code&state={Uri.EscapeDataString(googleState)}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // ── Helpers ──

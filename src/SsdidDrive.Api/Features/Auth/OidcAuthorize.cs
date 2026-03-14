@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Services;
@@ -9,15 +10,16 @@ public static class OidcAuthorize
 {
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/oidc/{provider}/authorize", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth");
 
     private static IResult Handle(
         string provider,
         ISessionStore sessionStore,
         OidcCodeExchanger exchanger)
     {
-        var stateToken = Convert.ToBase64String(
-            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        // Use hex encoding — safe in query strings without escaping
+        var stateToken = RandomNumberGenerator.GetHexString(64, lowercase: true);
 
         var result = exchanger.GetAuthorizationUrl(provider, stateToken);
         if (result is null)
@@ -26,7 +28,7 @@ public static class OidcAuthorize
         var (url, state, codeVerifier) = result.Value;
 
         // Store state → (codeVerifier, provider) mapping via challenge store (consumed on callback)
-        sessionStore.CreateChallenge("oidc", stateToken, codeVerifier, provider);
+        sessionStore.CreateChallenge("oidc", state, codeVerifier, provider);
 
         return Results.Redirect(url);
     }

@@ -15,6 +15,13 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
+    private static readonly string[] AllowedMfaPaths =
+    [
+        "/api/auth/totp/verify",
+        "/api/auth/totp/setup",
+        "/api/auth/totp/setup/confirm"
+    ];
+
     public async Task InvokeAsync(HttpContext context, ISessionStore sessionStore, AppDbContext db, CurrentUserAccessor accessor)
     {
         // Skip auth for endpoints marked with [SsdidPublic]
@@ -61,7 +68,7 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         else
         {
             // Legacy SSDID auth: session value is DID string
-            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Did == sessionValue);
+            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Did == effectiveValue);
         }
 
         if (user is null)
@@ -80,14 +87,8 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         if (mfaPending)
         {
             var path = context.Request.Path.Value ?? "";
-            var allowedMfaPaths = new[]
-            {
-                "/api/auth/totp/verify",
-                "/api/auth/totp/setup",
-                "/api/auth/totp/setup/confirm"
-            };
 
-            if (!allowedMfaPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)))
+            if (!AllowedMfaPaths.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)))
             {
                 await WriteProblem(context, 403, "MFA verification required");
                 return;
@@ -111,7 +112,7 @@ public class SsdidAuthMiddleware(RequestDelegate next)
         return context.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Type = $"https://httpstatuses.com/{status}",
-            Title = "Unauthorized",
+            Title = status switch { 403 => "Forbidden", _ => "Unauthorized" },
             Status = status,
             Detail = detail
         }, ProblemJsonOptions);

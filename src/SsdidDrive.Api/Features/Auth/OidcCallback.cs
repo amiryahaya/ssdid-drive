@@ -12,7 +12,8 @@ public static class OidcCallback
 {
     public static void Map(RouteGroupBuilder group) =>
         group.MapGet("/oidc/{provider}/callback", Handle)
-            .WithMetadata(new SsdidPublicAttribute());
+            .WithMetadata(new SsdidPublicAttribute())
+            .RequireRateLimiting("auth");
 
     private static async Task<IResult> Handle(
         string provider,
@@ -77,10 +78,6 @@ public static class OidcCallback
         if (user.Status == UserStatus.Suspended)
             return RedirectWithError(config, "Account is suspended");
 
-        user.LastLoginAt = DateTimeOffset.UtcNow;
-        user.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
-
         // Check if user is admin/owner in any tenant
         var isAdmin = await db.UserTenants
             .AnyAsync(ut => ut.UserId == user.Id
@@ -94,14 +91,15 @@ public static class OidcCallback
         {
             if (user.TotpEnabled)
             {
+                // Admin with TOTP — require MFA verification
                 sessionValue = $"mfa:{user.Id}";
                 mfaRequired = true;
             }
             else
             {
-                sessionValue = $"mfa:{user.Id}";
+                // Admin without TOTP — full session so they can call /totp/setup
+                sessionValue = user.Id.ToString();
                 totpSetupRequired = true;
-                mfaRequired = true;
             }
         }
         else
@@ -109,11 +107,21 @@ public static class OidcCallback
             sessionValue = user.Id.ToString();
         }
 
+        // Only stamp LastLoginAt for completed logins (not MFA-pending)
+        if (!mfaRequired)
+        {
+            user.LastLoginAt = DateTimeOffset.UtcNow;
+            user.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+
         var sessionToken = sessionStore.CreateSession(sessionValue);
         if (sessionToken is null)
             return RedirectWithError(config, "Session limit exceeded");
 
-        await auditService.LogAsync(user.Id, "auth.login.oidc", "user", user.Id,
+        await auditService.LogAsync(user.Id,
+            mfaRequired ? "auth.login.oidc.initiated" : "auth.login.oidc",
+            "user", user.Id,
             $"Provider: {provider} (server-side)", ct);
 
         // Redirect to admin portal with token

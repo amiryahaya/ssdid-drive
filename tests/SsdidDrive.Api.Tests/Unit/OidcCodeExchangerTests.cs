@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using SsdidDrive.Api.Services;
 
 namespace SsdidDrive.Api.Tests.Unit;
@@ -21,6 +22,7 @@ public class OidcCodeExchangerTests
         Assert.Contains("state=test-state-123", url);
         Assert.Contains("code_challenge=", url);
         Assert.Contains("code_challenge_method=S256", url);
+        Assert.Contains("redirect_uri=", url);
         Assert.Equal("test-state-123", state);
         Assert.False(string.IsNullOrEmpty(codeVerifier));
     }
@@ -66,6 +68,22 @@ public class OidcCodeExchangerTests
     }
 
     [Fact]
+    public void GetAuthorizationUrl_MissingRedirectUri_ReturnsNull()
+    {
+        var config = new Dictionary<string, string?>
+        {
+            ["Oidc:Google:ClientId"] = "google-client-id",
+            ["Oidc:Google:ClientSecret"] = "google-client-secret",
+            ["Oidc:Google:RedirectUri"] = "",
+        };
+        var exchanger = CreateExchanger(config);
+
+        var result = exchanger.GetAuthorizationUrl("google", "state");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void GetAuthorizationUrl_GeneratesUniquePkcePerCall()
     {
         var exchanger = CreateExchanger();
@@ -94,6 +112,7 @@ public class OidcCodeExchangerTests
             .AddInMemoryCollection(config)
             .Build();
 
-        return new OidcCodeExchanger(configuration);
+        return new OidcCodeExchanger(configuration, new HttpClient(),
+            NullLogger<OidcCodeExchanger>.Instance);
     }
 }
