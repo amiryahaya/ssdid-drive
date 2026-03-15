@@ -76,6 +76,28 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
             requiresAuth: true
         )
     }
+
+    // MARK: - Trustee Dashboard (pending backend implementation)
+
+    func getPendingRequests() async throws -> [RecoveryRequest] {
+        // TODO: Implement when backend adds GET /api/recovery/requests endpoint
+        return []
+    }
+
+    func getHeldShares() async throws -> [RecoveryShare] {
+        // TODO: Implement when backend adds GET /api/recovery/shares endpoint
+        return []
+    }
+
+    func approveRequest(requestId: String) async throws {
+        // TODO: Implement when backend adds POST /api/recovery/requests/{id}/approve
+        throw APIClient.APIError.serverError("Trustee approval not yet implemented on the server")
+    }
+
+    func rejectRequest(requestId: String) async throws {
+        // TODO: Implement when backend adds POST /api/recovery/requests/{id}/reject
+        throw APIClient.APIError.serverError("Trustee rejection not yet implemented on the server")
+    }
 }
 
 /// Empty response for endpoints that return 201/204
