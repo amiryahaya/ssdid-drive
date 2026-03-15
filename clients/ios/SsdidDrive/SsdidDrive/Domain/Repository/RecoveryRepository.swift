@@ -35,6 +35,15 @@ protocol RecoveryRepository {
 
     /// Reject a recovery request.
     func rejectRequest(requestId: String) async throws
+
+    /// Get available trustees for recovery setup.
+    func getTrustees() async throws -> [User]
+
+    /// Get the current user's own recovery request (if any).
+    func getMyRecoveryRequest() async throws -> RecoveryRequest?
+
+    /// Initiate a new recovery request.
+    func initiateRecovery() async throws -> RecoveryRequest
 }
 
 struct RecoveryStatusResponse: Codable {

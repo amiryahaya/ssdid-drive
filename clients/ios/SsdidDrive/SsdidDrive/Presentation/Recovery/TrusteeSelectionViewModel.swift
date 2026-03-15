@@ -56,22 +56,9 @@ final class TrusteeSelectionViewModel: BaseViewModel {
                 let trustees = try await recoveryRepository.getTrustees()
                 await MainActor.run {
                     // Filter trustees by query (simple email/name search)
-                    self.searchResults = trustees.compactMap { trustee in
-                        guard trustee.email.lowercased().contains(query.lowercased()) ||
-                              (trustee.displayName?.lowercased().contains(query.lowercased()) ?? false) else {
-                            return nil
-                        }
-                        // Convert Trustee to User for selection
-                        return User(
-                            id: trustee.userId,
-                            email: trustee.email,
-                            displayName: trustee.displayName,
-                            tenantId: nil,
-                            createdAt: Date(),
-                            updatedAt: Date(),
-                            encryptedMasterKey: nil,
-                            keyDerivationSalt: nil
-                        )
+                    self.searchResults = trustees.filter { trustee in
+                        trustee.email.lowercased().contains(query.lowercased()) ||
+                        (trustee.displayName?.lowercased().contains(query.lowercased()) ?? false)
                     }
                     self.isSearching = false
                 }
@@ -108,12 +95,15 @@ final class TrusteeSelectionViewModel: BaseViewModel {
         Task {
             do {
                 // Setup recovery with selected trustees
-                let trusteeEmails = selectedTrustees.map { $0.email }
-                let threshold = max(2, selectedTrustees.count / 2 + 1) // Default threshold
-
+                // TODO: Implement full Shamir split + trustee invitation flow
+                // For now, this calls the low-level setupRecovery with placeholder values.
+                // The full implementation should:
+                // 1. Generate Shamir shares from the master key
+                // 2. Encrypt each share for the respective trustee
+                // 3. Send encrypted shares to trustees via the backend
                 _ = try await recoveryRepository.setupRecovery(
-                    threshold: threshold,
-                    trusteeEmails: trusteeEmails
+                    serverShare: "",  // TODO: generate and split master key
+                    keyProof: ""      // TODO: sign proof with master key
                 )
 
                 await MainActor.run {

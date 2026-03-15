@@ -113,8 +113,14 @@ final class RecoveryViewModel: BaseViewModel {
                 )
 
                 // Re-enroll: the key material is restored; authenticate with the server
-                let token = try await recoveryRepository.completeRecovery()
-                let tokenString = String(data: token, encoding: .utf8) ?? token.base64EncodedString()
+                // TODO: Generate new DID + key proof from reconstructed key for full recovery
+                let response = try await recoveryRepository.completeRecovery(
+                    oldDid: "",       // TODO: extract from recovery file
+                    newDid: "",       // TODO: generate new DID
+                    keyProof: "",     // TODO: sign proof with reconstructed key
+                    kemPublicKey: ""  // TODO: generate new KEM keypair
+                )
+                let tokenString = response.token
 
                 isLoading = false
                 step = .success(token: tokenString)
@@ -155,7 +161,10 @@ final class RecoveryViewModel: BaseViewModel {
     }
 
     private func fetchServerShare(did: String) async throws -> ShamirSecretSharing.Share {
-        let shareData = try await recoveryRepository.getServerShare(did: did)
+        let response = try await recoveryRepository.getServerShare(did: did)
+        guard let shareData = Data(base64Encoded: response.serverShare) else {
+            throw RecoveryFlowError.invalidFileFormat
+        }
         return try ShamirSecretSharing.Share.deserialize(shareData)
     }
 

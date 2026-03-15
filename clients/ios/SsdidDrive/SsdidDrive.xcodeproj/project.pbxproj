@@ -192,7 +192,6 @@
 		B597A1B225DE732A84099674 /* InitiateRecoveryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AE9E4D8BC2FE9719456CF2B /* InitiateRecoveryViewController.swift */; };
 		B67645A89AA013D392ECEF7C /* SecureSharingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEADB5AD1EC2F8E7D5E9C51E /* SecureSharingApp.swift */; };
 		B67F836D89AAD71E106FA9B3 /* KazSignNative.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E0C300C698839113E3A402C /* KazSignNative.xcframework */; };
-		B6B68CCDC0339A09BF304909 /* ssdid_sdk_ffi.swift in Sources */ = {isa = PBXBuildFile; fileRef = D398412033FE3F37AFE19931 /* ssdid_sdk_ffi.swift */; };
 		B741524E801424224CE24247 /* AppNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA30859DB58E33BD62CE5BEC /* AppNotification.swift */; };
 		B7E8D7EC0F6F5DBF82D5D955 /* SecurityManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A68165227B7FA76728949CE /* SecurityManagerTests.swift */; };
 		B80AB752C150AF2ECA5AFC68 /* FPSyncAnchorStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E111BE32F93032857A530E /* FPSyncAnchorStore.swift */; };
@@ -448,7 +447,6 @@
 		8411670A6AD770AF3CD07081 /* ShamirSecretSharingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShamirSecretSharingTests.swift; sourceTree = "<group>"; };
 		84EA94962EDB3D339CBD3A55 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
 		84F19790E6DA325AABDD0D45 /* BaseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseViewModel.swift; sourceTree = "<group>"; };
-		87846EF88892930348689017 /* ssdid_sdk_ffiFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ssdid_sdk_ffiFFI.h; sourceTree = "<group>"; };
 		87D4562F9A1EE3DDF4C77D74 /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		88A9624C8170A96A929AAD6A /* TotpVerifyViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TotpVerifyViewModel.swift; sourceTree = "<group>"; };
 		8A928FEDD0F4A1BBDCC4DA24 /* FPTemporaryStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPTemporaryStorage.swift; sourceTree = "<group>"; };
@@ -509,7 +507,6 @@
 		C4B80601C8C75323FE61E59C /* TenantRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TenantRepositoryImpl.swift; sourceTree = "<group>"; };
 		C6EA45DF2CEA0D6F0C8B2C5F /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		C75300BBD1EBE1EC146217D2 /* KeyManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyManagerTests.swift; sourceTree = "<group>"; };
-		CA35717BC391114861D8A757 /* ssdid_sdk_ffiFFI.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = ssdid_sdk_ffiFFI.modulemap; sourceTree = "<group>"; };
 		CB6D493797AA70F4357E1548 /* InviteAcceptViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteAcceptViewModelTests.swift; sourceTree = "<group>"; };
 		CCDFD6071CE4BD98AF8C832E /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
 		CE5BA4C44A034A434B5A01CD /* JoinTenantViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoinTenantViewModelTests.swift; sourceTree = "<group>"; };
@@ -520,7 +517,6 @@
 		D01D7A4298CA59553FD42466 /* ShareRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRepositoryImpl.swift; sourceTree = "<group>"; };
 		D0353728B68336C3F5CA2D9E /* InvitationsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitationsListView.swift; sourceTree = "<group>"; };
 		D26556A5BCE203011B42A299 /* MenuBarHelperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarHelperApp.swift; sourceTree = "<group>"; };
-		D398412033FE3F37AFE19931 /* ssdid_sdk_ffi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ssdid_sdk_ffi.swift; sourceTree = "<group>"; };
 		D3C2EE0CD6A0B0357FC51772 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D41017675CF54E6B425EACFA /* InvitationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitationsViewModel.swift; sourceTree = "<group>"; };
 		D602E355C199D9382FDC984D /* ConversationCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCell.swift; sourceTree = "<group>"; };
@@ -1173,7 +1169,6 @@
 				0F58CF5E46973807BBD00D87 /* Extensions */,
 				5B7D7756C36033186A62B5B6 /* Security */,
 				BA1D7511AF36663C2B11E7AE /* Spotlight */,
-				E08237BD085E3F99B738DC61 /* SsdidSdk */,
 				C5D19D3733872E1312C78FC7 /* Utils */,
 			);
 			path = Core;
@@ -1256,16 +1251,6 @@
 				7132A1AB63DC00AA9FEB457C /* ConversationListViewModel.swift */,
 			);
 			path = ConversationList;
-			sourceTree = "<group>";
-		};
-		E08237BD085E3F99B738DC61 /* SsdidSdk */ = {
-			isa = PBXGroup;
-			children = (
-				D398412033FE3F37AFE19931 /* ssdid_sdk_ffi.swift */,
-				87846EF88892930348689017 /* ssdid_sdk_ffiFFI.h */,
-				CA35717BC391114861D8A757 /* ssdid_sdk_ffiFFI.modulemap */,
-			);
-			path = SsdidSdk;
 			sourceTree = "<group>";
 		};
 		E144EC88D2E8CF95CA1B0005 /* Helpers */ = {
@@ -1878,7 +1863,6 @@
 				D42D8FDD9EFFD313294A7006 /* WebAuthnRepository.swift in Sources */,
 				FA5CCBB0ED50929AF9BA771E /* WebAuthnRepositoryImpl.swift in Sources */,
 				42F60271BB1DD379D6C8DC30 /* WindowManager.swift in Sources */,
-				B6B68CCDC0339A09BF304909 /* ssdid_sdk_ffi.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

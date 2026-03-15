@@ -91,12 +91,27 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
 
     func approveRequest(requestId: String) async throws {
         // TODO: Implement when backend adds POST /api/recovery/requests/{id}/approve
-        throw APIClient.APIError.serverError("Trustee approval not yet implemented on the server")
+        throw APIClient.APIError.serverError
     }
 
     func rejectRequest(requestId: String) async throws {
         // TODO: Implement when backend adds POST /api/recovery/requests/{id}/reject
-        throw APIClient.APIError.serverError("Trustee rejection not yet implemented on the server")
+        throw APIClient.APIError.serverError
+    }
+
+    func getTrustees() async throws -> [User] {
+        // TODO: Implement when backend adds GET /api/recovery/trustees
+        return []
+    }
+
+    func getMyRecoveryRequest() async throws -> RecoveryRequest? {
+        // TODO: Implement when backend adds GET /api/recovery/my-request
+        return nil
+    }
+
+    func initiateRecovery() async throws -> RecoveryRequest {
+        // TODO: Implement when backend adds POST /api/recovery/initiate
+        throw APIClient.APIError.serverError
     }
 }
 
