@@ -29,7 +29,11 @@ data class InviteAcceptUiState(
     val isLoading: Boolean = false,
     val isWaitingForWallet: Boolean = false,
     val isRegistered: Boolean = false,
-    val registrationError: String? = null
+    val registrationError: String? = null,
+
+    // Multi-auth state
+    val isAcceptingAsExisting: Boolean = false,
+    val acceptError: String? = null
 )
 
 /**
@@ -170,5 +174,29 @@ class InviteAcceptViewModel @Inject constructor(
     fun handleWalletError(message: String) {
         savedStateHandle["isWaitingForWallet"] = false
         _uiState.update { it.copy(isWaitingForWallet = false, registrationError = message) }
+    }
+
+    /**
+     * Handle the result from an OIDC sign-in (Google or Microsoft).
+     * Uses the existing oidcVerify endpoint with the invitation token
+     * to register/login and accept the invitation in one step.
+     */
+    fun handleOidcResult(provider: String, idToken: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, registrationError = null, acceptError = null) }
+            when (authRepository.oidcVerify(provider, idToken, _uiState.value.token)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isLoading = false, isRegistered = true) }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            registrationError = "Sign-in failed. Please try again."
+                        )
+                    }
+                }
+            }
+        }
     }
 }

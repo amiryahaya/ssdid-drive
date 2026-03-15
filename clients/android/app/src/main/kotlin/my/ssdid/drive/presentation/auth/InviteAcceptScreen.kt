@@ -23,12 +23,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import my.ssdid.drive.util.WalletCallbackHolder
 
 /**
- * Screen for accepting an invitation via SSDID Wallet.
+ * Screen for accepting an invitation via multiple auth methods:
+ * existing account, email registration, OIDC (Google/Microsoft), or SSDID Wallet.
  */
 @Composable
 fun InviteAcceptScreen(
     onRegistrationSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit,
+    onNavigateToEmailRegister: (invitationToken: String) -> Unit = {},
+    onOidcLogin: (provider: String) -> Unit = {},
     viewModel: InviteAcceptViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -107,25 +110,102 @@ fun InviteAcceptScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Accept with SSDID Wallet button
-            Button(
-                onClick = { viewModel.acceptWithWallet() },
-                enabled = !uiState.isLoading && !uiState.isWaitingForWallet,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
+            // Multi-auth section — hidden when waiting for wallet
+            if (!uiState.isWaitingForWallet) {
+                // Existing user: sign in to accept
+                OutlinedButton(
+                    onClick = onNavigateToLogin,
+                    enabled = !uiState.isLoading && !uiState.isAcceptingAsExisting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (uiState.isAcceptingAsExisting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Sign In to Accept")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "or create account",
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Continue with Email
+                OutlinedButton(
+                    onClick = { onNavigateToEmailRegister(uiState.token) },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
+                    Text("Continue with Email")
                 }
-                Text("Accept with SSDID Wallet")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sign in with Google
+                OutlinedButton(
+                    onClick = { onOidcLogin("google") },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Sign in with Google")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sign in with Microsoft
+                OutlinedButton(
+                    onClick = { onOidcLogin("microsoft") },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Sign in with Microsoft")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Accept with SSDID Wallet (primary action)
+                Button(
+                    onClick = { viewModel.acceptWithWallet() },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Accept with SSDID Wallet")
+                }
             }
 
             // Error display
-            uiState.registrationError?.let { error ->
+            val errorMessage = uiState.acceptError ?: uiState.registrationError
+            errorMessage?.let { error ->
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = error,
@@ -149,12 +229,14 @@ fun InviteAcceptScreen(
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                 )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(onClick = onNavigateToLogin) {
-                Text("Already have an account? Sign in")
+                TextButton(onClick = {
+                    viewModel.handleWalletError("Cancelled")
+                }) {
+                    Text("Cancel")
+                }
             }
         }
 

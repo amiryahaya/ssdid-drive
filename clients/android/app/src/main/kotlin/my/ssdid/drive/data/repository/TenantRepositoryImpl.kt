@@ -10,6 +10,7 @@ import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
 import my.ssdid.drive.data.remote.dto.CreateInvitationRequest
 import my.ssdid.drive.data.remote.dto.InviteMemberRequest
+import my.ssdid.drive.data.remote.dto.SubmitTenantRequestBody
 import my.ssdid.drive.data.remote.dto.TenantDto
 import my.ssdid.drive.data.remote.dto.TenantSwitchRequest
 import my.ssdid.drive.data.remote.dto.UpdateMemberRoleRequest
@@ -25,6 +26,7 @@ import my.ssdid.drive.domain.model.PublicKeys
 import my.ssdid.drive.domain.model.Tenant
 import my.ssdid.drive.domain.model.TenantConfig
 import my.ssdid.drive.domain.model.TenantContext
+import my.ssdid.drive.domain.model.TenantRequestResult
 import my.ssdid.drive.domain.model.TenantMember
 import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.domain.model.UserRole
@@ -280,6 +282,35 @@ class TenantRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Result.error(AppException.Network("Failed to get tenant users", e))
+        }
+    }
+
+    // ==================== Tenant Requests ====================
+
+    override suspend fun submitTenantRequest(organizationName: String, reason: String?): Result<TenantRequestResult> {
+        return try {
+            val response = apiService.submitTenantRequest(
+                SubmitTenantRequestBody(organizationName, reason)
+            )
+
+            if (response.isSuccessful) {
+                val dto = response.body()!!
+                Result.success(
+                    TenantRequestResult(
+                        id = dto.id,
+                        organizationName = dto.organizationName,
+                        status = dto.status
+                    )
+                )
+            } else {
+                when (response.code()) {
+                    401 -> Result.error(AppException.Unauthorized())
+                    409 -> Result.error(AppException.Conflict("You already have a pending request"))
+                    else -> Result.error(AppException.Unknown("Failed to submit tenant request: ${response.code()}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.error(AppException.Network("Failed to submit tenant request", e))
         }
     }
 

@@ -30,6 +30,8 @@ import my.ssdid.drive.data.remote.dto.MoveFileRequest
 import my.ssdid.drive.data.remote.dto.MoveFolderRequest
 import my.ssdid.drive.data.remote.dto.PublicKeyResponse
 import my.ssdid.drive.data.remote.dto.RegisterPushRequest
+import my.ssdid.drive.data.remote.dto.SubmitTenantRequestBody
+import my.ssdid.drive.data.remote.dto.TenantRequestResponseDto
 import my.ssdid.drive.data.remote.dto.SetExpiryRequest
 import my.ssdid.drive.data.remote.dto.SetupRecoveryRequest
 import my.ssdid.drive.data.remote.dto.ShareFileRequest
@@ -88,6 +90,14 @@ interface ApiService {
 
     @GET("tenant/users")
     suspend fun getTenantUsers(): Response<UsersResponse>
+
+    // ==================== Tenant Requests ====================
+
+    /**
+     * Submit a request to create a new tenant/organization.
+     */
+    @POST("tenant-requests")
+    suspend fun submitTenantRequest(@Body request: SubmitTenantRequestBody): Response<TenantRequestResponseDto>
 
     // ==================== Member Management ====================
 

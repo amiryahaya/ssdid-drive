@@ -9,6 +9,7 @@ import my.ssdid.drive.domain.model.SentInvitation
 import my.ssdid.drive.domain.model.Tenant
 import my.ssdid.drive.domain.model.TenantConfig
 import my.ssdid.drive.domain.model.TenantContext
+import my.ssdid.drive.domain.model.TenantRequestResult
 import my.ssdid.drive.domain.model.TenantMember
 import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.domain.model.UserRole
@@ -96,6 +97,17 @@ interface TenantRepository {
      * Used for sharing and recovery trustee selection.
      */
     suspend fun getTenantUsers(): Result<List<User>>
+
+    // ==================== Tenant Requests ====================
+
+    /**
+     * Submit a request to create a new tenant/organization.
+     *
+     * @param organizationName The desired organization name
+     * @param reason Optional reason for the request
+     * @return Result containing the tenant request details or an error
+     */
+    suspend fun submitTenantRequest(organizationName: String, reason: String? = null): Result<TenantRequestResult>
 
     // ==================== Member Management ====================
 

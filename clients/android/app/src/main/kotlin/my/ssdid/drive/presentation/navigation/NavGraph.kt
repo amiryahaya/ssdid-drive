@@ -15,6 +15,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import my.ssdid.drive.util.AnalyticsManager
 import my.ssdid.drive.presentation.auth.InviteAcceptScreen
+import my.ssdid.drive.presentation.auth.InviteEmailRegisterScreen
 import my.ssdid.drive.presentation.auth.LockScreen
 import my.ssdid.drive.presentation.auth.LoginScreen
 import my.ssdid.drive.presentation.auth.RegisterScreen
@@ -186,7 +187,30 @@ fun NavGraph(
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.InviteAccept.route) { inclusive = true }
                     }
+                },
+                onNavigateToEmailRegister = { token ->
+                    navController.navigate(Screen.InviteEmailRegister.createRoute(token))
+                },
+                onOidcLogin = { _ ->
+                    // OIDC is handled by the InviteAcceptViewModel via native SDK callbacks
                 }
+            )
+        }
+
+        // Invitation email registration (email + OTP for new users with invitation)
+        composable(
+            route = Screen.InviteEmailRegister.route,
+            arguments = listOf(
+                navArgument(Screen.ARG_TOKEN) { type = NavType.StringType }
+            )
+        ) {
+            InviteEmailRegisterScreen(
+                onRegistrationSuccess = {
+                    navController.navigate(Screen.Files.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
