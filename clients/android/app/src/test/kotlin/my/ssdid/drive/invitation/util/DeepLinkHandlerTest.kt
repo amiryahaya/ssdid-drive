@@ -71,23 +71,23 @@ class DeepLinkHandlerTest {
     }
 
     @Test
-    fun `parseIntent with invite callback missing status returns WalletInviteError action`() {
+    fun `parseIntent with invite callback missing status but has token returns WalletInviteCallback`() {
         val intent = createMockViewIntent(
             scheme = "ssdiddrive",
             host = "invite",
             pathSegments = listOf("callback"),
-            queryParams = mapOf("session_token" to "tok-xyz") // no status
+            queryParams = mapOf("session_token" to "tok-xyz") // no status — legacy callback
         )
 
         val action = deepLinkHandler.parseIntent(intent)
 
-        // status defaults to "" so not "success" — treated as error
-        assertTrue(action is DeepLinkAction.WalletInviteError)
-        assertEquals("Invitation failed", (action as DeepLinkAction.WalletInviteError).message)
+        // No status but has session_token — treat as success (legacy callback)
+        assertTrue(action is DeepLinkAction.WalletInviteCallback)
+        assertEquals("tok-xyz", (action as DeepLinkAction.WalletInviteCallback).sessionToken)
     }
 
     @Test
-    fun `parseIntent with invite callback success missing session_token returns WalletInviteError`() {
+    fun `parseIntent with invite callback success missing session_token returns error`() {
         val intent = createMockViewIntent(
             scheme = "ssdiddrive",
             host = "invite",
@@ -97,6 +97,7 @@ class DeepLinkHandlerTest {
 
         val action = deepLinkHandler.parseIntent(intent)
 
+        // success status but no session_token — falls through to error
         assertTrue(action is DeepLinkAction.WalletInviteError)
     }
 

@@ -2,8 +2,6 @@ package my.ssdid.drive.util
 
 import android.content.Intent
 import android.net.Uri
-import uniffi.ssdid_sdk_ffi.FfiCallback
-import uniffi.ssdid_sdk_ffi.parseCallback
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -75,21 +73,22 @@ class DeepLinkHandler @Inject constructor() {
                 val segment = pathSegments.firstOrNull()
                 if (segment == "callback") {
                     // ssdiddrive://invite/callback?session_token=...&status=...
-                    try {
-                        val callback = parseCallback(uri.toString())
-                        val sessionToken = uri.getQueryParameter("session_token")
-                        when {
-                            callback is FfiCallback.Success && sessionToken != null ->
-                                DeepLinkAction.WalletInviteCallback(sessionToken)
-                            callback is FfiCallback.Error ->
-                                DeepLinkAction.WalletInviteError(uri.getQueryParameter("message") ?: "Unknown error")
-                            callback is FfiCallback.Denied -> null
-                            else -> null
-                        }
-                    } catch (_: Exception) {
-                        // SDK parse failed — fallback to manual extraction
-                        val sessionToken = uri.getQueryParameter("session_token")
-                        if (sessionToken != null) DeepLinkAction.WalletInviteCallback(sessionToken) else null
+                    val sessionToken = uri.getQueryParameter("session_token")
+                    val status = uri.getQueryParameter("status") ?: ""
+
+                    when {
+                        status == "success" && sessionToken != null ->
+                            DeepLinkAction.WalletInviteCallback(sessionToken)
+                        status == "error" ->
+                            DeepLinkAction.WalletInviteError(
+                                uri.getQueryParameter("message") ?: "Invitation failed"
+                            )
+                        status == "denied" -> null
+                        sessionToken != null ->
+                            // No status but has token — treat as success (legacy callback)
+                            DeepLinkAction.WalletInviteCallback(sessionToken)
+                        else ->
+                            DeepLinkAction.WalletInviteError("Invitation failed")
                     }
                 } else {
                     // ssdiddrive://invite/{token} — open invitation acceptance screen
