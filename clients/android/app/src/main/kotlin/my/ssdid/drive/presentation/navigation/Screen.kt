@@ -28,6 +28,9 @@ sealed class Screen(val route: String) {
     data object InviteAccept : Screen("invite/{token}") {
         fun createRoute(token: String) = "invite/${URLEncoder.encode(token, "UTF-8")}"
     }
+    data object InviteEmailRegister : Screen("invite/{token}/email") {
+        fun createRoute(token: String) = "invite/${URLEncoder.encode(token, "UTF-8")}/email"
+    }
 
     // Main screens
     data object Files : Screen("files")
@@ -69,6 +72,7 @@ sealed class Screen(val route: String) {
 
     // Tenant screens
     data object JoinTenant : Screen("join-tenant")
+    data object TenantRequest : Screen("tenant-request")
 
     // File operations
     data object FilePreview : Screen("file/{fileId}/preview") {

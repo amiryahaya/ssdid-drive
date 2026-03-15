@@ -111,6 +111,12 @@ fun NavGraph(
                 onNavigateToTotp = { email ->
                     navController.navigate(Screen.TotpVerify.createRoute(email))
                 },
+                onNavigateToJoinTenant = {
+                    navController.navigate(Screen.JoinTenant.route)
+                },
+                onNavigateToTenantRequest = {
+                    navController.navigate(Screen.TenantRequest.route)
+                },
                 onOidcLogin = { _ ->
                     // OIDC is handled by the LoginViewModel via native SDK callbacks
                 }
