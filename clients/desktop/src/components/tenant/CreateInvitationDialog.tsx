@@ -152,6 +152,15 @@ export function CreateInvitationDialog({
                   Sent to {result.email}
                 </p>
               )}
+              {result.email && (
+                <p className={`text-xs mt-1 flex items-center gap-1 ${result.email_sent ? 'text-green-600' : 'text-amber-600'}`}>
+                  {result.email_sent ? (
+                    <><Check className="h-3 w-3" /> Email delivered</>
+                  ) : (
+                    <><Mail className="h-3 w-3" /> Email failed to send — share the code manually</>
+                  )}
+                </p>
+              )}
             </div>
 
             <DialogFooter>

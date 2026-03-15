@@ -19,6 +19,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { InvitationsPage } from '@/pages/InvitationsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { JoinTenantPage } from '@/pages/JoinTenantPage';
+import { TenantRequestPage } from '@/pages/TenantRequestPage';
 import { RecoveryPage } from '@/pages/RecoveryPage';
 import { EmailLoginPage } from '@/pages/EmailLoginPage';
 import { TotpSetupPage } from '@/pages/TotpSetupPage';
@@ -161,6 +162,10 @@ function App() {
         <Route
           path="/join"
           element={<JoinTenantRoute />}
+        />
+        <Route
+          path="/request-org"
+          element={<TenantRequestPage />}
         />
         <Route
           path="/onboarding"

@@ -160,6 +160,9 @@ export function LoginPage() {
             <Link to="/recover" className="block text-gray-400 hover:text-gray-600 transition-colors">
               Lost your device? Recover your account
             </Link>
+            <Link to="/request-org" className="block text-gray-400 hover:text-gray-600 transition-colors">
+              Need an organization? Request one
+            </Link>
           </div>
         </div>
       </div>

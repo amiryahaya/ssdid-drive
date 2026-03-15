@@ -43,6 +43,8 @@ export interface CreateInvitationResponse {
   role: TenantRole;
   email: string | null;
   expires_at: string | null;
+  email_sent: boolean;
+  email_error: string | null;
 }
 
 interface PaginatedResponse<T> {
