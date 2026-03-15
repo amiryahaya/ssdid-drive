@@ -1,4 +1,4 @@
-using SsdidDrive.Api.Crypto.Providers;
+using Ssdid.Sdk.Server.Crypto.Providers;
 
 namespace SsdidDrive.Api.Tests.Crypto.Providers;
 

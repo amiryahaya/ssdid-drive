@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Crypto;
+using Ssdid.Sdk.Server.Crypto.Providers;
+using Ssdid.Sdk.Server.Encoding;
+using Ssdid.Sdk.Server.Identity;
+using Ssdid.Sdk.Server.Registry;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -136,7 +138,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
         var regBody = await regResp.Content.ReadFromJsonAsync<JsonElement>();
 
         // Sign with garbage
-        var fakeSignature = SsdidCrypto.MultibaseEncode(new byte[64]);
+        var fakeSignature = SsdidEncoding.MultibaseEncode(new byte[64]);
 
         var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
             new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = fakeSignature },
@@ -301,7 +303,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
             }
         };
 
-        var result = SsdidCrypto.CanonicalJson(input);
+        var result = SsdidEncoding.CanonicalJson(input);
         Assert.Equal("{\"a\":\"first\",\"m\":{\"a\":1,\"b\":2},\"z\":\"last\"}", result);
     }
 
@@ -313,7 +315,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
         var doc = new Dictionary<string, object> { ["id"] = "did:ssdid:test" };
         var opts = new Dictionary<string, object> { ["type"] = "Ed25519Signature2020" };
 
-        var payload = SsdidCrypto.W3cSigningPayload(doc, opts);
+        var payload = SsdidEncoding.W3cSigningPayload(doc, opts);
 
         // SHA3-256 produces 32 bytes each → 64 bytes total
         Assert.Equal(64, payload.Length);

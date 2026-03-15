@@ -3,10 +3,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
+using Ssdid.Sdk.Server.Crypto;
+using Ssdid.Sdk.Server.Crypto.Providers;
+using Ssdid.Sdk.Server.Encoding;
 using SsdidDrive.Api.Data;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Identity;
+using Ssdid.Sdk.Server.Registry;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -280,7 +283,7 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
     public async Task SessionStore_CollectExpired_CleansUpOrphanedWaiters()
     {
         using var scope = _factory.Services.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<SessionStore>();
+        var store = scope.ServiceProvider.GetRequiredService<global::Ssdid.Sdk.Server.Session.InMemory.InMemorySessionStore>();
 
         // Create a waiter for a fake challenge_id
         using var cts = new CancellationTokenSource();
@@ -385,7 +388,7 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         var identity = scope.ServiceProvider.GetRequiredService<SsdidIdentity>();
         var cryptoFactory = scope.ServiceProvider.GetRequiredService<CryptoProviderFactory>();
 
-        var sigBytes = SsdidCrypto.MultibaseDecode(serverSignature);
+        var sigBytes = SsdidEncoding.MultibaseDecode(serverSignature);
         var challengeBytes = System.Text.Encoding.UTF8.GetBytes(challenge);
 
         var verified = cryptoFactory.Verify(identity.AlgorithmType, challengeBytes, sigBytes, identity.PublicKey);

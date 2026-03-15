@@ -1,6 +1,6 @@
+using Ssdid.Sdk.Server.Auth;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Middleware;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
 

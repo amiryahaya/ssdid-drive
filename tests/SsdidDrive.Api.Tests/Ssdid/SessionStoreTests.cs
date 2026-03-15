@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Time.Testing;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Session.InMemory;
 
 namespace SsdidDrive.Api.Tests.Ssdid;
 
@@ -8,7 +8,7 @@ public class SessionStoreTests
     [Fact]
     public async Task WaitForCompletion_And_NotifyCompletion_Roundtrip()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var challengeId = "test-challenge-1";
         var expectedToken = "session-token-abc";
 
@@ -27,7 +27,7 @@ public class SessionStoreTests
     [Fact]
     public async Task WaitForCompletion_TimesOut_WhenNoCompletion()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var challengeId = "test-challenge-timeout";
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
@@ -39,7 +39,7 @@ public class SessionStoreTests
     [Fact]
     public async Task WaitForCompletion_Cancels_WhenTokenCancelled()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var challengeId = "test-challenge-cancel";
 
         using var cts = new CancellationTokenSource();
@@ -55,7 +55,7 @@ public class SessionStoreTests
     [Fact]
     public void NotifyCompletion_ReturnsFalse_WhenNoWaiter()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
 
         var result = store.NotifyCompletion("nonexistent-challenge", "token");
 
@@ -65,7 +65,7 @@ public class SessionStoreTests
     [Fact]
     public async Task WaitForCompletion_MultipleWaiters_SameChallengeId_ShareResult()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var challengeId = "shared-challenge";
         var expectedToken = "shared-token";
 
@@ -83,7 +83,7 @@ public class SessionStoreTests
     [Fact]
     public void NotifyCompletion_SecondCall_ReturnsFalse()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var challengeId = "once-challenge";
 
         _ = store.WaitForCompletion(challengeId, CancellationToken.None);
@@ -98,7 +98,7 @@ public class SessionStoreTests
     public void GetSession_ExpiredSession_ReturnsNull()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var store = new SessionStore(clock: clock);
+        var store = new InMemorySessionStore(clock: clock);
         var did = "did:ssdid:expired-session";
         var token = store.CreateSession(did);
         Assert.NotNull(token);
@@ -114,7 +114,7 @@ public class SessionStoreTests
     public void GetSession_SlidingExpiration_ExtendsLifetime()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var store = new SessionStore(clock: clock);
+        var store = new InMemorySessionStore(clock: clock);
         var did = "did:ssdid:sliding-test";
         var token = store.CreateSession(did);
         Assert.NotNull(token);
@@ -139,7 +139,7 @@ public class SessionStoreTests
     public void ConsumeChallenge_ExpiredChallenge_ReturnsNull()
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        var store = new SessionStore(clock: clock);
+        var store = new InMemorySessionStore(clock: clock);
         var did = "did:ssdid:expired-challenge";
         var purpose = "register";
 
@@ -155,7 +155,7 @@ public class SessionStoreTests
     [Fact]
     public void CreateSession_MaxSessionsCap_ReturnsNull()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
 
         // Fill up to MaxSessions (10,000) using the internal direct method
         for (var i = 0; i < 10_000; i++)
@@ -169,7 +169,7 @@ public class SessionStoreTests
     [Fact]
     public void GetSession_ValidSession_ReturnsDid()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var did = "did:ssdid:ttl-test";
         var token = store.CreateSession(did);
 
@@ -182,7 +182,7 @@ public class SessionStoreTests
     [Fact]
     public void GetSession_DeletedSession_ReturnsNull()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var did = "did:ssdid:deleted-session";
         var token = store.CreateSession(did);
         Assert.NotNull(token);
@@ -196,7 +196,7 @@ public class SessionStoreTests
     [Fact]
     public void ConsumeChallenge_ValidChallenge_ReturnsEntry()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var did = "did:ssdid:challenge-ttl";
         var purpose = "register";
 
@@ -211,7 +211,7 @@ public class SessionStoreTests
     [Fact]
     public void ConsumeChallenge_AlreadyConsumed_ReturnsNull()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var did = "did:ssdid:challenge-double";
         var purpose = "register";
 
@@ -228,7 +228,7 @@ public class SessionStoreTests
     [Fact]
     public void GetSession_NonExistentToken_ReturnsNull()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var result = store.GetSession("nonexistent-token");
         Assert.Null(result);
     }
@@ -236,7 +236,7 @@ public class SessionStoreTests
     [Fact]
     public void ConsumeChallenge_NonExistent_ReturnsNull()
     {
-        var store = new SessionStore();
+        var store = new InMemorySessionStore();
         var result = store.ConsumeChallenge("did:ssdid:nonexistent", "register");
         Assert.Null(result);
     }

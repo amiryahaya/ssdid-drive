@@ -10,8 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -36,6 +35,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SsdidDrive.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../ssdid-sdk-dotnet/src/Ssdid.Sdk.Server/Ssdid.Sdk.Server.csproj" />
+    <ProjectReference Include="../../../ssdid-sdk-dotnet/src/Ssdid.Sdk.Server.PqcNist/Ssdid.Sdk.Server.PqcNist.csproj" />
+    <ProjectReference Include="../../../ssdid-sdk-dotnet/src/Ssdid.Sdk.Server.KazSign/Ssdid.Sdk.Server.KazSign.csproj" />
   </ItemGroup>
 
 </Project>

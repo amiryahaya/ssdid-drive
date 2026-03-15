@@ -1,5 +1,7 @@
+using Ssdid.Sdk.Server.Encoding;
+using Ssdid.Sdk.Server.Identity;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Middleware;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
 
@@ -17,13 +19,13 @@ public static class LoginInitiate
         // challengeId is a correlation ID for SSE session delivery only —
         // the wallet authenticates by presenting a VC, not by signing this challenge.
         var challengeId = Guid.NewGuid().ToString("N");
-        var challenge = SsdidCrypto.GenerateChallenge();
+        var challenge = SsdidEncoding.GenerateChallenge();
         var serverSignature = identity.SignChallenge(challenge);
 
         // Generate a subscriber secret so only the initiator can listen on SSE
         var subscriberSecret = sseBus.CreateSubscriberSecret(challengeId);
 
-        var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidCrypto.DefaultRegistryUrl;
+        var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidEncoding.DefaultRegistryUrl;
         var serviceUrl = config["Ssdid:ServiceUrl"] ?? "";
 
         var qrPayload = new

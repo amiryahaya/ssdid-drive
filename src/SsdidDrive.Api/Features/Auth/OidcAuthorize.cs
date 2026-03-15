@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Middleware;
 using SsdidDrive.Api.Services;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
 

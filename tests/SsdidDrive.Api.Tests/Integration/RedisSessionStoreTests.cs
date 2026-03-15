@@ -2,7 +2,8 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Session;
+using Ssdid.Sdk.Server.Session.Redis;
 using StackExchange.Redis;
 using Testcontainers.Redis;
 

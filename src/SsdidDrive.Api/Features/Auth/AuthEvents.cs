@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Middleware;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
 

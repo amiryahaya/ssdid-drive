@@ -23,9 +23,12 @@ using SsdidDrive.Api.Features.ExtensionServices;
 using SsdidDrive.Api.Features.TenantRequests;
 using SsdidDrive.Api.Services;
 using SsdidDrive.Api.Middleware;
-using SsdidDrive.Api.Ssdid;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
+using Ssdid.Sdk.Server;
+using Ssdid.Sdk.Server.PqcNist;
+using Ssdid.Sdk.Server.KazSign;
+using Ssdid.Sdk.Server.Session;
+using Ssdid.Sdk.Server.Session.InMemory;
+using Ssdid.Sdk.Server.Session.Redis;
 using SsdidDrive.Api.Health;
 using Microsoft.Extensions.FileProviders;
 using Serilog;
@@ -83,38 +86,20 @@ builder.Services.AddScoped<CurrentUserAccessor>();
 // ── Storage ──
 builder.Services.AddSingleton<IStorageService, LocalStorageService>();
 
-// ── Crypto Providers ──
-builder.Services.AddSingleton<ICryptoProvider, Ed25519Provider>();
-builder.Services.AddSingleton<ICryptoProvider, EcdsaProvider>();
-builder.Services.AddSingleton<ICryptoProvider, MlDsaProvider>();
-builder.Services.AddSingleton<ICryptoProvider, SlhDsaProvider>();
-builder.Services.AddSingleton<ICryptoProvider, KazSignProvider>();
-builder.Services.AddSingleton<CryptoProviderFactory>();
-
-// ── SSDID Services ──
-builder.Services.AddSingleton<SsdidIdentity>(sp =>
+// ── SSDID SDK ──
+builder.Services.AddSsdidServer(options =>
 {
-    var factory = sp.GetRequiredService<CryptoProviderFactory>();
-    var identityPath = builder.Configuration["Ssdid:IdentityPath"]
+    options.RegistryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
+    options.IdentityPath = builder.Configuration["Ssdid:IdentityPath"]
         ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
-    var algorithmType = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
-    var identity = SsdidIdentity.LoadOrCreate(identityPath, algorithmType, factory);
-    if (identity.AlgorithmMismatch)
-    {
-        var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("SsdidIdentity");
-        log.LogWarning(
-            "Loaded identity uses {Loaded} but configured Ssdid:Algorithm is {Configured}. " +
-            "Delete {Path} to regenerate with the configured algorithm.",
-            identity.AlgorithmType, algorithmType, identityPath);
-    }
-    return identity;
+    options.Algorithm = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
+    options.Sessions.SessionTtlMinutes = builder.Configuration.GetValue("Ssdid:Sessions:SessionTtlMinutes", 60);
+    options.Sessions.ChallengeTtlMinutes = builder.Configuration.GetValue("Ssdid:Sessions:ChallengeTtlMinutes", 5);
 });
+builder.Services.AddSsdidPqcNist();
+builder.Services.AddSsdidKazSign();
 
-// ── Session Store Options ──
-builder.Services.Configure<SessionStoreOptions>(
-    builder.Configuration.GetSection(SessionStoreOptions.SectionName));
-
-// ── Session Store (Redis or in-memory) ──
+// ── Session Store (Redis override or keep SDK's in-memory default) ──
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 if (!string.IsNullOrEmpty(redisConnection))
 {
@@ -135,6 +120,7 @@ if (!string.IsNullOrEmpty(redisConnection))
     });
     builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
         ConnectionMultiplexer.Connect(redisOptions));
+    // Override SDK's default InMemorySessionStore with Redis
     builder.Services.AddSingleton<RedisSessionStore>();
     builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<RedisSessionStore>());
     builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<RedisSessionStore>());
@@ -142,10 +128,9 @@ if (!string.IsNullOrEmpty(redisConnection))
 }
 else
 {
-    builder.Services.AddSingleton<SessionStore>();
-    builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<SessionStore>());
-    builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<SessionStore>());
-    builder.Services.AddHostedService(sp => sp.GetRequiredService<SessionStore>());
+    // SDK already registers InMemorySessionStore as ISessionStore + ISseNotificationBus.
+    // Just register it as a hosted service for GC.
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<InMemorySessionStore>());
     builder.Services.AddHealthChecks();
 }
 
@@ -166,14 +151,6 @@ builder.Services.AddHttpClient<OidcCodeExchanger>(client =>
 builder.Services.AddScoped<ExtensionServiceContext>();
 builder.Services.AddSingleton<HmacReplayCache>();
 
-builder.Services.AddHttpClient<RegistryClient>(client =>
-{
-    var registryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
-    client.BaseAddress = new Uri(registryUrl);
-    client.Timeout = TimeSpan.FromSeconds(10);
-});
-
-builder.Services.AddScoped<SsdidAuthService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<InvitationAcceptanceService>();
@@ -195,7 +172,6 @@ else
     builder.Services.AddSingleton<IEmailService, NullEmailService>();
 }
 builder.Services.AddSingleton<WebAuthnChallengeStore>();
-builder.Services.AddHostedService<ServerRegistrationService>();
 
 // ── Rate Limiting ──
 builder.Services.AddRateLimiter(options =>

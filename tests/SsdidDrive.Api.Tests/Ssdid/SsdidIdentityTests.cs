@@ -1,8 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Crypto;
+using Ssdid.Sdk.Server.Crypto.Providers;
+using Ssdid.Sdk.Server.Encoding;
+using Ssdid.Sdk.Server.Identity;
 
 namespace SsdidDrive.Api.Tests.Ssdid;
 
@@ -155,7 +156,7 @@ public class SsdidIdentityTests
         var challenge = "test-challenge";
         var multibaseSig = identity.SignChallenge(challenge);
 
-        var signatureBytes = SsdidCrypto.MultibaseDecode(multibaseSig);
+        var signatureBytes = SsdidEncoding.MultibaseDecode(multibaseSig);
         var messageBytes = Encoding.UTF8.GetBytes(challenge);
         var isValid = factory.Verify(AlgorithmType, messageBytes, signatureBytes, identity.PublicKey);
 

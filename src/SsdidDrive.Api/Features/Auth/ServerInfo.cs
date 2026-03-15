@@ -1,5 +1,6 @@
+using Ssdid.Sdk.Server.Encoding;
+using Ssdid.Sdk.Server.Identity;
 using SsdidDrive.Api.Middleware;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Features.Auth;
 
@@ -13,7 +14,7 @@ public static class ServerInfo
 
     private static IResult Handle(SsdidIdentity identity, IConfiguration config)
     {
-        var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidCrypto.DefaultRegistryUrl;
+        var registryUrl = config["Ssdid:RegistryUrl"] ?? SsdidEncoding.DefaultRegistryUrl;
         return Results.Ok(new Response(identity.Did, identity.KeyId, "drive", registryUrl));
     }
 }

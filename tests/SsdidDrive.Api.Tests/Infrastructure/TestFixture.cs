@@ -4,11 +4,12 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
+using Ssdid.Sdk.Server.Crypto;
+using Ssdid.Sdk.Server.Crypto.Providers;
+using Ssdid.Sdk.Server.Identity;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
-using SsdidDrive.Api.Ssdid;
 
 namespace SsdidDrive.Api.Tests.Infrastructure;
 
@@ -29,7 +30,6 @@ public static class TestFixture
         string? systemRole = null)
     {
         did ??= $"did:ssdid:test-{Guid.NewGuid():N}";
-        var sessionToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -71,7 +71,7 @@ public static class TestFixture
         db.UserTenants.Add(userTenant);
         await db.SaveChangesAsync();
 
-        CreateSessionDirect(sessionStore, did, sessionToken);
+        var sessionToken = CreateTestSession(sessionStore, did);
 
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken);
@@ -83,7 +83,6 @@ public static class TestFixture
         SsdidDriveFactory factory, Guid tenantId, string displayName = "Tenant Member")
     {
         var did = $"did:ssdid:test-{Guid.NewGuid():N}";
-        var sessionToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -111,7 +110,7 @@ public static class TestFixture
         db.UserTenants.Add(userTenant);
         await db.SaveChangesAsync();
 
-        CreateSessionDirect(sessionStore, did, sessionToken);
+        var sessionToken = CreateTestSession(sessionStore, did);
 
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", sessionToken);
@@ -265,23 +264,11 @@ public static class TestFixture
     }
 
     /// <summary>
-    /// Dispatches CreateSessionDirect to whichever concrete session store is registered,
-    /// avoiding a hard cast that breaks when RedisSessionStore is in use.
+    /// Creates a session via the public ISessionStore API and returns the generated token.
     /// </summary>
-    private static void CreateSessionDirect(ISessionStore store, string did, string token)
+    private static string CreateTestSession(ISessionStore store, string did)
     {
-        switch (store)
-        {
-            case SessionStore inMemory:
-                inMemory.CreateSessionDirect(did, token);
-                break;
-            case RedisSessionStore redis:
-                redis.CreateSessionDirect(did, token);
-                break;
-            default:
-                throw new InvalidOperationException(
-                    $"TestFixture does not know how to inject a session into {store.GetType().Name}. " +
-                    "Add a case above or expose CreateSessionDirect on ISessionStore.");
-        }
+        var token = store.CreateSession(did);
+        return token ?? throw new InvalidOperationException("Session store returned null — session limit reached in test setup");
     }
 }

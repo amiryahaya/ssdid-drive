@@ -2,9 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using SsdidDrive.Api.Crypto;
-using SsdidDrive.Api.Crypto.Providers;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Crypto;
+using Ssdid.Sdk.Server.Crypto.Providers;
+using Ssdid.Sdk.Server.Encoding;
+using Ssdid.Sdk.Server.Identity;
+using Ssdid.Sdk.Server.KazSign.Providers;
+using Ssdid.Sdk.Server.PqcNist.Providers;
+using Ssdid.Sdk.Server.Registry;
 
 namespace SsdidDrive.Api.Tests.Integration;
 
@@ -131,7 +135,7 @@ public class RegistryIntegrationTests
             ["created"] = DateTimeOffset.UtcNow.ToString("o"),
             ["verificationMethod"] = identity.KeyId,
             ["proofPurpose"] = "assertionMethod",
-            ["proofValue"] = SsdidCrypto.MultibaseEncode(new byte[64])
+            ["proofValue"] = SsdidEncoding.MultibaseEncode(new byte[64])
         };
 
         var payload = new { did_document = didDoc, proof };
@@ -217,7 +221,7 @@ public class RegistryIntegrationTests
             ["proofPurpose"] = "assertionMethod"
         };
 
-        var payload = SsdidCrypto.W3cSigningPayload(didDoc, proofOptions);
+        var payload = SsdidEncoding.W3cSigningPayload(didDoc, proofOptions);
         var proofBytes = identity.SignRaw(payload);
 
         // Verify the W3C proof locally (C library ↔ C library)
@@ -384,7 +388,7 @@ public class RegistryIntegrationTests
         Assert.Equal(HttpStatusCode.OK, regResp.StatusCode);
 
         // Verify with garbage signature
-        var fakeSignature = SsdidCrypto.MultibaseEncode(new byte[64]);
+        var fakeSignature = SsdidEncoding.MultibaseEncode(new byte[64]);
         var verifyResp = await httpClient.PostAsJsonAsync("/api/auth/ssdid/register/verify",
             new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = fakeSignature },
             SnakeJson);
@@ -577,9 +581,9 @@ public class RegistryIntegrationTests
             ["proofPurpose"] = "assertionMethod"
         };
 
-        var payload = SsdidCrypto.W3cSigningPayload(didDoc, proofOptions);
+        var payload = SsdidEncoding.W3cSigningPayload(didDoc, proofOptions);
         var proofBytes = identity.SignRaw(payload);
-        proofOptions["proofValue"] = SsdidCrypto.MultibaseEncode(proofBytes);
+        proofOptions["proofValue"] = SsdidEncoding.MultibaseEncode(proofBytes);
 
         var reqPayload = new { did_document = didDoc, proof = proofOptions };
 

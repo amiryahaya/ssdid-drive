@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Data;
 using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Services;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Session;
 using OtpNet;
 using SsdidDrive.Api.Tests.Infrastructure;
 
@@ -348,10 +348,10 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
     {
         switch (store)
         {
-            case SessionStore inMemory:
+            case global::Ssdid.Sdk.Server.Session.InMemory.InMemorySessionStore inMemory:
                 inMemory.CreateSessionDirect(value, token);
                 break;
-            case RedisSessionStore redis:
+            case global::Ssdid.Sdk.Server.Session.Redis.RedisSessionStore redis:
                 redis.CreateSessionDirect(value, token);
                 break;
             default:

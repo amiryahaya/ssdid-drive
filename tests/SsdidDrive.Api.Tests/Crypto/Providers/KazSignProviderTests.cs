@@ -1,4 +1,4 @@
-using SsdidDrive.Api.Crypto.Providers;
+using Ssdid.Sdk.Server.KazSign.Providers;
 using SsdidDrive.Api.Tests;
 
 namespace SsdidDrive.Api.Tests.Crypto.Providers;

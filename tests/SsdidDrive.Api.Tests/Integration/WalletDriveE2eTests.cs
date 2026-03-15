@@ -5,7 +5,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Data;
-using SsdidDrive.Api.Ssdid;
+using Ssdid.Sdk.Server.Registry;
+using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
