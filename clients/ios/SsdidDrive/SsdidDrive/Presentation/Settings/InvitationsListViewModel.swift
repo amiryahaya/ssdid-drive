@@ -162,6 +162,8 @@ final class InvitationsListViewModel: BaseViewModel {
                         message: original.message,
                         tenantId: original.tenantId,
                         tenantName: original.tenantName,
+                        emailSent: original.emailSent,
+                        emailError: original.emailError,
                         createdAt: original.createdAt,
                         expiresAt: original.expiresAt
                     )

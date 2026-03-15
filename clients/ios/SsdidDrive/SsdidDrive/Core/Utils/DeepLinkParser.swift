@@ -99,30 +99,26 @@ final class DeepLinkParser {
         case "invite":
             // Check for wallet invite callback first (custom scheme only)
             if url.scheme == "ssdid-drive", pathComponents.first == "callback" {
-                do {
-                    let callback = try parseCallback(uri: url.absoluteString)
-                    switch callback {
-                    case .success:
-                        // SDK confirmed status=success, extract session_token manually
-                        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                        if let sessionToken = components?.queryItems?.first(where: { $0.name == "session_token" })?.value,
-                           !sessionToken.isEmpty {
-                            return .walletInviteCallback(sessionToken: sessionToken)
-                        }
-                        return nil
-                    case .denied:
-                        return nil
-                    case .error(let code):
-                        let message = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                            .queryItems?.first(where: { $0.name == "message" })?.value ?? code
-                        return .walletInviteError(message: message)
+                let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                let queryItems = components?.queryItems ?? []
+                let status = queryItems.first(where: { $0.name == "status" })?.value ?? ""
+                let sessionToken = queryItems.first(where: { $0.name == "session_token" })?.value
+
+                switch status {
+                case "success":
+                    if let token = sessionToken, !token.isEmpty {
+                        return .walletInviteCallback(sessionToken: token)
                     }
-                } catch {
-                    // Fallback: manual extraction for backwards compatibility
-                    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                    if let sessionToken = components?.queryItems?.first(where: { $0.name == "session_token" })?.value,
-                       !sessionToken.isEmpty {
-                        return .walletInviteCallback(sessionToken: sessionToken)
+                    return nil
+                case "error":
+                    let message = queryItems.first(where: { $0.name == "message" })?.value ?? "Invitation failed"
+                    return .walletInviteError(message: message)
+                case "denied":
+                    return nil
+                default:
+                    // No status but has token — treat as success (legacy callback)
+                    if let token = sessionToken, !token.isEmpty {
+                        return .walletInviteCallback(sessionToken: token)
                     }
                     return nil
                 }

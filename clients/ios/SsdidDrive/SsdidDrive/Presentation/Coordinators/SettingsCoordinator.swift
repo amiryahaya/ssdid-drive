@@ -263,6 +263,16 @@ extension SettingsCoordinator: SettingsViewModelCoordinatorDelegate {
 // MARK: - RecoverySetupViewModelCoordinatorDelegate
 
 extension SettingsCoordinator: RecoverySetupViewModelCoordinatorDelegate {
+    func recoverySetupDidComplete() {
+        if let settingsVC = navigationController.viewControllers.first(where: { $0 is SettingsViewController }) {
+            navigationController.popToViewController(settingsVC, animated: true)
+        }
+    }
+
+    func recoverySetupDidCancel() {
+        navigationController.popViewController(animated: true)
+    }
+
     func recoverySetupDidRequestTrusteeSelection(totalShares: Int) {
         showTrusteeSelection(totalShares: totalShares)
     }

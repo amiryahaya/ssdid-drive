@@ -76,6 +76,43 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
             requiresAuth: true
         )
     }
+
+    // MARK: - Trustee Dashboard (pending backend implementation)
+
+    func getPendingRequests() async throws -> [RecoveryRequest] {
+        // TODO: Implement when backend adds GET /api/recovery/requests endpoint
+        return []
+    }
+
+    func getHeldShares() async throws -> [RecoveryShare] {
+        // TODO: Implement when backend adds GET /api/recovery/shares endpoint
+        return []
+    }
+
+    func approveRequest(requestId: String) async throws {
+        // TODO: Implement when backend adds POST /api/recovery/requests/{id}/approve
+        throw APIClient.APIError.serverError
+    }
+
+    func rejectRequest(requestId: String) async throws {
+        // TODO: Implement when backend adds POST /api/recovery/requests/{id}/reject
+        throw APIClient.APIError.serverError
+    }
+
+    func getTrustees() async throws -> [User] {
+        // TODO: Implement when backend adds GET /api/recovery/trustees
+        return []
+    }
+
+    func getMyRecoveryRequest() async throws -> RecoveryRequest? {
+        // TODO: Implement when backend adds GET /api/recovery/my-request
+        return nil
+    }
+
+    func initiateRecovery() async throws -> RecoveryRequest {
+        // TODO: Implement when backend adds POST /api/recovery/initiate
+        throw APIClient.APIError.serverError
+    }
 }
 
 /// Empty response for endpoints that return 201/204

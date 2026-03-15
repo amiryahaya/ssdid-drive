@@ -1,4 +1,0 @@
-module ssdid_sdk_ffiFFI {
-    header "ssdid_sdk_ffiFFI.h"
-    export *
-}

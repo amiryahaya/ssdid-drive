@@ -98,7 +98,13 @@ final class InitiateRecoveryViewModel: BaseViewModel {
         Task {
             do {
                 // Complete recovery and get the recovered master key
-                _ = try await recoveryRepository.completeRecovery()
+                // TODO: Pass actual DID migration params from recovery flow
+                _ = try await recoveryRepository.completeRecovery(
+                    oldDid: "",       // TODO: from recovery request
+                    newDid: "",       // TODO: generate new DID
+                    keyProof: "",     // TODO: sign with recovered key
+                    kemPublicKey: ""  // TODO: new KEM keypair
+                )
                 await MainActor.run {
                     self.isLoading = false
                     self.coordinatorDelegate?.initiateRecoveryDidComplete()

@@ -21,6 +21,29 @@ protocol RecoveryRepository {
 
     /// Delete/deactivate recovery setup.
     func deleteSetup() async throws
+
+    // MARK: - Trustee Dashboard (pending backend implementation)
+
+    /// Get pending recovery requests where the current user is a trustee.
+    func getPendingRequests() async throws -> [RecoveryRequest]
+
+    /// Get recovery shares held by the current user as a trustee.
+    func getHeldShares() async throws -> [RecoveryShare]
+
+    /// Approve a recovery request (release share to requester).
+    func approveRequest(requestId: String) async throws
+
+    /// Reject a recovery request.
+    func rejectRequest(requestId: String) async throws
+
+    /// Get available trustees for recovery setup.
+    func getTrustees() async throws -> [User]
+
+    /// Get the current user's own recovery request (if any).
+    func getMyRecoveryRequest() async throws -> RecoveryRequest?
+
+    /// Initiate a new recovery request.
+    func initiateRecovery() async throws -> RecoveryRequest
 }
 
 struct RecoveryStatusResponse: Codable {

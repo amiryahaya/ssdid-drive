@@ -67,34 +67,41 @@ final class LoginViewModel: BaseViewModel {
                 // Extract fields from the backend's qr_payload
                 let qr = response.qrPayload
 
-                // Build requested claims from the qr_payload's required/optional arrays
-                var requestedClaims: [FfiRequestedClaim] = []
-                if let claimsDict = qr["requested_claims"] as? [String: Any] {
-                    if let required = claimsDict["required"] as? [String] {
-                        requestedClaims.append(contentsOf: required.map {
-                            FfiRequestedClaim(name: $0, required: true)
-                        })
-                    }
-                    if let optional = claimsDict["optional"] as? [String] {
-                        requestedClaims.append(contentsOf: optional.map {
-                            FfiRequestedClaim(name: $0, required: false)
-                        })
+                // Build ssdid://login?... URL using URLComponents
+                var components = URLComponents()
+                components.scheme = "ssdid"
+                components.host = "login"
+
+                var queryItems: [URLQueryItem] = []
+                queryItems.append(URLQueryItem(name: "server_url", value: qr["service_url"] as? String ?? SsdidAuthService.shared.baseURL))
+                queryItems.append(URLQueryItem(name: "service_name", value: qr["service_name"] as? String ?? "ssdid-drive"))
+                queryItems.append(URLQueryItem(name: "challenge_id", value: response.challengeId))
+                queryItems.append(URLQueryItem(name: "callback_url", value: "ssdid-drive://auth/callback"))
+
+                if let challenge = qr["challenge"] as? String {
+                    queryItems.append(URLQueryItem(name: "challenge", value: challenge))
+                }
+                if let serverDid = qr["server_did"] as? String {
+                    queryItems.append(URLQueryItem(name: "server_did", value: serverDid))
+                }
+                if let serverKeyId = qr["server_key_id"] as? String {
+                    queryItems.append(URLQueryItem(name: "server_key_id", value: serverKeyId))
+                }
+                if let serverSignature = qr["server_signature"] as? String {
+                    queryItems.append(URLQueryItem(name: "server_signature", value: serverSignature))
+                }
+                if let registryUrl = qr["registry_url"] as? String {
+                    queryItems.append(URLQueryItem(name: "registry_url", value: registryUrl))
+                }
+                if let claimsDict = qr["requested_claims"] {
+                    if let claimsData = try? JSONSerialization.data(withJSONObject: claimsDict),
+                       let claimsString = String(data: claimsData, encoding: .utf8) {
+                        queryItems.append(URLQueryItem(name: "requested_claims", value: claimsString))
                     }
                 }
 
-                // Build ssdid://login?... URL using the SDK
-                let deeplink = try buildLoginRequest(
-                    serverUrl: qr["service_url"] as? String ?? SsdidAuthService.shared.baseURL,
-                    serviceName: qr["service_name"] as? String ?? "ssdid-drive",
-                    challengeId: response.challengeId,
-                    callbackScheme: "ssdid-drive",
-                    requestedClaims: requestedClaims,
-                    challenge: qr["challenge"] as? String,
-                    serverDid: qr["server_did"] as? String,
-                    serverKeyId: qr["server_key_id"] as? String,
-                    serverSignature: qr["server_signature"] as? String,
-                    registryUrl: qr["registry_url"] as? String
-                )
+                components.queryItems = queryItems
+                let deeplink = components.string ?? ""
 
                 // QR code contains the URL string (wallet scans → parses as ssdid:// URL)
                 self.qrPayload = deeplink

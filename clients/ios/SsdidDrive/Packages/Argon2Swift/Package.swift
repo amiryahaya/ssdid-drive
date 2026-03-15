@@ -24,8 +24,6 @@ let package = Package(
             dependencies: [],
             path: "Sources/Argon2",
             exclude: [
-                "kats",
-                "vs2015",
                 "src/blake2/blamka-round-opt.h",
                 "src/run.c",
                 "src/test.c",
