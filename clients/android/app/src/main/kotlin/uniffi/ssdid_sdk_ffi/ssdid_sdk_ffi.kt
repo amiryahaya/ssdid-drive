@@ -1370,43 +1370,43 @@ public object FfiConverterTypeFfiCredentialFormat: FfiConverterRustBuffer<FfiCre
 sealed class FfiSdkException: kotlin.Exception() {
     
     class InvalidConfig(
-        
-        val `message`: kotlin.String
+
+        val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ `msg` }"
     }
-    
+
     class InvalidUrl(
-        
-        val `message`: kotlin.String
+
+        val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ `msg` }"
     }
-    
+
     class InvalidFormat(
-        
-        val `message`: kotlin.String
+
+        val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ `msg` }"
     }
-    
+
     class ResponseParseException(
-        
-        val `message`: kotlin.String
+
+        val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ `msg` }"
     }
-    
+
     class QrGenerationFailed(
-        
-        val `message`: kotlin.String
+
+        val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ `msg` }"
     }
     
 
@@ -1449,27 +1449,27 @@ public object FfiConverterTypeFfiSdkError : FfiConverterRustBuffer<FfiSdkExcepti
             is FfiSdkException.InvalidConfig -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is FfiSdkException.InvalidUrl -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is FfiSdkException.InvalidFormat -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is FfiSdkException.ResponseParseException -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is FfiSdkException.QrGenerationFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
         }
     }
@@ -1478,27 +1478,27 @@ public object FfiConverterTypeFfiSdkError : FfiConverterRustBuffer<FfiSdkExcepti
         when(value) {
             is FfiSdkException.InvalidConfig -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is FfiSdkException.InvalidUrl -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is FfiSdkException.InvalidFormat -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is FfiSdkException.ResponseParseException -> {
                 buf.putInt(4)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is FfiSdkException.QrGenerationFailed -> {
                 buf.putInt(5)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

@@ -310,6 +310,9 @@ dependencies {
     implementation(files("libs/kazkem-release.aar"))
     implementation(files("libs/kazsign-release.aar"))
 
+    // JNA - required by UniFFI/ssdid-sdk Kotlin bindings
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
+
     // Bouncy Castle - NIST PQC algorithms (ML-KEM, ML-DSA)
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")

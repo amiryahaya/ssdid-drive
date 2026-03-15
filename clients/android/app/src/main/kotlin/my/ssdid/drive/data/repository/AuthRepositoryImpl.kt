@@ -40,6 +40,8 @@ import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import uniffi.ssdid_sdk_ffi.buildLoginRequest
+import uniffi.ssdid_sdk_ffi.FfiRequestedClaim
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -68,11 +70,35 @@ class AuthRepositoryImpl @Inject constructor(
         val response = apiService.loginInitiate()
         val qr = response.qrPayload
 
-        // Build same-device deep link per ssdid-drive-deeplink-protocol.md
         val serverUrl = qr.serviceUrl.ifEmpty { BuildConfig.API_BASE_URL.removeSuffix("/api/").removeSuffix("/api") }
-        val walletUrl = "ssdid://authenticate" +
-            "?server_url=${URLEncoder.encode(serverUrl, "UTF-8")}" +
-            "&callback_url=${URLEncoder.encode("ssdiddrive://auth/callback", "UTF-8")}"
+
+        // Convert backend requested_claims to SDK format
+        val requestedClaims = mutableListOf<FfiRequestedClaim>()
+        qr.requestedClaims?.required?.forEach { name ->
+            requestedClaims.add(FfiRequestedClaim(name = name, required = true))
+        }
+        qr.requestedClaims?.optional?.forEach { name ->
+            requestedClaims.add(FfiRequestedClaim(name = name, required = false))
+        }
+        if (requestedClaims.isEmpty()) {
+            // Default claims when backend doesn't specify any
+            requestedClaims.add(FfiRequestedClaim(name = "name", required = true))
+            requestedClaims.add(FfiRequestedClaim(name = "email", required = false))
+        }
+
+        // Build same-device deep link via ssdid-sdk
+        val walletUrl = buildLoginRequest(
+            serverUrl = serverUrl,
+            serviceName = qr.serviceName,
+            challengeId = qr.challengeId,
+            callbackScheme = "ssdiddrive",
+            requestedClaims = requestedClaims,
+            challenge = qr.challenge,
+            serverDid = qr.serverDid,
+            serverKeyId = qr.serverKeyId,
+            serverSignature = qr.serverSignature,
+            registryUrl = qr.registryUrl
+        )
 
         return ChallengeInfo(
             challengeId = response.challengeId,
