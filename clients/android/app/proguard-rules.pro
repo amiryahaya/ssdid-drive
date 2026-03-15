@@ -165,3 +165,12 @@
 # OneSignal
 -keep class com.onesignal.** { *; }
 -dontwarn com.onesignal.**
+
+# ====================================================================================
+# SSDID SDK (UniFFI + JNA)
+# Required for ssdid-sdk native bindings to work with R8/ProGuard
+# ====================================================================================
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.Structure { *; }
+-keep class uniffi.ssdid_sdk_ffi.** { *; }
+-dontwarn com.sun.jna.**

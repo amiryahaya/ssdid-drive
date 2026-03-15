@@ -87,18 +87,22 @@ class AuthRepositoryImpl @Inject constructor(
         }
 
         // Build same-device deep link via ssdid-sdk
-        val walletUrl = buildLoginRequest(
-            serverUrl = serverUrl,
-            serviceName = qr.serviceName,
-            challengeId = qr.challengeId,
-            callbackScheme = "ssdiddrive",
-            requestedClaims = requestedClaims,
-            challenge = qr.challenge,
-            serverDid = qr.serverDid,
-            serverKeyId = qr.serverKeyId,
-            serverSignature = qr.serverSignature,
-            registryUrl = qr.registryUrl
-        )
+        val walletUrl = try {
+            buildLoginRequest(
+                serverUrl = serverUrl,
+                serviceName = qr.serviceName,
+                challengeId = qr.challengeId,
+                callbackScheme = "ssdiddrive",
+                requestedClaims = requestedClaims,
+                challenge = qr.challenge,
+                serverDid = qr.serverDid,
+                serverKeyId = qr.serverKeyId,
+                serverSignature = qr.serverSignature,
+                registryUrl = qr.registryUrl
+            )
+        } catch (e: Exception) {
+            throw Exception("Failed to build wallet login URL: ${e.message}", e)
+        }
 
         return ChallengeInfo(
             challengeId = response.challengeId,
