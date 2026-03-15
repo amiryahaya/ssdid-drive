@@ -99,17 +99,33 @@ final class DeepLinkParser {
         case "invite":
             // Check for wallet invite callback first (custom scheme only)
             if url.scheme == "ssdid-drive", pathComponents.first == "callback" {
-                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-                    let status = components.queryItems?.first(where: { $0.name == "status" })?.value ?? ""
-                    let sessionToken = components.queryItems?.first(where: { $0.name == "session_token" })?.value
-                    if status == "success", let token = sessionToken, !token.isEmpty {
-                        return .walletInviteCallback(sessionToken: token)
-                    } else {
-                        let message = components.queryItems?.first(where: { $0.name == "message" })?.value ?? "Invitation failed"
+                do {
+                    let callback = try parseCallback(uri: url.absoluteString)
+                    switch callback {
+                    case .success:
+                        // SDK confirmed status=success, extract session_token manually
+                        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                        if let sessionToken = components?.queryItems?.first(where: { $0.name == "session_token" })?.value,
+                           !sessionToken.isEmpty {
+                            return .walletInviteCallback(sessionToken: sessionToken)
+                        }
+                        return nil
+                    case .denied:
+                        return nil
+                    case .error(let code):
+                        let message = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                            .queryItems?.first(where: { $0.name == "message" })?.value ?? code
                         return .walletInviteError(message: message)
                     }
+                } catch {
+                    // Fallback: manual extraction for backwards compatibility
+                    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                    if let sessionToken = components?.queryItems?.first(where: { $0.name == "session_token" })?.value,
+                       !sessionToken.isEmpty {
+                        return .walletInviteCallback(sessionToken: sessionToken)
+                    }
+                    return nil
                 }
-                return nil
             }
             // Existing invitation token handling
             let token = extractResourceId(from: url, pathComponents: pathComponents)

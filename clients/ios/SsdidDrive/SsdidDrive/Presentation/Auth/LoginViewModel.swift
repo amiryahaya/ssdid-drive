@@ -64,39 +64,43 @@ final class LoginViewModel: BaseViewModel {
                 let response = try await SsdidAuthService.shared.initiateLogin()
                 self.challengeId = response.challengeId
 
-                // Build ssdid://login?... URL that the wallet understands
-                var components = URLComponents()
-                components.scheme = "ssdid"
-                components.host = "login"
-
                 // Extract fields from the backend's qr_payload
                 let qr = response.qrPayload
-                var queryItems = [
-                    URLQueryItem(name: "server_url", value: qr["service_url"] as? String ?? SsdidAuthService.shared.baseURL),
-                    URLQueryItem(name: "service_name", value: qr["service_name"] as? String ?? "ssdid-drive"),
-                    URLQueryItem(name: "challenge_id", value: response.challengeId),
-                    URLQueryItem(name: "callback_url", value: "ssdid-drive://auth/callback"),
-                ]
 
-                // Include requested_claims if present
-                if let claims = qr["requested_claims"],
-                   let claimsData = try? JSONSerialization.data(withJSONObject: claims),
-                   let claimsString = String(data: claimsData, encoding: .utf8) {
-                    queryItems.append(URLQueryItem(name: "requested_claims", value: claimsString))
+                // Build requested claims from the qr_payload's required/optional arrays
+                var requestedClaims: [FfiRequestedClaim] = []
+                if let claimsDict = qr["requested_claims"] as? [String: Any] {
+                    if let required = claimsDict["required"] as? [String] {
+                        requestedClaims.append(contentsOf: required.map {
+                            FfiRequestedClaim(name: $0, required: true)
+                        })
+                    }
+                    if let optional = claimsDict["optional"] as? [String] {
+                        requestedClaims.append(contentsOf: optional.map {
+                            FfiRequestedClaim(name: $0, required: false)
+                        })
+                    }
                 }
 
-                components.queryItems = queryItems
-
-                guard let loginUrl = components.url else {
-                    self.handleError(URLError(.badURL))
-                    return
-                }
+                // Build ssdid://login?... URL using the SDK
+                let deeplink = try buildLoginRequest(
+                    serverUrl: qr["service_url"] as? String ?? SsdidAuthService.shared.baseURL,
+                    serviceName: qr["service_name"] as? String ?? "ssdid-drive",
+                    challengeId: response.challengeId,
+                    callbackScheme: "ssdid-drive",
+                    requestedClaims: requestedClaims,
+                    challenge: qr["challenge"] as? String,
+                    serverDid: qr["server_did"] as? String,
+                    serverKeyId: qr["server_key_id"] as? String,
+                    serverSignature: qr["server_signature"] as? String,
+                    registryUrl: qr["registry_url"] as? String
+                )
 
                 // QR code contains the URL string (wallet scans → parses as ssdid:// URL)
-                self.qrPayload = loginUrl.absoluteString
+                self.qrPayload = deeplink
 
                 // Same URL for same-device deep link
-                self.walletDeepLink = loginUrl
+                self.walletDeepLink = URL(string: deeplink)
 
                 self.isLoading = false
 
