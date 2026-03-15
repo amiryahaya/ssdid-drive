@@ -5,8 +5,9 @@ namespace SsdidDrive.Api.Data;
 
 /// <summary>
 /// Design-time factory used by <c>dotnet ef migrations</c> so that the CLI
-/// can instantiate AppDbContext without bootstrapping the full application
-/// (which requires native libraries such as libkazsign).
+/// can instantiate AppDbContext without bootstrapping the full application host
+/// (which registers KazSignProvider and other SDK services that load native
+/// libraries at instantiation time).
 /// </summary>
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {

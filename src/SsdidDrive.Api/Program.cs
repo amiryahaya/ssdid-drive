@@ -120,7 +120,14 @@ if (!string.IsNullOrEmpty(redisConnection))
     });
     builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
         ConnectionMultiplexer.Connect(redisOptions));
-    // Override SDK's default InMemorySessionStore with Redis
+    // Override SDK's default InMemorySessionStore with Redis.
+    // Remove the SDK's descriptors first — AddSingleton appends (not replaces),
+    // and "last wins" is fragile. Explicit removal is safer.
+    var sdkStoreDescriptors = builder.Services
+        .Where(d => d.ServiceType == typeof(ISessionStore) || d.ServiceType == typeof(ISseNotificationBus))
+        .ToList();
+    foreach (var d in sdkStoreDescriptors) builder.Services.Remove(d);
+
     builder.Services.AddSingleton<RedisSessionStore>();
     builder.Services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<RedisSessionStore>());
     builder.Services.AddSingleton<ISseNotificationBus>(sp => sp.GetRequiredService<RedisSessionStore>());
