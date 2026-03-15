@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -341,7 +341,7 @@
 		1E9DF4479A20A5D6CDA10DBC /* LockViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockViewModel.swift; sourceTree = "<group>"; };
 		1FBF23277F8EBB14678B2AA3 /* FileEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileEncryptionService.swift; sourceTree = "<group>"; };
 		1FCE598A0D812D7D207492B0 /* CreatedSharesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreatedSharesViewController.swift; sourceTree = "<group>"; };
-		21C0476A3441FDA92EB0FEDF /* Release.xcconfig.example */ = {isa = PBXFileReference; path = Release.xcconfig.example; sourceTree = "<group>"; };
+		21C0476A3441FDA92EB0FEDF /* Release.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text; path = Release.xcconfig.example; sourceTree = "<group>"; };
 		2321C162FEDFA6312A714777 /* StatusIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusIndicatorView.swift; sourceTree = "<group>"; };
 		2405B69050010439D9A48632 /* TieredKdfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TieredKdfTests.swift; sourceTree = "<group>"; };
 		246822E588149FFE716F8AA8 /* UITestConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestConfig.swift; sourceTree = "<group>"; };
@@ -390,7 +390,7 @@
 		4801B7D0701D6911CF644359 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		4A3399E4623974F13B2391C7 /* CoreDataStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStack.swift; sourceTree = "<group>"; };
 		4BBC7C314CEB82627B8C3AE9 /* FileProviderExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProviderExtension.swift; sourceTree = "<group>"; };
-		4C15528255D075CAFD316EE3 /* SsdidDrive.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SsdidDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C15528255D075CAFD316EE3 /* SsdidDrive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SsdidDrive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D68750159CDBC9A3164FDE6 /* BasePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BasePage.swift; sourceTree = "<group>"; };
 		4F6AFC0C0416912473E9E041 /* TrusteeSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrusteeSelectionViewController.swift; sourceTree = "<group>"; };
 		51D968914D71FFD61009AD57 /* CreateInvitationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateInvitationViewModel.swift; sourceTree = "<group>"; };
@@ -416,7 +416,7 @@
 		68EC08AD2DDAABE6AF236550 /* MockTenantRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTenantRepository.swift; sourceTree = "<group>"; };
 		690B0AB6C901234416E2FED4 /* FPDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FPDecryptor.swift; sourceTree = "<group>"; };
 		69BFA0EA8DB859F79B304591 /* UserMessageCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessageCell.swift; sourceTree = "<group>"; };
-		6AA5FCB2E7273B9A2A5C65E2 /* Debug.xcconfig.example */ = {isa = PBXFileReference; path = Debug.xcconfig.example; sourceTree = "<group>"; };
+		6AA5FCB2E7273B9A2A5C65E2 /* Debug.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text; path = Debug.xcconfig.example; sourceTree = "<group>"; };
 		6AE9E4D8BC2FE9719456CF2B /* InitiateRecoveryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InitiateRecoveryViewController.swift; sourceTree = "<group>"; };
 		6C29CA432DBC2ADB3ADBD4F2 /* RecoverySetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoverySetupViewController.swift; sourceTree = "<group>"; };
 		6CA40224E56C1F20026E04AD /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
@@ -538,7 +538,7 @@
 		E213627BA15A9E6FC6E9BA53 /* ShareRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRepository.swift; sourceTree = "<group>"; };
 		E310DA56CFAA21EAD1FC9A6A /* TotpVerifyViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TotpVerifyViewController.swift; sourceTree = "<group>"; };
 		E3494A1C9530CFEA082E9BC2 /* ActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityCoordinator.swift; sourceTree = "<group>"; };
-		E385D9E112E19EE420531514 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E385D9E112E19EE420531514 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E4DDDCA7F3E91442169B77BC /* BaseViewController+Catalyst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BaseViewController+Catalyst.swift"; sourceTree = "<group>"; };
 		E6392B5F23252123BBF974B4 /* TenantRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TenantRepository.swift; sourceTree = "<group>"; };
 		E7B29EABE09EE2C57047CA51 /* CryptoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoManager.swift; sourceTree = "<group>"; };
@@ -1054,7 +1054,6 @@
 				BB8FD4B18ECBA3F4437937CD /* RecoveryFile.swift */,
 				476B67537A2F2E662A765973 /* ShamirSecretSharing.swift */,
 				D98E0940D612613E5015D5E4 /* TieredKdf.swift */,
-				F27F07D40B9CDC3E2D96249F /* PQC */,
 			);
 			path = Crypto;
 			sourceTree = "<group>";
@@ -1521,9 +1520,6 @@
 					2ABFC28B04C68A3E8926BB12 = {
 						DevelopmentTeam = "";
 					};
-					2D9384A7B894E72083755F9A = {
-						DevelopmentTeam = "";
-					};
 					805C636933E6043C3D176AF4 = {
 						DevelopmentTeam = "";
 						TestTargetID = 2D9384A7B894E72083755F9A;
@@ -1548,7 +1544,6 @@
 				E0F1ECA16421F9CD71F08FE5 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				67CC300A2EF88F1A5F262FE6 /* XCLocalSwiftPackageReference "Packages/Argon2Swift" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -1950,24 +1945,27 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SsdidDrive.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 4;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = HY5S7B8P9R;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "SSDID Drive";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = my.ssdid.drive.SsdidDrive;
+				PRODUCT_BUNDLE_IDENTIFIER = my.ssdid.drive;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -2036,24 +2034,27 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SsdidDrive.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 4;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = HY5S7B8P9R;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "SSDID Drive";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = my.ssdid.drive.SsdidDrive;
+				PRODUCT_BUNDLE_IDENTIFIER = my.ssdid.drive;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
