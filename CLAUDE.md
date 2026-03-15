@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SsdidDrive is an ASP.NET Core 10 (.NET 10) Web API for a secure file-sharing platform using SSDID (Self-Sovereign Digital Identity) authentication. There are no passwords or OAuth — authentication is purely DID-based challenge-response with Verifiable Credentials, supporting 19 post-quantum and classical algorithms.
 
+## Pre-Push CI Hook (Mandatory)
+
+A pre-push hook runs platform-specific builds before every `git push`. It detects which platforms have changes and only runs relevant checks. Push is blocked if any check fails.
+
+```bash
+# Install the hook (first-time setup or after clone)
+cp .githooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
+# Or configure git to use .githooks/ globally for this repo
+git config core.hooksPath .githooks
+```
+
+The hook checks: Backend (.NET build), Android (Gradle build), Desktop (typecheck + build), Admin (build). iOS is skipped (use Xcode). Use `git push --no-verify` only when you are certain the push is safe.
+
 ## Build & Run Commands
 
 ```bash
