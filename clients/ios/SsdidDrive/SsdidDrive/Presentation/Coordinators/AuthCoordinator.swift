@@ -42,6 +42,7 @@ final class AuthCoordinator: BaseCoordinator {
         self.loginViewModel = viewModel
 
         let loginVC = LoginViewController(viewModel: viewModel)
+        loginVC.delegate = self
         navigationController.setViewControllers([loginVC], animated: true)
     }
 
@@ -80,6 +81,35 @@ final class AuthCoordinator: BaseCoordinator {
         navigationController.present(hostingController, animated: true)
     }
 
+    /// Show the TOTP verification screen after email login
+    func showTotpVerify(email: String) {
+        let viewModel = TotpVerifyViewModel(
+            email: email,
+            apiClient: container.apiClient,
+            keychainManager: container.keychainManager
+        )
+        viewModel.coordinatorDelegate = self
+
+        let totpVC = TotpVerifyViewController(viewModel: viewModel)
+        navigationController.pushViewController(totpVC, animated: true)
+    }
+
+    /// Show the "Request Organization" screen as a modal
+    func showTenantRequest() {
+        let viewModel = TenantRequestViewModel(apiClient: container.apiClient)
+        viewModel.delegate = self
+
+        let tenantRequestView = TenantRequestView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: tenantRequestView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
 }
 
 // MARK: - LoginViewModelCoordinatorDelegate
@@ -94,6 +124,45 @@ extension AuthCoordinator: LoginViewModelCoordinatorDelegate {
     }
 }
 
+// MARK: - LoginViewControllerDelegate
+
+extension AuthCoordinator: LoginViewControllerDelegate {
+    func loginDidRequestInviteCode() {
+        showJoinTenant()
+    }
+
+    func loginDidRequestTotpVerify(email: String) {
+        showTotpVerify(email: email)
+    }
+
+    func loginDidRequestOidc(provider: String) {
+        // TODO: Launch ASWebAuthenticationSession for OIDC provider
+        let alert = UIAlertController(
+            title: "\(provider.capitalized) Sign In",
+            message: "OIDC sign-in with \(provider.capitalized) is coming soon.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        navigationController.present(alert, animated: true)
+    }
+
+    func loginDidRequestTenantRequest() {
+        showTenantRequest()
+    }
+}
+
+// MARK: - TotpVerifyViewModelCoordinatorDelegate
+
+extension AuthCoordinator: TotpVerifyViewModelCoordinatorDelegate {
+    func totpVerifyDidComplete() {
+        delegate?.authDidComplete()
+    }
+
+    func totpVerifyDidRequestRecovery(email: String) {
+        // TODO: Navigate to recovery flow if available
+    }
+}
+
 // MARK: - InviteAcceptViewModelCoordinatorDelegate
 
 extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
@@ -105,6 +174,14 @@ extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
     func inviteAcceptViewModelDidRequestLogin() {
         inviteAcceptViewModel = nil
         showLogin()
+    }
+
+    func inviteAcceptViewModelDidRequestEmailRegister(token: String) {
+        // TODO: Navigate to email registration flow with invitation token
+    }
+
+    func inviteAcceptViewModelDidRequestOidc(provider: String, token: String) {
+        // TODO: Navigate to OIDC authentication flow with provider and invitation token
     }
 }
 
@@ -121,6 +198,14 @@ extension AuthCoordinator: JoinTenantViewModelDelegate {
             // Store the pending code for the app coordinator to process after auth.
             self?.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
         }
+    }
+}
+
+// MARK: - TenantRequestViewModelDelegate
+
+extension AuthCoordinator: TenantRequestViewModelDelegate {
+    func tenantRequestDidComplete() {
+        navigationController.dismiss(animated: true)
     }
 }
 
