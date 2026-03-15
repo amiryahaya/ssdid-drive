@@ -168,6 +168,78 @@ final class InviteAcceptViewController: BaseViewController {
         return button
     }()
 
+    // Multi-auth buttons container (shown between invitation card and wallet section)
+    private lazy var authButtonsContainer: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.isHidden = true
+        return view
+    }()
+
+    private lazy var acceptAsExistingButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Sign In to Accept", for: .normal)
+        button.applySecondaryStyle()
+        button.addTarget(self, action: #selector(acceptAsExistingTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var acceptExistingSpinner: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+
+    private lazy var orCreateAccountLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "or create account"
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        return label
+    }()
+
+    private lazy var continueWithEmailButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Continue with Email", for: .normal)
+        button.applySecondaryStyle()
+        button.addTarget(self, action: #selector(continueWithEmailTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var signInWithGoogleButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Sign in with Google", for: .normal)
+        button.applySecondaryStyle()
+        button.addTarget(self, action: #selector(signInWithGoogleTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var signInWithMicrosoftButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Sign in with Microsoft", for: .normal)
+        button.applySecondaryStyle()
+        button.addTarget(self, action: #selector(signInWithMicrosoftTapped), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var acceptErrorLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textColor = .systemRed
+        label.font = .systemFont(ofSize: 14)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        return label
+    }()
+
     // Wallet action container
     private lazy var walletContainer: UIView = {
         let view = UIView()
@@ -303,6 +375,16 @@ final class InviteAcceptViewController: BaseViewController {
         errorCard.addSubview(retryButton)
         errorCard.addSubview(goToLoginButton)
 
+        // Multi-auth buttons
+        contentView.addSubview(authButtonsContainer)
+        authButtonsContainer.addSubview(acceptAsExistingButton)
+        authButtonsContainer.addSubview(acceptExistingSpinner)
+        authButtonsContainer.addSubview(acceptErrorLabel)
+        authButtonsContainer.addSubview(orCreateAccountLabel)
+        authButtonsContainer.addSubview(continueWithEmailButton)
+        authButtonsContainer.addSubview(signInWithGoogleButton)
+        authButtonsContainer.addSubview(signInWithMicrosoftButton)
+
         // Wallet action
         contentView.addSubview(walletContainer)
         walletContainer.addSubview(walletIcon)
@@ -403,8 +485,44 @@ final class InviteAcceptViewController: BaseViewController {
             goToLoginButton.widthAnchor.constraint(equalToConstant: 120),
             goToLoginButton.heightAnchor.constraint(equalToConstant: 44),
 
+            // Auth buttons container
+            authButtonsContainer.topAnchor.constraint(equalTo: invitationCard.bottomAnchor, constant: 24),
+            authButtonsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 32),
+            authButtonsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
+
+            acceptAsExistingButton.topAnchor.constraint(equalTo: authButtonsContainer.topAnchor),
+            acceptAsExistingButton.leadingAnchor.constraint(equalTo: authButtonsContainer.leadingAnchor),
+            acceptAsExistingButton.trailingAnchor.constraint(equalTo: authButtonsContainer.trailingAnchor),
+            acceptAsExistingButton.heightAnchor.constraint(equalToConstant: 50),
+
+            acceptExistingSpinner.centerYAnchor.constraint(equalTo: acceptAsExistingButton.centerYAnchor),
+            acceptExistingSpinner.trailingAnchor.constraint(equalTo: acceptAsExistingButton.trailingAnchor, constant: -16),
+
+            acceptErrorLabel.topAnchor.constraint(equalTo: acceptAsExistingButton.bottomAnchor, constant: 8),
+            acceptErrorLabel.leadingAnchor.constraint(equalTo: authButtonsContainer.leadingAnchor),
+            acceptErrorLabel.trailingAnchor.constraint(equalTo: authButtonsContainer.trailingAnchor),
+
+            orCreateAccountLabel.topAnchor.constraint(equalTo: acceptErrorLabel.bottomAnchor, constant: 16),
+            orCreateAccountLabel.centerXAnchor.constraint(equalTo: authButtonsContainer.centerXAnchor),
+
+            continueWithEmailButton.topAnchor.constraint(equalTo: orCreateAccountLabel.bottomAnchor, constant: 16),
+            continueWithEmailButton.leadingAnchor.constraint(equalTo: authButtonsContainer.leadingAnchor),
+            continueWithEmailButton.trailingAnchor.constraint(equalTo: authButtonsContainer.trailingAnchor),
+            continueWithEmailButton.heightAnchor.constraint(equalToConstant: 50),
+
+            signInWithGoogleButton.topAnchor.constraint(equalTo: continueWithEmailButton.bottomAnchor, constant: 12),
+            signInWithGoogleButton.leadingAnchor.constraint(equalTo: authButtonsContainer.leadingAnchor),
+            signInWithGoogleButton.trailingAnchor.constraint(equalTo: authButtonsContainer.trailingAnchor),
+            signInWithGoogleButton.heightAnchor.constraint(equalToConstant: 50),
+
+            signInWithMicrosoftButton.topAnchor.constraint(equalTo: signInWithGoogleButton.bottomAnchor, constant: 12),
+            signInWithMicrosoftButton.leadingAnchor.constraint(equalTo: authButtonsContainer.leadingAnchor),
+            signInWithMicrosoftButton.trailingAnchor.constraint(equalTo: authButtonsContainer.trailingAnchor),
+            signInWithMicrosoftButton.heightAnchor.constraint(equalToConstant: 50),
+            signInWithMicrosoftButton.bottomAnchor.constraint(equalTo: authButtonsContainer.bottomAnchor),
+
             // Wallet container
-            walletContainer.topAnchor.constraint(equalTo: invitationCard.bottomAnchor, constant: 24),
+            walletContainer.topAnchor.constraint(equalTo: authButtonsContainer.bottomAnchor, constant: 24),
             walletContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             walletContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             walletContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
@@ -483,6 +601,7 @@ final class InviteAcceptViewController: BaseViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isWaiting in
                 self?.waitingStack.isHidden = !isWaiting
+                self?.authButtonsContainer.isHidden = isWaiting || self?.viewModel.invitation == nil || self?.viewModel.invitation?.valid == false
                 if isWaiting {
                     self?.waitingActivityIndicator.startAnimating()
                 } else {
@@ -499,6 +618,28 @@ final class InviteAcceptViewController: BaseViewController {
                 self?.registrationErrorLabel.isHidden = error == nil
             }
             .store(in: &cancellables)
+
+        // Accepting as existing user
+        viewModel.$isAcceptingAsExisting
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] accepting in
+                self?.acceptAsExistingButton.isEnabled = !accepting
+                if accepting {
+                    self?.acceptExistingSpinner.startAnimating()
+                } else {
+                    self?.acceptExistingSpinner.stopAnimating()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Accept error
+        viewModel.$acceptError
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] error in
+                self?.acceptErrorLabel.text = error
+                self?.acceptErrorLabel.isHidden = error == nil
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - UI Updates
@@ -507,11 +648,13 @@ final class InviteAcceptViewController: BaseViewController {
         guard let invitation = invitation, invitation.valid else {
             invitationCard.isHidden = true
             walletContainer.isHidden = true
+            authButtonsContainer.isHidden = true
             return
         }
 
         invitationCard.isHidden = false
         walletContainer.isHidden = false
+        authButtonsContainer.isHidden = false
         errorCard.isHidden = true
 
         tenantNameLabel.text = invitation.tenantName
@@ -541,6 +684,7 @@ final class InviteAcceptViewController: BaseViewController {
 
         invitationCard.isHidden = true
         walletContainer.isHidden = true
+        authButtonsContainer.isHidden = true
         errorCard.isHidden = false
         errorMessageLabel.text = error
     }
@@ -558,6 +702,26 @@ final class InviteAcceptViewController: BaseViewController {
     }
 
     // MARK: - Actions
+
+    @objc private func acceptAsExistingTapped() {
+        triggerHapticFeedback()
+        viewModel.acceptAsExistingUser()
+    }
+
+    @objc private func continueWithEmailTapped() {
+        triggerSelectionFeedback()
+        viewModel.requestEmailRegister()
+    }
+
+    @objc private func signInWithGoogleTapped() {
+        triggerSelectionFeedback()
+        viewModel.requestOidc(provider: "google")
+    }
+
+    @objc private func signInWithMicrosoftTapped() {
+        triggerSelectionFeedback()
+        viewModel.requestOidc(provider: "microsoft")
+    }
 
     @objc private func acceptWithWalletTapped() {
         triggerHapticFeedback()

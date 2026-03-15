@@ -15,6 +15,7 @@ protocol SettingsViewModelCoordinatorDelegate: AnyObject {
     func settingsDidRequestCredentials()
     func settingsDidRequestTenantSwitcher()
     func settingsDidRequestJoinTenant()
+    func settingsDidRequestRequestTenant()
     func settingsDidRequestLogout()
 }
 
@@ -66,6 +67,7 @@ final class SettingsViewModel: BaseViewModel {
         case credentials
         case tenant
         case joinTenant
+        case requestTenant
         case biometric
         case autoLock
         case autoLockTimeout
@@ -249,7 +251,7 @@ final class SettingsViewModel: BaseViewModel {
         case .account:
             return [.profile, .devices, .invitationsList]
         case .organization:
-            var items: [SettingsItem] = [.tenant, .joinTenant]
+            var items: [SettingsItem] = [.tenant, .joinTenant, .requestTenant]
             // Admin/Owner-only items
             if isAdminOrOwner {
                 items.append(.createInvitation)
@@ -278,6 +280,10 @@ final class SettingsViewModel: BaseViewModel {
 
     func showJoinTenant() {
         coordinatorDelegate?.settingsDidRequestJoinTenant()
+    }
+
+    func showRequestTenant() {
+        coordinatorDelegate?.settingsDidRequestRequestTenant()
     }
 
     /// Whether the current user is admin or owner in the current tenant

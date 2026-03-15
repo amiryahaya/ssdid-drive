@@ -122,6 +122,21 @@ final class SettingsCoordinator: BaseCoordinator {
         navigationController.present(hostingController, animated: true)
     }
 
+    func showRequestTenant() {
+        let viewModel = TenantRequestViewModel(apiClient: container.apiClient)
+        viewModel.delegate = self
+
+        let tenantRequestView = TenantRequestView(viewModel: viewModel)
+        let hostingController = UIHostingController(rootView: tenantRequestView)
+
+        if let sheet = hostingController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+
+        navigationController.present(hostingController, animated: true)
+    }
+
     func showInvitationsList() {
         let viewModel = InvitationsListViewModel(apiClient: container.apiClient)
 
@@ -236,6 +251,10 @@ extension SettingsCoordinator: SettingsViewModelCoordinatorDelegate {
         showJoinTenant()
     }
 
+    func settingsDidRequestRequestTenant() {
+        showRequestTenant()
+    }
+
     func settingsDidRequestLogout() {
         delegate?.settingsCoordinatorDidRequestLogout()
     }
@@ -280,5 +299,13 @@ extension SettingsCoordinator: JoinTenantViewModelDelegate {
     func joinTenantDidRequestLogin(inviteCode: String) {
         // Authenticated flow only in settings, so this is a no-op.
         // The unauthenticated flow is handled by AuthCoordinator.
+    }
+}
+
+// MARK: - TenantRequestViewModelDelegate
+
+extension SettingsCoordinator: TenantRequestViewModelDelegate {
+    func tenantRequestDidComplete() {
+        navigationController.dismiss(animated: true)
     }
 }

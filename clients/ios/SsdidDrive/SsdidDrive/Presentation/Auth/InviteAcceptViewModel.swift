@@ -5,6 +5,8 @@ import Combine
 protocol InviteAcceptViewModelCoordinatorDelegate: AnyObject {
     func inviteAcceptViewModelDidRegister()
     func inviteAcceptViewModelDidRequestLogin()
+    func inviteAcceptViewModelDidRequestEmailRegister(token: String)
+    func inviteAcceptViewModelDidRequestOidc(provider: String, token: String)
 }
 
 /// View model for invitation acceptance screen.
@@ -26,7 +28,7 @@ final class InviteAcceptViewModel: BaseViewModel {
     // MARK: - Properties
 
     private let authRepository: AuthRepository
-    private let token: String
+    let token: String
     weak var coordinatorDelegate: InviteAcceptViewModelCoordinatorDelegate?
 
     private var loadTask: Task<Void, Never>?
@@ -173,5 +175,13 @@ final class InviteAcceptViewModel: BaseViewModel {
 
     func requestLogin() {
         coordinatorDelegate?.inviteAcceptViewModelDidRequestLogin()
+    }
+
+    func requestEmailRegister() {
+        coordinatorDelegate?.inviteAcceptViewModelDidRequestEmailRegister(token: token)
+    }
+
+    func requestOidc(provider: String) {
+        coordinatorDelegate?.inviteAcceptViewModelDidRequestOidc(provider: provider, token: token)
     }
 }
