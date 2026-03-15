@@ -1,24 +1,24 @@
-name: Desktop CI
+name: Admin CI
 
 on:
   push:
     branches: [main]
     paths:
-      - 'clients/desktop/**'
-      - '.github/workflows/desktop-ci.yml'
+      - 'clients/admin/**'
+      - '.github/workflows/admin-ci.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'clients/desktop/**'
-      - '.github/workflows/desktop-ci.yml'
+      - 'clients/admin/**'
+      - '.github/workflows/admin-ci.yml'
   workflow_dispatch:
 
 jobs:
-  lint-and-test:
+  build-and-test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: clients/desktop
+        working-directory: clients/admin
 
     steps:
       - uses: actions/checkout@v4
@@ -28,16 +28,19 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: clients/desktop/package-lock.json
+          cache-dependency-path: clients/admin/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check
-        run: npm run typecheck
-
       - name: Lint
         run: npm run lint
 
+      - name: Type check
+        run: npx tsc -b --noEmit
+
       - name: Test
-        run: npm run test:run
+        run: npm test
+
+      - name: Build
+        run: npm run build
