@@ -19,6 +19,8 @@ final class InviteAcceptViewModel: BaseViewModel {
     @Published var isLoadingInvitation = true
     @Published var invitationError: String?
     @Published var isWaitingForWallet = false
+    @Published var isAcceptingAsExisting = false
+    @Published var acceptError: String?
     @Published var registrationError: String?
 
     // MARK: - Properties
@@ -118,6 +120,55 @@ final class InviteAcceptViewModel: BaseViewModel {
     func handleWalletError(message: String) {
         isWaitingForWallet = false
         registrationError = message
+    }
+
+    /// Accept the invitation as an already-authenticated user.
+    /// Uses the invitation token to accept without re-registration.
+    func acceptAsExistingUser() {
+        guard invitation != nil else { return }
+        isAcceptingAsExisting = true
+        acceptError = nil
+
+        acceptTask?.cancel()
+        acceptTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await authRepository.acceptInvitationAsExistingUser(token: token)
+                guard !Task.isCancelled else { return }
+                self.isAcceptingAsExisting = false
+                self.coordinatorDelegate?.inviteAcceptViewModelDidRegister()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.isAcceptingAsExisting = false
+                self.acceptError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Handle OIDC authentication result for invitation acceptance.
+    /// Registers a new user via OIDC provider and accepts the invitation in one step.
+    func handleOidcResult(provider: String, idToken: String) {
+        isLoading = true
+        errorMessage = nil
+
+        acceptTask?.cancel()
+        acceptTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await authRepository.acceptInvitationWithOidc(
+                    token: token,
+                    provider: provider,
+                    idToken: idToken
+                )
+                guard !Task.isCancelled else { return }
+                self.isLoading = false
+                self.coordinatorDelegate?.inviteAcceptViewModelDidRegister()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.isLoading = false
+                self.handleError(error)
+            }
+        }
     }
 
     func requestLogin() {

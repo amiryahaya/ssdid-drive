@@ -400,6 +400,77 @@ extension AuthRepositoryImpl {
         }
     }
 
+    // MARK: - Multi-Auth Invitation Acceptance
+
+    func acceptInvitationAsExistingUser(token: String) async throws {
+        let endpoint = "/api/invitations/token/\(token)/accept"
+        let _: AcceptCodeInvitationResponse = try await apiClient.request(
+            endpoint,
+            method: .post,
+            body: nil,
+            queryItems: nil,
+            requiresAuth: true
+        )
+    }
+
+    func acceptInvitationWithOidc(token: String, provider: String, idToken: String) async throws {
+        struct OidcInviteRequest: Encodable {
+            let provider: String
+            let idToken: String
+            let invitationToken: String
+
+            enum CodingKeys: String, CodingKey {
+                case provider
+                case idToken = "id_token"
+                case invitationToken = "invitation_token"
+            }
+        }
+
+        let request = OidcInviteRequest(
+            provider: provider,
+            idToken: idToken,
+            invitationToken: token
+        )
+
+        struct OidcInviteResponse: Decodable {
+            let accessToken: String
+            let refreshToken: String
+            let user: InviteUser
+
+            enum CodingKeys: String, CodingKey {
+                case accessToken = "access_token"
+                case refreshToken = "refresh_token"
+                case user
+            }
+        }
+
+        let response: OidcInviteResponse = try await apiClient.request(
+            "/api/auth/oidc/verify",
+            method: .post,
+            body: request,
+            requiresAuth: false
+        )
+
+        // Store tokens
+        keychainManager.accessToken = response.accessToken
+        keychainManager.refreshToken = response.refreshToken
+        keychainManager.userId = response.user.id
+
+        // Write tokens to shared keychain for File Provider extension
+        if let tokenData = response.accessToken.data(using: .utf8) {
+            try? keychainManager.saveToSharedKeychain(tokenData, for: Constants.Keychain.accessToken)
+        }
+        if let refreshData = response.refreshToken.data(using: .utf8) {
+            try? keychainManager.saveToSharedKeychain(refreshData, for: Constants.Keychain.refreshToken)
+        }
+        if let userIdData = response.user.id.data(using: .utf8) {
+            try? keychainManager.saveToSharedKeychain(userIdData, for: Constants.Keychain.userId)
+        }
+
+        SharedDefaults.shared.writeIsAuthenticated(true)
+        SharedDefaults.shared.notifyHelper()
+    }
+
     // MARK: - Private Helpers for Invitation
 
     private func generateMasterKey() throws -> Data {

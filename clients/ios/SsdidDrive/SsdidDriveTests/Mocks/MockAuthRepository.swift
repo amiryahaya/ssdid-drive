@@ -22,6 +22,8 @@ final class MockAuthRepository: AuthRepository {
     var acceptInvitationResult: Result<InviteUser, Error> = .failure(MockError.notImplemented)
     var launchWalletInviteResult: Result<Void, Error> = .success(())
     var saveSessionFromWalletResult: Result<Void, Error> = .success(())
+    var acceptInvitationAsExistingUserResult: Result<Void, Error> = .success(())
+    var acceptInvitationWithOidcResult: Result<Void, Error> = .success(())
 
     // MARK: - Call Tracking
 
@@ -42,6 +44,8 @@ final class MockAuthRepository: AuthRepository {
     var acceptInvitationCallCount = 0
     var launchWalletInviteCallCount = 0
     var saveSessionFromWalletCallCount = 0
+    var acceptInvitationAsExistingUserCallCount = 0
+    var acceptInvitationWithOidcCallCount = 0
 
     // MARK: - Last Call Parameters
 
@@ -53,6 +57,10 @@ final class MockAuthRepository: AuthRepository {
     var lastAcceptInvitationPassword: String?
     var lastLaunchWalletInviteToken: String?
     var lastSaveSessionFromWalletToken: String?
+    var lastAcceptAsExistingUserToken: String?
+    var lastAcceptWithOidcToken: String?
+    var lastAcceptWithOidcProvider: String?
+    var lastAcceptWithOidcIdToken: String?
 
     // MARK: - Properties
 
@@ -173,6 +181,22 @@ final class MockAuthRepository: AuthRepository {
         try saveSessionFromWalletResult.get()
     }
 
+    // MARK: - Multi-Auth Invitation Acceptance
+
+    func acceptInvitationAsExistingUser(token: String) async throws {
+        acceptInvitationAsExistingUserCallCount += 1
+        lastAcceptAsExistingUserToken = token
+        try acceptInvitationAsExistingUserResult.get()
+    }
+
+    func acceptInvitationWithOidc(token: String, provider: String, idToken: String) async throws {
+        acceptInvitationWithOidcCallCount += 1
+        lastAcceptWithOidcToken = token
+        lastAcceptWithOidcProvider = provider
+        lastAcceptWithOidcIdToken = idToken
+        try acceptInvitationWithOidcResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -193,6 +217,8 @@ final class MockAuthRepository: AuthRepository {
         acceptInvitationResult = .failure(MockError.notImplemented)
         launchWalletInviteResult = .success(())
         saveSessionFromWalletResult = .success(())
+        acceptInvitationAsExistingUserResult = .success(())
+        acceptInvitationWithOidcResult = .success(())
 
         // Reset call counts
         logoutCallCount = 0
@@ -212,6 +238,8 @@ final class MockAuthRepository: AuthRepository {
         acceptInvitationCallCount = 0
         launchWalletInviteCallCount = 0
         saveSessionFromWalletCallCount = 0
+        acceptInvitationAsExistingUserCallCount = 0
+        acceptInvitationWithOidcCallCount = 0
 
         // Reset last call parameters
         lastEnrollDeviceName = nil
@@ -222,6 +250,10 @@ final class MockAuthRepository: AuthRepository {
         lastAcceptInvitationPassword = nil
         lastLaunchWalletInviteToken = nil
         lastSaveSessionFromWalletToken = nil
+        lastAcceptAsExistingUserToken = nil
+        lastAcceptWithOidcToken = nil
+        lastAcceptWithOidcProvider = nil
+        lastAcceptWithOidcIdToken = nil
 
         // Reset properties
         stubbedCurrentUserId = nil

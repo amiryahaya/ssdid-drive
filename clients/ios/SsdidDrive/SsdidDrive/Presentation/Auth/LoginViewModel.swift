@@ -19,6 +19,8 @@ final class LoginViewModel: BaseViewModel {
     private let keychainManager: KeychainManager
     weak var coordinatorDelegate: LoginViewModelCoordinatorDelegate?
 
+    @Published var email: String = ""
+    @Published var navigateToTotp: String?
     @Published var qrPayload: String?
     @Published var walletDeepLink: URL?
     @Published var isExpired = false
@@ -128,6 +130,99 @@ final class LoginViewModel: BaseViewModel {
             return
         }
         saveSession(token: sessionToken)
+    }
+
+    // MARK: - Email Login
+
+    /// Initiate email-based login. On success the server returns whether TOTP is required.
+    func emailLogin() {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Email is required"
+            return
+        }
+
+        isLoading = true
+        clearError()
+
+        Task {
+            do {
+                guard let url = URL(string: "\(SsdidAuthService.shared.baseURL)/api/auth/email/login") else {
+                    throw URLError(.badURL)
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(withJSONObject: ["email": trimmed])
+
+                let (data, response) = try await SsdidAuthService.shared.urlSession.data(for: request)
+
+                if let httpResponse = response as? HTTPURLResponse,
+                   !(200...299).contains(httpResponse.statusCode) {
+                    throw URLError(.badServerResponse)
+                }
+
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw URLError(.cannotParseResponse)
+                }
+
+                let requiresTotp = json["requires_totp"] as? Bool ?? false
+                let responseEmail = json["email"] as? String ?? trimmed
+
+                if requiresTotp {
+                    self.navigateToTotp = responseEmail
+                }
+
+                self.isLoading = false
+            } catch {
+                self.isLoading = false
+                self.handleError(error)
+            }
+        }
+    }
+
+    // MARK: - OIDC
+
+    /// Handle the result of an OIDC authentication flow (e.g. Google / Apple sign-in).
+    /// Sends the provider name and ID token to the backend for verification.
+    func handleOidcResult(provider: String, idToken: String) {
+        isLoading = true
+        clearError()
+
+        Task {
+            do {
+                guard let url = URL(string: "\(SsdidAuthService.shared.baseURL)/api/auth/oidc/verify") else {
+                    throw URLError(.badURL)
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(
+                    withJSONObject: ["provider": provider, "id_token": idToken]
+                )
+
+                let (data, response) = try await SsdidAuthService.shared.urlSession.data(for: request)
+
+                if let httpResponse = response as? HTTPURLResponse,
+                   !(200...299).contains(httpResponse.statusCode) {
+                    throw URLError(.badServerResponse)
+                }
+
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let sessionToken = json["session_token"] as? String,
+                      Self.isValidSessionToken(sessionToken) else {
+                    throw URLError(.cannotParseResponse)
+                }
+
+                self.saveSession(token: sessionToken)
+                self.isLoading = false
+            } catch {
+                self.isLoading = false
+                self.handleError(error)
+            }
+        }
     }
 
     // MARK: - Private

@@ -229,6 +229,17 @@ struct CreateInvitationView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    // Email sent status
+                    if let emailSent = invitation.emailSent {
+                        HStack {
+                            Image(systemName: emailSent ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundColor(emailSent ? .green : .orange)
+                            Text(emailSent ? "Email sent" : "Email failed to send")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
 

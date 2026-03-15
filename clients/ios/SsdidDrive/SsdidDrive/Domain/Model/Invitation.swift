@@ -267,6 +267,8 @@ struct SentInvitation: Codable, Identifiable, Equatable, Hashable {
     let message: String?
     let tenantId: String
     let tenantName: String?
+    let emailSent: Bool?
+    let emailError: String?
     let createdAt: Date
     let expiresAt: Date
 
@@ -279,6 +281,8 @@ struct SentInvitation: Codable, Identifiable, Equatable, Hashable {
         case message
         case tenantId = "tenant_id"
         case tenantName = "tenant_name"
+        case emailSent = "email_sent"
+        case emailError = "email_error"
         case createdAt = "created_at"
         case expiresAt = "expires_at"
     }

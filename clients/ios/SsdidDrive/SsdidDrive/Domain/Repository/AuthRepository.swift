@@ -79,4 +79,14 @@ protocol AuthRepository: AnyObject {
 
     /// Save session from wallet callback (invitation acceptance).
     func saveSessionFromWallet(sessionToken: String) async throws
+
+    // MARK: - Multi-Auth Invitation Acceptance
+
+    /// Accept an invitation as an already-authenticated user.
+    /// No key generation needed — the user already has an account.
+    func acceptInvitationAsExistingUser(token: String) async throws
+
+    /// Accept an invitation via OIDC provider authentication.
+    /// Registers a new user using OIDC and accepts the invitation in one step.
+    func acceptInvitationWithOidc(token: String, provider: String, idToken: String) async throws
 }
