@@ -35,6 +35,7 @@ import my.ssdid.drive.presentation.settings.MembersScreen
 import my.ssdid.drive.presentation.settings.SentInvitationsScreen
 import my.ssdid.drive.presentation.settings.SettingsScreen
 import my.ssdid.drive.presentation.tenant.JoinTenantScreen
+import my.ssdid.drive.presentation.tenant.TenantRequestScreen
 import my.ssdid.drive.presentation.sharing.ReceivedSharesScreen
 import my.ssdid.drive.presentation.sharing.CreatedSharesScreen
 import my.ssdid.drive.presentation.sharing.ShareFileScreen
@@ -349,6 +350,9 @@ fun NavGraph(
                 onNavigateToJoinTenant = {
                     navController.navigate(Screen.JoinTenant.route)
                 },
+                onNavigateToTenantRequest = {
+                    navController.navigate(Screen.TenantRequest.route)
+                },
                 onNavigateToLinkedLogins = {
                     navController.navigate(Screen.LinkedLogins.route)
                 }
@@ -370,6 +374,13 @@ fun NavGraph(
                     }
                 },
                 isLoggedIn = true
+            )
+        }
+
+        // Tenant Request (create organization)
+        composable(Screen.TenantRequest.route) {
+            TenantRequestScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

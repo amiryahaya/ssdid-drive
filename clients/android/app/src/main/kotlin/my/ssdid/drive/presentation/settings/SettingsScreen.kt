@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
@@ -36,6 +37,7 @@ fun SettingsScreen(
     onNavigateToMembers: () -> Unit = {},
     onNavigateToPiiChat: () -> Unit = {},
     onNavigateToJoinTenant: () -> Unit = {},
+    onNavigateToTenantRequest: () -> Unit = {},
     onNavigateToLinkedLogins: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -124,6 +126,17 @@ fun SettingsScreen(
                             title = "Join Organization",
                             subtitle = "Enter an invite code to join a new organization",
                             onClick = onNavigateToJoinTenant
+                        )
+                    }
+
+                    // Request Organization
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        SettingsNavigationCard(
+                            icon = Icons.Default.Business,
+                            title = "Request Organization",
+                            subtitle = "Request a new organization for your team",
+                            onClick = onNavigateToTenantRequest
                         )
                     }
 
