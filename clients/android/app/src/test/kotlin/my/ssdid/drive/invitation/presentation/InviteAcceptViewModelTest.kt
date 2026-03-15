@@ -2,6 +2,7 @@ package my.ssdid.drive.invitation.presentation
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import my.ssdid.drive.domain.model.User
 import my.ssdid.drive.domain.repository.AuthRepository
 import my.ssdid.drive.invitation.fixtures.InvitationTestFixtures
 import my.ssdid.drive.presentation.auth.InviteAcceptViewModel
@@ -22,6 +23,12 @@ class InviteAcceptViewModelTest {
     private lateinit var authRepository: AuthRepository
     private lateinit var viewModel: InviteAcceptViewModel
     private val testDispatcher = StandardTestDispatcher()
+
+    private val testUser = User(
+        id = "user-1",
+        email = "test@example.com",
+        displayName = "Test User"
+    )
 
     @Before
     fun setup() {
@@ -312,6 +319,52 @@ class InviteAcceptViewModelTest {
             assertFalse(state.isRegistered)
             assertFalse(state.isWaitingForWallet)
             assertEquals("Invalid session token", state.registrationError)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ==================== OIDC Sign-In Tests ====================
+
+    @Test
+    fun `handleOidcResult sets registered on success`() = runTest {
+        coEvery { authRepository.getInvitationInfo(any()) } returns
+            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.oidcVerify("google", "id-token-123", "test-token-123") } returns
+            Result.success(testUser)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.handleOidcResult("google", "id-token-123")
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertTrue(state.isRegistered)
+            assertFalse(state.isLoading)
+            assertNull(state.registrationError)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `handleOidcResult shows error on failure`() = runTest {
+        coEvery { authRepository.getInvitationInfo(any()) } returns
+            Result.Success(InvitationTestFixtures.DomainModels.validTokenInvitation)
+        coEvery { authRepository.oidcVerify("microsoft", "bad-token", "test-token-123") } returns
+            Result.error(AppException.Unauthorized())
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.handleOidcResult("microsoft", "bad-token")
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertFalse(state.isRegistered)
+            assertFalse(state.isLoading)
+            assertEquals("Sign-in failed. Please try again.", state.registrationError)
             cancelAndIgnoreRemainingEvents()
         }
     }
