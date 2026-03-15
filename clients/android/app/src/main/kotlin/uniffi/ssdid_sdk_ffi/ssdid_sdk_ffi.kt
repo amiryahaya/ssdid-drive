@@ -1370,43 +1370,43 @@ public object FfiConverterTypeFfiCredentialFormat: FfiConverterRustBuffer<FfiCre
 sealed class FfiSdkException: kotlin.Exception() {
     
     class InvalidConfig(
-
+        
         val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `msg` }"
+            get() = "msg=${ `msg` }"
     }
-
+    
     class InvalidUrl(
-
+        
         val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `msg` }"
+            get() = "msg=${ `msg` }"
     }
-
+    
     class InvalidFormat(
-
+        
         val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `msg` }"
+            get() = "msg=${ `msg` }"
     }
-
+    
     class ResponseParseException(
-
+        
         val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `msg` }"
+            get() = "msg=${ `msg` }"
     }
-
+    
     class QrGenerationFailed(
-
+        
         val `msg`: kotlin.String
         ) : FfiSdkException() {
         override val message
-            get() = "message=${ `msg` }"
+            get() = "msg=${ `msg` }"
     }
     
 

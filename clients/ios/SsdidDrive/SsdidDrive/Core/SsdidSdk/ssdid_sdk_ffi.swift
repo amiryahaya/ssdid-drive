@@ -977,15 +977,15 @@ public enum FfiSdkError {
 
     
     
-    case InvalidConfig(message: String
+    case InvalidConfig(msg: String
     )
-    case InvalidUrl(message: String
+    case InvalidUrl(msg: String
     )
-    case InvalidFormat(message: String
+    case InvalidFormat(msg: String
     )
-    case ResponseParseError(message: String
+    case ResponseParseError(msg: String
     )
-    case QrGenerationFailed(message: String
+    case QrGenerationFailed(msg: String
     )
 }
 
@@ -1004,19 +1004,19 @@ public struct FfiConverterTypeFfiSdkError: FfiConverterRustBuffer {
 
         
         case 1: return .InvalidConfig(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 2: return .InvalidUrl(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 3: return .InvalidFormat(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 4: return .ResponseParseError(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 5: return .QrGenerationFailed(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
 
          default: throw UniffiInternalError.unexpectedEnumCase
@@ -1030,29 +1030,29 @@ public struct FfiConverterTypeFfiSdkError: FfiConverterRustBuffer {
 
         
         
-        case let .InvalidConfig(message):
+        case let .InvalidConfig(msg):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .InvalidUrl(message):
+        case let .InvalidUrl(msg):
             writeInt(&buf, Int32(2))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .InvalidFormat(message):
+        case let .InvalidFormat(msg):
             writeInt(&buf, Int32(3))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .ResponseParseError(message):
+        case let .ResponseParseError(msg):
             writeInt(&buf, Int32(4))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .QrGenerationFailed(message):
+        case let .QrGenerationFailed(msg):
             writeInt(&buf, Int32(5))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         }
     }
