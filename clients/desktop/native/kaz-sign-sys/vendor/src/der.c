@@ -9,12 +9,12 @@
  *
  * OIDs (private enterprise arc 62395):
  *   Algorithm OIDs (for signatures/certificates):
- *     KAZ-SIGN-128: 1.3.6.1.4.1.62395.2.2.1
- *     KAZ-SIGN-192: 1.3.6.1.4.1.62395.2.2.2
- *     KAZ-SIGN-256: 1.3.6.1.4.1.62395.2.2.3
+ *     KAZ-SIGN-128: 1.3.6.1.4.1.62395.1.2.1
+ *     KAZ-SIGN-192: 1.3.6.1.4.1.62395.1.2.2
+ *     KAZ-SIGN-256: 1.3.6.1.4.1.62395.1.2.3
  *   Key OIDs (for SubjectPublicKeyInfo / PrivateKeyInfo):
- *     Public key:  1.3.6.1.4.1.62395.2.1.2
- *     Private key: 1.3.6.1.4.1.62395.2.1.1
+ *     Public key:  1.3.6.1.4.1.62395.1.1.2
+ *     Private key: 1.3.6.1.4.1.62395.1.1.1
  */
 
 #include <string.h>
@@ -33,25 +33,25 @@
  *   Result: 0x83, 0xE7, 0x3B
  *
  * Key OIDs (fixed, no level byte):
- *   Public key:  1.3.6.1.4.1.62395.2.1.2
+ *   Public key:  1.3.6.1.4.1.62395.1.1.2
  *     Value: 2B 06 01 04 01 83 E7 3B 02 01 02  (11 bytes)
  *     TLV:   06 0B 2B 06 01 04 01 83 E7 3B 02 01 02  (13 bytes)
  *
- *   Private key: 1.3.6.1.4.1.62395.2.1.1
+ *   Private key: 1.3.6.1.4.1.62395.1.1.1
  *     Value: 2B 06 01 04 01 83 E7 3B 02 01 01  (11 bytes)
  *     TLV:   06 0B 2B 06 01 04 01 83 E7 3B 02 01 01  (13 bytes)
  */
 
 /* Public key OID value bytes (fixed) */
 static const unsigned char OID_PUBKEY[] = {
-    0x2B, 0x06, 0x01, 0x04, 0x01, 0x83, 0xE7, 0x3B, 0x02, 0x01, 0x02
+    0x2B, 0x06, 0x01, 0x04, 0x01, 0x83, 0xE7, 0x3B, 0x01, 0x01, 0x02
 };
 #define OID_PUBKEY_LEN    11   /* value bytes */
 #define OID_PUBKEY_TLV    13   /* tag(1) + length(1) + OID_PUBKEY_LEN */
 
 /* Private key OID value bytes (fixed) */
 static const unsigned char OID_PRIVKEY[] = {
-    0x2B, 0x06, 0x01, 0x04, 0x01, 0x83, 0xE7, 0x3B, 0x02, 0x01, 0x01
+    0x2B, 0x06, 0x01, 0x04, 0x01, 0x83, 0xE7, 0x3B, 0x01, 0x01, 0x01
 };
 #define OID_PRIVKEY_LEN   11   /* value bytes */
 #define OID_PRIVKEY_TLV   13   /* tag(1) + length(1) + OID_PRIVKEY_LEN */
