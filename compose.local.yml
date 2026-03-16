@@ -42,16 +42,26 @@ services:
       - "5050:5000"
     volumes:
       - api-data:/app/data
+    secrets:
+      - ssdid-identity
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=ssdid_drive"
       ConnectionStrings__Redis: "redis:6379"
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: "http://+:5000"
+      Email__ApiKey: "re_CVcS3GKg_8KwkrWnJL1HRWmKNZ7cHcxta"
+      Ssdid__ServiceUrl: "http://localhost:5050"
+      Ssdid__SecretPath: "/run/secrets/ssdid-identity"
+      Auth__TotpEncryptionKey: "XwjPWnWbliLvRFH2eRvGbugkozbnJZN3O6LI1h4QucM="
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+secrets:
+  ssdid-identity:
+    file: .secrets/ssdid-identity.json
 
 volumes:
   pgdata:
