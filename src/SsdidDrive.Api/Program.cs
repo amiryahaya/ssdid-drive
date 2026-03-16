@@ -334,6 +334,39 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+
+// Serve admin SPA static files BEFORE routing/rate limiting so assets aren't intercepted
+var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");
+PhysicalFileProvider? adminFileProvider = null;
+if (Directory.Exists(adminPath))
+{
+    adminFileProvider = new PhysicalFileProvider(adminPath);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = adminFileProvider,
+        RequestPath = "/admin"
+    });
+
+    // SPA fallback: if static file middleware didn't match, serve index.html for /admin/* paths.
+    // This runs as middleware (before routing) so it doesn't conflict with MapXxx endpoints.
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/admin")
+            && !Path.HasExtension(context.Request.Path.Value))
+        {
+            context.Request.Path = "/admin/index.html";
+        }
+        await next();
+    });
+
+    // Re-register static files so the rewritten path resolves
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = adminFileProvider,
+        RequestPath = "/admin"
+    });
+}
+
 app.UseRateLimiter();
 app.MapHealthChecks("/health/redis");
 
@@ -371,17 +404,7 @@ app.MapAccountFeature();
 app.MapExtensionServiceFeature();
 app.MapTenantRequestFeature();
 
-// ── Serve admin SPA ──
-var adminPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "admin");
-if (Directory.Exists(adminPath))
-{
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(adminPath),
-        RequestPath = "/admin"
-    });
-    app.MapFallbackToFile("/admin/{**path}", "admin/index.html");
-}
+// Admin SPA fallback handled by middleware above (before routing)
 
 // ── Auto-migrate (guarded) ──
 if (app.Environment.IsDevelopment() ||
