@@ -87,6 +87,14 @@ builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.AddSingleton<IStorageService, LocalStorageService>();
 
 // ── SSDID SDK ──
+// Key store: prefer container secrets > env var > file (default)
+var secretPath = builder.Configuration["Ssdid:SecretPath"]; // e.g. /run/secrets/ssdid-identity
+var identityEnvVar = builder.Configuration["Ssdid:IdentityEnvVar"]; // e.g. SSDID_IDENTITY_JSON
+if (!string.IsNullOrEmpty(secretPath))
+    builder.Services.AddSsdidSecretKeyStore(secretPath);
+else if (!string.IsNullOrEmpty(identityEnvVar))
+    builder.Services.AddSsdidEnvKeyStore(identityEnvVar);
+
 builder.Services.AddSsdidServer(options =>
 {
     options.RegistryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
