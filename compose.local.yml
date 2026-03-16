@@ -1,0 +1,59 @@
+# Local development compose — uses locally built image
+# Usage:
+#   1. Build admin SPA:  cd clients/admin && npm run build
+#   2. Publish backend:  dotnet publish src/SsdidDrive.Api/ -c Release -r linux-arm64 --self-contained true -o publish/
+#   3. Build image:      podman build -t ssdid-drive-api:local -f publish/Containerfile publish/
+#   4. Start stack:      podman compose -f compose.local.yml up -d
+#   5. Admin portal:     http://localhost:5050/admin/
+#   6. API:              http://localhost:5050/api/health
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ssdid_drive
+      POSTGRES_PASSWORD: ssdid_drive
+      POSTGRES_DB: ssdid_drive
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssdid_drive"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    image: ssdid-drive-api:local
+    ports:
+      - "5050:5000"
+    volumes:
+      - api-data:/app/data
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=ssdid_drive"
+      ConnectionStrings__Redis: "redis:6379"
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://+:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  api-data:
