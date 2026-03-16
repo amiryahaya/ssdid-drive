@@ -1,17 +1,43 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────
+# Context: repo root
+# Build with:
+#   cp -r ../ssdid-sdk-dotnet/src ssdid-sdk-dotnet-src
+#   podman build -f src/SsdidDrive.Api/Containerfile -t ssdid-drive-api .
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 
 ARG TARGETARCH
 
-WORKDIR /src
+# Mirror the filesystem layout so project reference paths resolve correctly:
+# SsdidDrive.Api is at /build/ssdid-drive/src/SsdidDrive.Api/
+# SDK is at           /build/ssdid-sdk-dotnet/src/Ssdid.Sdk.Server/
+# ProjectReference: ../../../ssdid-sdk-dotnet/src/... resolves correctly
+WORKDIR /build
 
-# Copy csproj first for layer caching
-COPY SsdidDrive.Api.csproj ./
-RUN dotnet restore
+# Copy SDK csproj files
+COPY ssdid-sdk-dotnet-src/Ssdid.Sdk.Server/Ssdid.Sdk.Server.csproj \
+     ssdid-sdk-dotnet/src/Ssdid.Sdk.Server/
+COPY ssdid-sdk-dotnet-src/Ssdid.Sdk.Server.PqcNist/Ssdid.Sdk.Server.PqcNist.csproj \
+     ssdid-sdk-dotnet/src/Ssdid.Sdk.Server.PqcNist/
+COPY ssdid-sdk-dotnet-src/Ssdid.Sdk.Server.KazSign/Ssdid.Sdk.Server.KazSign.csproj \
+     ssdid-sdk-dotnet/src/Ssdid.Sdk.Server.KazSign/
 
-# Copy everything and publish
-COPY . .
-RUN dotnet publish -c Release -o /app/publish --no-restore
+# Copy API csproj for layer caching
+COPY src/SsdidDrive.Api/SsdidDrive.Api.csproj \
+     ssdid-drive/src/SsdidDrive.Api/
+
+WORKDIR /build/ssdid-drive
+RUN dotnet restore src/SsdidDrive.Api/SsdidDrive.Api.csproj
+
+WORKDIR /build
+
+# Copy SDK source
+COPY ssdid-sdk-dotnet-src/ ssdid-sdk-dotnet/src/
+
+# Copy API source (includes wwwroot/admin/ from pre-built SPA)
+COPY src/SsdidDrive.Api/ ssdid-drive/src/SsdidDrive.Api/
+
+WORKDIR /build/ssdid-drive
+RUN dotnet publish src/SsdidDrive.Api/ -c Release -o /app/publish --no-restore
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview
