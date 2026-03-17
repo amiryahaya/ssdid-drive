@@ -76,7 +76,7 @@ export default function Sidebar({ collapsed, onToggle, onClose }: SidebarProps) 
     >
       {/* Logo / brand */}
       <div className="flex items-center h-14 px-4 border-b border-gray-200 shrink-0">
-        <img src="/icon-192.png" alt="SSDID Drive" className="w-6 h-6 rounded shrink-0" />
+        <img src="/admin/icon-192.png" alt="SSDID Drive" className="w-6 h-6 rounded shrink-0" />
         {!collapsed && (
           <span className="ml-3 text-sm font-bold text-gray-900 whitespace-nowrap">
             SSDID Drive

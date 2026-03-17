@@ -117,7 +117,7 @@ interface AdminState {
   auditLog: AuditLogEntry[]
   auditLogTotal: number
   auditLogLoading: boolean
-  fetchAuditLog: (page: number, pageSize: number) => Promise<void>
+  fetchAuditLog: (page: number, pageSize: number, filters?: { actor?: string; action?: string; from?: string; to?: string }) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -246,11 +246,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   auditLogTotal: 0,
   auditLogLoading: false,
 
-  fetchAuditLog: async (page: number, pageSize: number) => {
+  fetchAuditLog: async (page: number, pageSize: number, filters?: { actor?: string; action?: string; from?: string; to?: string }) => {
     set({ auditLogLoading: true })
     try {
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+      if (filters?.actor) params.set('actor', filters.actor)
+      if (filters?.action) params.set('action', filters.action)
+      if (filters?.from) params.set('from', filters.from)
+      if (filters?.to) params.set('to', filters.to)
       const res = await api.get<AuditLogResponse>(
-        `/api/admin/audit-log?page=${page}&page_size=${pageSize}`,
+        `/api/admin/audit-log?${params}`,
       )
       set({ auditLog: res.items, auditLogTotal: res.total })
     } catch (err) {

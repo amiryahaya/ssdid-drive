@@ -27,7 +27,6 @@ export default function TenantDetailPage() {
     tenants,
     tenantMembers,
     tenantMembersLoading,
-    fetchTenantById,
     fetchTenantMembers,
     tenantInvitations,
     tenantInvitationsLoading,
@@ -36,23 +35,23 @@ export default function TenantDetailPage() {
   } = useAdminStore()
 
   const [error, setError] = useState<string | null>(null)
-  const [directTenant, setDirectTenant] = useState<Tenant | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
   const [invError, setInvError] = useState<string | null>(null)
 
   // Use tenant from store if available, otherwise use directly fetched one
-  const tenant: Tenant | undefined = tenants.find((t) => t.id === id) ?? directTenant ?? undefined
+  const tenant: Tenant | undefined = tenants.find((t) => t.id === id)
 
-  // Fetch tenant if not in store (e.g. direct navigation)
+  const { fetchTenants } = useAdminStore()
+
+  // Fetch tenant list if not in store (e.g. page refresh or direct navigation)
   useEffect(() => {
     if (!id) return
     if (!tenants.find((t) => t.id === id)) {
-      fetchTenantById(id)
-        .then(setDirectTenant)
-        .catch(() => setError('Tenant not found'))
+      fetchTenants(1, 100)
+        .catch(() => setError('Failed to load tenants'))
     }
-  }, [id, tenants, fetchTenantById])
+  }, [id, tenants, fetchTenants])
 
   // Fetch members
   useEffect(() => {

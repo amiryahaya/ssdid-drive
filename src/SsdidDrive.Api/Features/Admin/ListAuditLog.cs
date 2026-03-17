@@ -11,12 +11,34 @@ public static class ListAuditLog
 
     private static async Task<IResult> Handle(
         [AsParameters] PaginationParams pagination,
+        string? actor,
+        string? action,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
         AppDbContext db,
         CancellationToken ct)
     {
         var query = db.AuditLog
             .Include(e => e.Actor)
             .AsNoTracking();
+
+        // Filters
+        if (!string.IsNullOrWhiteSpace(actor))
+        {
+            var actorLower = actor.Trim().ToLowerInvariant();
+            query = query.Where(e =>
+                (e.Actor.DisplayName != null && e.Actor.DisplayName.ToLower().Contains(actorLower)) ||
+                (e.Actor.Email != null && e.Actor.Email.ToLower().Contains(actorLower)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(action))
+            query = query.Where(e => e.Action.Contains(action.Trim()));
+
+        if (from.HasValue)
+            query = query.Where(e => e.CreatedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(e => e.CreatedAt <= to.Value);
 
         var total = await query.CountAsync(ct);
 

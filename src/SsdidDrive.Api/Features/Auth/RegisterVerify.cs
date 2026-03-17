@@ -38,7 +38,14 @@ public static class RegisterVerify
                 var user = await ProvisionUser(db, req.Did, req.InviteToken, req.SharedClaims, adminDid);
                 if (user is null)
                     return AppError.Forbidden("Registration requires a valid invite code").ToProblemResult();
-                return Results.Created($"/api/users/{user.Id}", ok);
+                // Serialize manually to prevent ASP.NET's global snake_case policy
+                // from converting the VC's camelCase keys (issuanceDate → issuance_date)
+                var responseJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    credential = ok.Credential,
+                    did = ok.Did
+                });
+                return Results.Text(responseJson, "application/json", statusCode: 201);
             },
             err => Task.FromResult(err.ToProblemResult()));
     }

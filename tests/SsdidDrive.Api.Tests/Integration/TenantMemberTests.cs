@@ -210,6 +210,89 @@ public class TenantMemberTests : IClassFixture<SsdidDriveFactory>
         }
     }
 
+    // ── SwitchTenant ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SwitchTenant_ReturnsNewSessionToken()
+    {
+        // User belongs to two tenants; switch from tenant1 to tenant2
+        var (client, userId, tenant1Id) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-User1");
+        var (_, _, tenant2Id) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-Owner2");
+
+        // Add the user as member of tenant2
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.UserTenants.Add(new UserTenant
+            {
+                UserId = userId,
+                TenantId = tenant2Id,
+                Role = TenantRole.Member,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsync($"/api/me/switch-tenant/{tenant2Id}", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        Assert.Equal(tenant2Id, body.GetProperty("active_tenant_id").GetGuid());
+        Assert.Equal("member", body.GetProperty("role").GetString());
+        Assert.True(body.TryGetProperty("session_token", out var tokenProp));
+        Assert.False(string.IsNullOrEmpty(tokenProp.GetString()));
+    }
+
+    [Fact]
+    public async Task SwitchTenant_RevokesOldToken()
+    {
+        // User belongs to two tenants
+        var (client, userId, tenant1Id) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-User2");
+        var (_, _, tenant2Id) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-Owner2b");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.UserTenants.Add(new UserTenant
+            {
+                UserId = userId,
+                TenantId = tenant2Id,
+                Role = TenantRole.Member,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Switch tenant — response carries new token
+        var switchResp = await client.PostAsync($"/api/me/switch-tenant/{tenant2Id}", null);
+        Assert.Equal(HttpStatusCode.OK, switchResp.StatusCode);
+        var body = await switchResp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        var newToken = body.GetProperty("session_token").GetString()!;
+
+        // Old token (still on client.DefaultRequestHeaders) should now return 401
+        var oldTokenResp = await client.GetAsync("/api/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, oldTokenResp.StatusCode);
+
+        // New token should work
+        var newClient = _factory.CreateClient();
+        newClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", newToken);
+        var newTokenResp = await newClient.GetAsync("/api/me");
+        Assert.Equal(HttpStatusCode.OK, newTokenResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task SwitchTenant_NonMember_Returns403()
+    {
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-User3");
+        var (_, _, otherTenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ST-Owner3");
+
+        var response = await client.PostAsync($"/api/me/switch-tenant/{otherTenantId}", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private async Task<(HttpClient Client, Guid UserId)> CreateAdminClient(Guid tenantId)

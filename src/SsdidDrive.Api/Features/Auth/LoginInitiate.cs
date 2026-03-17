@@ -41,8 +41,7 @@ public static class LoginInitiate
             registry_url = registryUrl,
             requested_claims = new
             {
-                required = new[] { "name" },
-                optional = new[] { "email" }
+                required = new[] { "name", "email" }
             }
         };
 
