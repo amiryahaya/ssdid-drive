@@ -203,10 +203,10 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
         var challenge = sessionStore.ConsumeChallenge("oidc", state!);
         Assert.NotNull(challenge);
         Assert.Equal("google", challenge.KeyId);
-        Assert.False(string.IsNullOrEmpty(challenge.Challenge)); // code verifier
+        Assert.False(string.IsNullOrEmpty(challenge.Challenge)); // code verifier payload
 
-        // Verify PKCE: code_challenge in URL = SHA256(code_verifier)
-        var codeVerifier = challenge.Challenge;
+        // Challenge is stored as "codeVerifier|redirect_uri|invitation_token"
+        var codeVerifier = challenge.Challenge.Split('|')[0];
         var expectedChallenge = Convert.ToBase64String(
                 SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -264,13 +264,14 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
-    public async Task OidcCallback_UnsupportedProvider_ReturnsBadRequest()
+    public async Task OidcCallback_UnsupportedProvider_ReturnsUnauthorized()
     {
         var client = _factory.CreateClient();
 
+        // With an invalid state, the callback returns Unauthorized before checking the provider
         var response = await client.GetAsync("/api/auth/oidc/facebook/callback?code=fake&state=fake");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

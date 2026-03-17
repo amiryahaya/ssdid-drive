@@ -112,10 +112,13 @@ public static class OidcVerify
             return AppError.NotFound("No account linked to this provider. Register first or link in Settings.").ToProblemResult();
 
         var invToken = req.InvitationToken!.Trim();
-        var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => (i.Token == invToken || i.ShortCode == invToken)
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+        // Materialize first, filter client-side (SQLite compat: DateTimeOffset/enum in WHERE)
+        var verifyNow = DateTimeOffset.UtcNow;
+        var invCandidates = await db.Invitations
+            .Where(i => i.Token == invToken || i.ShortCode == invToken)
+            .ToListAsync(ct);
+        var invitation = invCandidates
+            .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > verifyNow);
 
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();

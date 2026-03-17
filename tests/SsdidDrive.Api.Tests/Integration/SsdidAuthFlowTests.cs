@@ -7,6 +7,8 @@ using Ssdid.Sdk.Server.Crypto.Providers;
 using Ssdid.Sdk.Server.Encoding;
 using Ssdid.Sdk.Server.Identity;
 using Ssdid.Sdk.Server.Registry;
+using SsdidDrive.Api.Data;
+using SsdidDrive.Api.Data.Entities;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -89,6 +91,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
     {
         var (clientIdentity, _) = CreateClientIdentity();
         RegisterClientInMockRegistry(clientIdentity);
+        var inviteToken = await CreateInviteTokenAsync();
 
         var client = _factory.CreateClient();
 
@@ -103,9 +106,9 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
         // Step 2: Sign the challenge with client's private key
         var signedChallenge = clientIdentity.SignChallenge(challenge);
 
-        // Step 3: Verify
+        // Step 3: Verify (with invite token)
         var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
 
         // RegisterVerify returns Created (201)
@@ -219,6 +222,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
     {
         var (clientIdentity, _) = CreateClientIdentity();
         RegisterClientInMockRegistry(clientIdentity);
+        var inviteToken = await CreateInviteTokenAsync();
 
         var client = _factory.CreateClient();
 
@@ -231,13 +235,13 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
 
         // First verify succeeds
         var verify1 = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         Assert.Equal(HttpStatusCode.Created, verify1.StatusCode);
 
         // Second verify with same challenge fails (consumed)
         var verify2 = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         Assert.Equal(HttpStatusCode.Unauthorized, verify2.StatusCode);
     }
@@ -338,6 +342,60 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
 
     // ── Helpers ──
 
+    private async Task<string> CreateInviteTokenAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Auth Test Tenant",
+            Slug = $"auth-{Guid.NewGuid():N}"[..32],
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Tenants.Add(tenant);
+
+        var owner = new User
+        {
+            Id = Guid.NewGuid(),
+            Did = $"did:ssdid:auth-owner-{Guid.NewGuid():N}",
+            DisplayName = "Auth Owner",
+            Status = UserStatus.Active,
+            TenantId = tenant.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Users.Add(owner);
+        db.UserTenants.Add(new UserTenant
+        {
+            UserId = owner.Id,
+            TenantId = tenant.Id,
+            Role = TenantRole.Owner,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        db.Invitations.Add(new Invitation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenant.Id,
+            InvitedById = owner.Id,
+            Email = "test@example.com",
+            Role = TenantRole.Member,
+            Status = InvitationStatus.Pending,
+            Token = token,
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        return token;
+    }
+
     private (SsdidIdentity Identity, CryptoProviderFactory CryptoFactory) CreateClientIdentity()
     {
         var providers = new ICryptoProvider[] { new Ed25519Provider() };
@@ -359,6 +417,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
     {
         var (clientIdentity, _) = CreateClientIdentity();
         RegisterClientInMockRegistry(clientIdentity);
+        var inviteToken = await CreateInviteTokenAsync();
 
         var client = _factory.CreateClient();
 
@@ -370,10 +429,10 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
         var regBody = await regResp.Content.ReadFromJsonAsync<JsonElement>();
         var challenge = regBody.GetProperty("challenge").GetString()!;
 
-        // Sign & verify
+        // Sign & verify (with invite token)
         var signedChallenge = clientIdentity.SignChallenge(challenge);
         var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         verifyResp.EnsureSuccessStatusCode();
         var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();

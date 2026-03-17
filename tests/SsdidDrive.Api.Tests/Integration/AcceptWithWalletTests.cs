@@ -83,7 +83,8 @@ public class AcceptWithWalletTests : IClassFixture<SsdidDriveFactory>
             new { credential, email = "expired@example.com" },
             TestFixture.Json);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // Expired invitations now return 410 Gone
+        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
     }
 
     // ── 4. Already accepted → second attempt returns 409 ──

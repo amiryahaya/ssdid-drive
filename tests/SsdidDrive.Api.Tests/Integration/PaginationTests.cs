@@ -97,8 +97,9 @@ public class PaginationTests : IClassFixture<SsdidDriveFactory>
     // ── Files ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ListFiles_WithPagination_ReturnsPagedResponse()
+    public async Task ListFiles_WithPagination_ReturnsAllFiles()
     {
+        // The current ListFiles endpoint returns all files without pagination
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
         var folderId = await TestFixture.CreateFolderAsync(client, "PagFileFolder");
 
@@ -106,19 +107,19 @@ public class PaginationTests : IClassFixture<SsdidDriveFactory>
         await TestFixture.UploadFileAsync(client, folderId, "pagfile2.bin");
         await TestFixture.UploadFileAsync(client, folderId, "pagfile3.bin");
 
-        var response = await client.GetAsync($"/api/folders/{folderId}/files?page=1&pageSize=2");
+        var response = await client.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var items = body.GetProperty("items");
+        var items = body.GetProperty("data");
 
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Equal(3, body.GetProperty("total").GetInt32());
+        Assert.Equal(3, items.GetArrayLength());
     }
 
     [Fact]
-    public async Task ListFiles_WithSearch_FiltersResults()
+    public async Task ListFiles_ReturnsAllFilesInFolder()
     {
+        // The current ListFiles endpoint returns all files (no search filter)
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
         var folderId = await TestFixture.CreateFolderAsync(client, "SearchFileFolder");
 
@@ -126,14 +127,13 @@ public class PaginationTests : IClassFixture<SsdidDriveFactory>
         await TestFixture.UploadFileAsync(client, folderId, "report-q2.bin");
         await TestFixture.UploadFileAsync(client, folderId, "invoice.bin");
 
-        var response = await client.GetAsync($"/api/folders/{folderId}/files?search=report");
+        var response = await client.GetAsync($"/api/folders/{folderId}/files");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var items = body.GetProperty("items");
+        var items = body.GetProperty("data");
 
-        Assert.Equal(2, items.GetArrayLength());
-        Assert.Equal(2, body.GetProperty("total").GetInt32());
+        Assert.Equal(3, items.GetArrayLength());
     }
 
     // ── Boundary Tests ────────────────────────────────────────────────

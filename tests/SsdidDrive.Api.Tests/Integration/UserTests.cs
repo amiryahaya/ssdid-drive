@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using SsdidDrive.Api.Tests.Infrastructure;
 
 namespace SsdidDrive.Api.Tests.Integration;
@@ -29,7 +30,46 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task UpdateProfile_ChangesDisplayName()
     {
-        var (client, userId, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "OldName");
+        // Create user WITHOUT a display name so it can be set
+        var did = $"did:ssdid:test-{Guid.NewGuid():N}";
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SsdidDrive.Api.Data.AppDbContext>();
+        var sessionStore = scope.ServiceProvider.GetRequiredService<global::Ssdid.Sdk.Server.Session.ISessionStore>();
+
+        var tenant = new SsdidDrive.Api.Data.Entities.Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Profile Tenant",
+            Slug = $"prof-{Guid.NewGuid():N}"[..32],
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Tenants.Add(tenant);
+
+        var user = new SsdidDrive.Api.Data.Entities.User
+        {
+            Id = Guid.NewGuid(),
+            Did = did,
+            DisplayName = null, // No display name initially
+            Status = SsdidDrive.Api.Data.Entities.UserStatus.Active,
+            TenantId = tenant.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Users.Add(user);
+        db.UserTenants.Add(new SsdidDrive.Api.Data.Entities.UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = SsdidDrive.Api.Data.Entities.TenantRole.Owner,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var token = sessionStore.CreateSession(did)!;
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         var patchResponse = await client.PatchAsJsonAsync("/api/me",
             new { display_name = "NewName" }, TestFixture.Json);
@@ -44,7 +84,7 @@ public class UserTests : IClassFixture<SsdidDriveFactory>
 
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal("NewName", getBody.GetProperty("display_name").GetString());
-        Assert.Equal(userId, getBody.GetProperty("id").GetGuid());
+        Assert.Equal(user.Id, getBody.GetProperty("id").GetGuid());
     }
 
     [Fact]

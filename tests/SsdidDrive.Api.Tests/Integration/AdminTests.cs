@@ -217,7 +217,7 @@ public class AdminTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.True(body.TryGetProperty("members", out var members));
+        Assert.True(body.TryGetProperty("items", out var members));
         Assert.Equal(JsonValueKind.Array, members.ValueKind);
     }
 

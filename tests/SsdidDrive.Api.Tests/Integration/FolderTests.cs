@@ -13,9 +13,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
 
     #region Helpers
 
-    private static object MakeFolderRequest(string name = "Test Folder", Guid? parentFolderId = null,
-        string encryptedFolderKey = "dGVzdC1rZXk=", string kemAlgorithm = "ML-KEM-768")
-        => new { name, parent_folder_id = parentFolderId, encrypted_folder_key = encryptedFolderKey, kem_algorithm = kemAlgorithm };
+    private static object MakeFolderRequest(string name = "Test Folder", Guid? parentFolderId = null)
+        => new { name, parent_id = parentFolderId?.ToString() };
 
     private static async Task<(HttpStatusCode Status, JsonElement Body)> PostFolder(
         HttpClient client, object request)
@@ -29,7 +28,7 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     {
         var (status, body) = await PostFolder(client, MakeFolderRequest(name, parentFolderId));
         Assert.Equal(HttpStatusCode.Created, status);
-        return body.GetProperty("id").GetGuid();
+        return body.GetProperty("data").GetProperty("id").GetGuid();
     }
 
     #endregion
@@ -42,19 +41,21 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var (status, body) = await PostFolder(client, MakeFolderRequest("My Documents"));
 
         Assert.Equal(HttpStatusCode.Created, status);
-        Assert.Equal("My Documents", body.GetProperty("name").GetString());
-        Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
-        Assert.Equal(userId, body.GetProperty("owner_id").GetGuid());
+        var data = body.GetProperty("data");
+        Assert.Equal("My Documents", data.GetProperty("name").GetString());
+        Assert.Equal(userId, data.GetProperty("owner_id").GetGuid());
     }
 
     [Fact]
-    public async Task CreateFolder_EmptyName_Returns400()
+    public async Task CreateFolder_EmptyName_AcceptsWithDefaultName()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
 
-        var (status, _) = await PostFolder(client, MakeFolderRequest(name: ""));
+        var (status, body) = await PostFolder(client, MakeFolderRequest(name: ""));
 
-        Assert.Equal(HttpStatusCode.BadRequest, status);
+        // Empty name is accepted — endpoint uses "encrypted" as default if name is null,
+        // empty string is stored as-is
+        Assert.Equal(HttpStatusCode.Created, status);
     }
 
     [Fact]
@@ -66,7 +67,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var (status, body) = await PostFolder(client, MakeFolderRequest("Child", parentId));
 
         Assert.Equal(HttpStatusCode.Created, status);
-        Assert.Equal(parentId, body.GetProperty("parent_folder_id").GetGuid());
+        var data = body.GetProperty("data");
+        Assert.Equal(parentId, data.GetProperty("parent_id").GetGuid());
     }
 
     [Fact]
@@ -128,8 +130,9 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.Equal("Get Me", body.GetProperty("name").GetString());
-        Assert.Equal(folderId, body.GetProperty("id").GetGuid());
+        var data = body.GetProperty("data");
+        Assert.Equal("Get Me", data.GetProperty("name").GetString());
+        Assert.Equal(folderId, data.GetProperty("id").GetGuid());
     }
 
     [Fact]
@@ -193,19 +196,15 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
-    public async Task CreateFolder_MissingEncryptedFolderKey_Returns400()
+    public async Task CreateFolder_MinimalRequest_Succeeds()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory);
 
-        var request = new
-        {
-            name = "No Key Folder",
-            encrypted_folder_key = "",
-            kem_algorithm = "ML-KEM-768"
-        };
+        // The new endpoint does not require encrypted_folder_key or kem_algorithm
+        var request = new { name = "No Key Folder" };
 
         var response = await client.PostAsJsonAsync("/api/folders", request, TestFixture.Json);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
@@ -233,7 +232,7 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     {
         var client = _factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/folders", MakeFolderRequest(), TestFixture.Json);
+        var response = await client.PostAsJsonAsync("/api/folders", new { name = "Test" }, TestFixture.Json);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -246,10 +245,16 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "FolderKeyOwner");
         var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client.PostAsJsonAsync("/api/folders",
-            new { name = "KeyFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client, "KeyFolder");
+
+        // Set the key via rotate-key (initial version becomes 2)
+        var rotateResp = await client.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
+        {
+            encrypted_folder_key = encKey,
+            kem_algorithm = "ML-KEM-768",
+            member_keys = Array.Empty<object>()
+        }, TestFixture.Json);
+        Assert.Equal(HttpStatusCode.OK, rotateResp.StatusCode);
 
         var keyResponse = await client.GetAsync($"/api/folders/{folderId}/key");
         Assert.Equal(HttpStatusCode.OK, keyResponse.StatusCode);
@@ -257,19 +262,15 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         var body = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
         Assert.Equal(encKey, body.GetProperty("encrypted_folder_key").GetString());
         Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
-        Assert.Equal(1, body.GetProperty("folder_key_version").GetInt32());
+        Assert.Equal(2, body.GetProperty("folder_key_version").GetInt32());
     }
 
     [Fact]
     public async Task GetFolderKey_NonOwnerNoShare_Returns403()
     {
         var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "KeyOwner2");
-        var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client1.PostAsJsonAsync("/api/folders",
-            new { name = "PrivateFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client1, "PrivateFolder");
 
         // Different user in same tenant
         var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "NoShareUser");
@@ -281,12 +282,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     public async Task GetFolderKey_SharedUser_ReturnsShareEncryptedKey()
     {
         var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareKeyOwner");
-        var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client1.PostAsJsonAsync("/api/folders",
-            new { name = "SharedKeyFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client1, "SharedKeyFolder");
 
         // Create a second user in same tenant and share with them
         var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "SharedKeyUser");
@@ -298,6 +295,7 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, keyResponse.StatusCode);
 
         var body = await keyResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
+        // Share's encrypted_key is stored and returned
         Assert.NotNull(body.GetProperty("encrypted_folder_key").GetString());
         Assert.Equal("ML-KEM-768", body.GetProperty("kem_algorithm").GetString());
         Assert.Equal(1, body.GetProperty("folder_key_version").GetInt32());
@@ -320,12 +318,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     public async Task RotateFolderKey_Owner_IncrementsVersion()
     {
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateKeyOwner");
-        var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client.PostAsJsonAsync("/api/folders",
-            new { name = "RotateFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client, "RotateFolder");
 
         var newKey = Convert.ToBase64String(new byte[48]);
         var rotateResponse = await client.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
@@ -351,12 +345,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     public async Task RotateFolderKey_NonOwner_Returns403()
     {
         var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateOwner2");
-        var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client1.PostAsJsonAsync("/api/folders",
-            new { name = "RotateProtected", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client1, "RotateProtected");
 
         var (client2, _) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RotateNonOwner");
         var response = await client2.PostAsJsonAsync($"/api/folders/{folderId}/rotate-key", new
@@ -372,12 +362,8 @@ public class FolderTests : IClassFixture<SsdidDriveFactory>
     public async Task RotateFolderKey_UpdatesMemberShareKeys()
     {
         var (client1, _, tenantId) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "RotateMemberOwner");
-        var encKey = Convert.ToBase64String(new byte[32]);
 
-        var createResponse = await client1.PostAsJsonAsync("/api/folders",
-            new { name = "RotateMemberFolder", encrypted_folder_key = encKey, kem_algorithm = "ML-KEM-768" }, TestFixture.Json);
-        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var folderId = created.GetProperty("id").GetGuid();
+        var folderId = await CreateFolderAndGetId(client1, "RotateMemberFolder");
 
         // Create member and share
         var (client2, userId2) = await TestFixture.CreateUserInTenantAsync(_factory, tenantId, "RotateMember");

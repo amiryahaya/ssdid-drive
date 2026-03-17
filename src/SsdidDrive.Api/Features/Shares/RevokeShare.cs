@@ -52,6 +52,7 @@ public static class RevokeShare
                 actionType: "share",
                 actionResourceId: id.ToString(),
                 ct: ct);
+            await db.SaveChangesAsync(ct);
         }
         catch (Exception ex)
         {

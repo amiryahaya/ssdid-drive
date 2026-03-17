@@ -92,11 +92,13 @@ public static class RegisterVerify
         Invitation? invitation = null;
         if (!string.IsNullOrWhiteSpace(inviteToken))
         {
-            invitation = await db.Invitations
-                .FirstOrDefaultAsync(i =>
-                    (i.Token == inviteToken || i.ShortCode == inviteToken)
-                    && i.Status == InvitationStatus.Pending
-                    && i.ExpiresAt > DateTimeOffset.UtcNow);
+            // Materialize first, filter client-side (SQLite compat: DateTimeOffset/enum in WHERE)
+            var now = DateTimeOffset.UtcNow;
+            var candidates = await db.Invitations
+                .Where(i => i.Token == inviteToken || i.ShortCode == inviteToken)
+                .ToListAsync();
+            invitation = candidates
+                .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > now);
         }
 
         // Reject registration without invite (unless admin bootstrap)
@@ -171,11 +173,13 @@ public static class RegisterVerify
     private static async Task AcceptInviteForUser(AppDbContext db, User user, string inviteToken)
     {
         // Only accept full token — short codes have insufficient entropy
-        var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i =>
-                (i.Token == inviteToken || i.ShortCode == inviteToken)
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow);
+        // Materialize first, filter client-side (SQLite compat: DateTimeOffset/enum in WHERE)
+        var nowForAccept = DateTimeOffset.UtcNow;
+        var invCandidates = await db.Invitations
+            .Where(i => i.Token == inviteToken || i.ShortCode == inviteToken)
+            .ToListAsync();
+        var invitation = invCandidates
+            .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > nowForAccept);
 
         if (invitation is null) return;
 

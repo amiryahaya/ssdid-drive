@@ -39,10 +39,13 @@ public static class EmailRegisterVerify
 
         // Look up invitation to get tenantId for the new user
         var invitationToken = req.InvitationToken!.Trim();
-        var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+        // Materialize first, filter client-side (SQLite compat: DateTimeOffset/enum in WHERE)
+        var evNow = DateTimeOffset.UtcNow;
+        var evCandidates = await db.Invitations
+            .Where(i => i.Token == invitationToken || i.ShortCode == invitationToken)
+            .ToListAsync(ct);
+        var invitation = evCandidates
+            .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > evNow);
 
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();

@@ -73,9 +73,10 @@ public class WalletLoginFlowTests : IClassFixture<WalletLoginFlowTests.WalletLog
         var regBody = await regResp.Content.ReadFromJsonAsync<JsonElement>();
         var regChallenge = regBody.GetProperty("challenge").GetString()!;
 
+        var inviteToken = await TestFixture.CreateInviteTokenAsync(_factory);
         var signedChallenge = walletIdentity.SignChallenge(regChallenge);
         var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         Assert.Equal(HttpStatusCode.Created, verifyResp.StatusCode);
         var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();

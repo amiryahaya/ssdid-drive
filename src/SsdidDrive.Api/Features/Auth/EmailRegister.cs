@@ -33,10 +33,13 @@ public static class EmailRegister
         var email = req.Email.Trim().ToLowerInvariant();
 
         var invitationToken = req.InvitationToken!.Trim();
-        var invitation = await db.Invitations
-            .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
-                && i.Status == InvitationStatus.Pending
-                && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+        // Materialize first, filter client-side (SQLite compat: DateTimeOffset/enum in WHERE)
+        var now = DateTimeOffset.UtcNow;
+        var invCandidates = await db.Invitations
+            .Where(i => i.Token == invitationToken || i.ShortCode == invitationToken)
+            .ToListAsync(ct);
+        var invitation = invCandidates
+            .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > now);
 
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();

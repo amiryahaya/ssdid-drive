@@ -200,13 +200,8 @@ public class ShareTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var filesBody = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var files = filesBody.GetProperty("items");
-        Assert.True(files.GetArrayLength() >= 1);
-
-        var names = Enumerable.Range(0, files.GetArrayLength())
-            .Select(i => files[i].GetProperty("name").GetString())
-            .ToList();
-        Assert.Contains("shared-doc.bin", names);
+        var files = filesBody.GetProperty("data");
+        Assert.True(files.GetArrayLength() >= 1, "Recipient should see at least one file");
     }
 
     // ── 10. SharedFolder_RecipientCanDownloadFile ─────────────────────

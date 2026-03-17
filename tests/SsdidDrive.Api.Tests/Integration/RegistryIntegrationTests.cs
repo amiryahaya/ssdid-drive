@@ -335,9 +335,12 @@ public class RegistryIntegrationTests
         // Step 2: Sign challenge with client key
         var signedChallenge = clientIdentity.SignChallenge(challenge);
 
+        // Create invite token for registration (invite-only registration)
+        var inviteToken = await Infrastructure.TestFixture.CreateInviteTokenAsync(factory);
+
         // Step 3: Verify via API (triggers second registry resolution + signature check)
         var verifyResp = await httpClient.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         Assert.Equal(HttpStatusCode.Created, verifyResp.StatusCode);
         var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -507,9 +510,12 @@ public class RegistryIntegrationTests
         // Step 2: Client signs the challenge
         var signedChallenge = clientIdentity.SignChallenge(challenge);
 
+        // Create invite token for registration (invite-only registration)
+        var inviteToken = await Infrastructure.TestFixture.CreateInviteTokenAsync(factory);
+
         // Step 3: Verify via API → second registry resolution + signature verification
         var verifyResp = await httpClient.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = clientIdentity.Did, key_id = clientIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             SnakeJson);
         Assert.Equal(HttpStatusCode.Created, verifyResp.StatusCode);
 
@@ -604,6 +610,8 @@ public class RegistryIntegrationTests
     /// </summary>
     private class RealRegistryFactory : Infrastructure.SsdidDriveFactory
     {
+        protected override bool UseMockRegistry => false;
+
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);

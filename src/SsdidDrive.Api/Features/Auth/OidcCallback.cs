@@ -80,12 +80,14 @@ public static class OidcCallback
             if (string.IsNullOrEmpty(invitationToken))
                 return RedirectWithError(config, "No account linked to this provider. Register first.", clientRedirectUri);
 
-            // Validate invitation
-            var invitation = await db.Invitations
+            // Validate invitation (materialize first, filter client-side for SQLite compat)
+            var cbNow = DateTimeOffset.UtcNow;
+            var cbCandidates = await db.Invitations
                 .Include(i => i.Tenant)
-                .FirstOrDefaultAsync(i => (i.Token == invitationToken || i.ShortCode == invitationToken)
-                    && i.Status == InvitationStatus.Pending
-                    && i.ExpiresAt > DateTimeOffset.UtcNow, ct);
+                .Where(i => i.Token == invitationToken || i.ShortCode == invitationToken)
+                .ToListAsync(ct);
+            var invitation = cbCandidates
+                .FirstOrDefault(i => i.Status == InvitationStatus.Pending && i.ExpiresAt > cbNow);
 
             if (invitation is null)
                 return RedirectWithError(config, "Invalid or expired invitation", clientRedirectUri);

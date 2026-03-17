@@ -18,13 +18,11 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
     {
         var resp = await client.PostAsJsonAsync("/api/folders", new
         {
-            name = "Test Folder",
-            encrypted_folder_key = Convert.ToBase64String(new byte[32]),
-            kem_algorithm = "ML-KEM-768"
+            name = "Test Folder"
         }, TestFixture.Json);
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        return body.GetProperty("id").GetString()!;
+        return body.GetProperty("data").GetProperty("id").GetString()!;
     }
 
     private static async Task<(HttpStatusCode Status, JsonElement Body)> UploadFileAsync(
@@ -97,7 +95,7 @@ public class FileTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        var files = body.GetProperty("items");
+        var files = body.GetProperty("data");
         Assert.Equal(2, files.GetArrayLength());
     }
 

@@ -147,7 +147,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         var invitationId = await CreateInvitationForUser(_factory, tenantId, ownerClient, acceptUserId);
 
         // Accept
-        var response = await acceptClient.PostAsync($"/api/invitations/{invitationId}/accept", null);
+        var response = await acceptClient.PostAsJsonAsync($"/api/invitations/{invitationId}/accept", new { }, TestFixture.Json);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Verify UserTenant was created
@@ -169,7 +169,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
 
         var invitationId = await CreateInvitationForUser(_factory, tenantId, ownerClient, declineUserId);
 
-        var response = await declineClient.PostAsync($"/api/invitations/{invitationId}/decline", null);
+        var response = await declineClient.PostAsJsonAsync($"/api/invitations/{invitationId}/decline", new { }, TestFixture.Json);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -236,6 +236,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
             Role = TenantRole.Member,
             Status = InvitationStatus.Pending,
             Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1), // Expired yesterday
             CreatedAt = DateTimeOffset.UtcNow.AddDays(-8),
             UpdatedAt = DateTimeOffset.UtcNow.AddDays(-8)
@@ -270,6 +271,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
             Role = TenantRole.Member,
             Status = InvitationStatus.Pending,
             Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -277,7 +279,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         db.Invitations.Add(invitation);
         await db.SaveChangesAsync();
 
-        var response = await memberClient.PostAsync($"/api/invitations/{invitation.Id}/accept", null);
+        var response = await memberClient.PostAsJsonAsync($"/api/invitations/{invitation.Id}/accept", new { }, TestFixture.Json);
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
@@ -306,6 +308,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
             Status = InvitationStatus.Pending,
             Token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
                 .Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -313,9 +316,10 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
         db.Invitations.Add(invitation);
         await db.SaveChangesAsync();
 
-        // Any authenticated user can accept an email-only invitation
-        // (authorization comes from knowing the invitation ID, which requires the token)
-        var response = await acceptClient.PostAsync($"/api/invitations/{invitation.Id}/accept", null);
+        // For open invitations (InvitedUserId is null), the accept endpoint requires
+        // a token proof to prevent GUID brute-force
+        var response = await acceptClient.PostAsJsonAsync($"/api/invitations/{invitation.Id}/accept",
+            new { token = invitation.Token }, TestFixture.Json);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -329,7 +333,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
 
         var invitationId = await CreateInvitationForUser(_factory, tenantId, ownerClient, acceptUserId);
 
-        var response = await acceptClient.PostAsync($"/api/invitations/{invitationId}/accept", null);
+        var response = await acceptClient.PostAsJsonAsync($"/api/invitations/{invitationId}/accept", new { }, TestFixture.Json);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Inviter should have an invitation_accepted notification
@@ -399,6 +403,7 @@ public class InvitationTests : IClassFixture<SsdidDriveFactory>
             Role = TenantRole.Member,
             Status = InvitationStatus.Pending,
             Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Replace("+", "-").Replace("/", "_").TrimEnd('='),
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow

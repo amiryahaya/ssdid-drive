@@ -198,9 +198,9 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
             key_proof = new string('e', 64)
         }, TestFixture.Json);
 
-        // Unauthenticated retrieval by DID
-        var unauthClient = _factory.CreateClient();
-        var response = await unauthClient.GetAsync(
+        // Retrieval by DID (requires auth)
+        var (shareClient, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareRetriever");
+        var response = await shareClient.GetAsync(
             $"/api/recovery/share?did={Uri.EscapeDataString(knownDid)}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -213,7 +213,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task GetRecoveryShare_UnknownDid_ReturnsNotFound()
     {
-        var client = _factory.CreateClient();
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareUnknownUser");
         var response = await client.GetAsync(
             "/api/recovery/share?did=did:ssdid:no-such-user-xyz");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -235,8 +235,8 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         await client.DeleteAsync("/api/recovery/setup");
 
         // The share should no longer be findable
-        var unauthClient = _factory.CreateClient();
-        var response = await unauthClient.GetAsync(
+        var (lookupClient, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShareDeletedLooker");
+        var response = await lookupClient.GetAsync(
             $"/api/recovery/share?did={Uri.EscapeDataString(deletedDid)}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -258,8 +258,8 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         }, TestFixture.Json);
 
         var newDid = $"did:ssdid:test-shamir-newdevice-{Guid.NewGuid():N}";
-        var unauthClient = _factory.CreateClient();
-        var response = await unauthClient.PostAsJsonAsync("/api/recovery/complete", new
+        var (completeClient, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirCompleter");
+        var response = await completeClient.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = oldDid,
             new_did = newDid,
@@ -288,8 +288,8 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
             key_proof = new string('d', 64)
         }, TestFixture.Json);
 
-        var unauthClient = _factory.CreateClient();
-        var response = await unauthClient.PostAsJsonAsync("/api/recovery/complete", new
+        var (wrongProofClient, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirWrongProofer");
+        var response = await wrongProofClient.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = oldDid,
             new_did = $"did:ssdid:test-shamir-wrong-{Guid.NewGuid():N}",
@@ -303,7 +303,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task CompleteRecovery_UnknownOldDid_ReturnsNotFound()
     {
-        var client = _factory.CreateClient();
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirUnknownDid");
         var response = await client.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = "did:ssdid:no-such-user-complete",
@@ -318,7 +318,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
     [Fact]
     public async Task CompleteRecovery_MissingFields_ReturnsBadRequest()
     {
-        var client = _factory.CreateClient();
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirMissingFields");
         var response = await client.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = "",
@@ -338,7 +338,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         await TestFixture.CreateAuthenticatedClientAsync(
             _factory, "ShamirNoSetupComplete", did: oldDid);
 
-        var client = _factory.CreateClient();
+        var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirNoSetupCompleter");
         var response = await client.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = oldDid,
@@ -376,8 +376,8 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
 
         // 3. Complete recovery
         var newDid = $"did:ssdid:test-shamir-flow-new-{Guid.NewGuid():N}";
-        var unauthClient = _factory.CreateClient();
-        var completeResp = await unauthClient.PostAsJsonAsync("/api/recovery/complete", new
+        var (flowCompleteClient, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirFlowCompleter");
+        var completeResp = await flowCompleteClient.PostAsJsonAsync("/api/recovery/complete", new
         {
             old_did = oldDid,
             new_did = newDid,
@@ -387,7 +387,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, completeResp.StatusCode);
 
         // 4. Share is no longer available — setup was deactivated
-        var shareResp = await unauthClient.GetAsync(
+        var shareResp = await flowCompleteClient.GetAsync(
             $"/api/recovery/share?did={Uri.EscapeDataString(oldDid)}");
         Assert.Equal(HttpStatusCode.NotFound, shareResp.StatusCode);
     }

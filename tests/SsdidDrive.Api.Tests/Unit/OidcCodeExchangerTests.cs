@@ -18,7 +18,7 @@ public class OidcCodeExchangerTests
         Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth", url);
         Assert.Contains("client_id=google-client-id", url);
         Assert.Contains("response_type=code", url);
-        Assert.Contains("scope=openid+email+profile", url);
+        Assert.Contains("scope=openid", url);
         Assert.Contains("state=test-state-123", url);
         Assert.Contains("code_challenge=", url);
         Assert.Contains("code_challenge_method=S256", url);

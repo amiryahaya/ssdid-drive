@@ -122,9 +122,7 @@ public static class TestFixture
     {
         var resp = await client.PostAsJsonAsync("/api/folders", new
         {
-            name,
-            encrypted_folder_key = Convert.ToBase64String(new byte[32]),
-            kem_algorithm = "ML-KEM-768"
+            name
         }, Json);
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>(Json);
@@ -183,6 +181,12 @@ public static class TestFixture
     public static async Task<JsonElement> RegisterWalletAsync(
         SsdidDriveFactory factory, SsdidIdentity walletIdentity)
     {
+        // Register the DID in the mock registry so resolution succeeds
+        factory.MockRegistryHandler.RegisterDid(walletIdentity.Did, walletIdentity.BuildDidDocument());
+
+        // Create an invitation for the wallet user to register with
+        var inviteToken = await CreateInviteTokenAsync(factory);
+
         var client = factory.CreateClient();
 
         var regResp = await client.PostAsJsonAsync("/api/auth/ssdid/register",
@@ -193,11 +197,65 @@ public static class TestFixture
 
         var signedChallenge = walletIdentity.SignChallenge(challenge);
         var verifyResp = await client.PostAsJsonAsync("/api/auth/ssdid/register/verify",
-            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge },
+            new { did = walletIdentity.Did, key_id = walletIdentity.KeyId, signed_challenge = signedChallenge, invite_token = inviteToken },
             Json);
         verifyResp.EnsureSuccessStatusCode();
         var verifyBody = await verifyResp.Content.ReadFromJsonAsync<JsonElement>();
         return verifyBody.GetProperty("credential");
+    }
+
+    public static async Task<string> CreateInviteTokenAsync(SsdidDriveFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Invite Tenant",
+            Slug = $"inv-{Guid.NewGuid():N}"[..32],
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Tenants.Add(tenant);
+
+        var owner = new User
+        {
+            Id = Guid.NewGuid(),
+            Did = $"did:ssdid:inv-owner-{Guid.NewGuid():N}",
+            DisplayName = "Invite Owner",
+            Status = UserStatus.Active,
+            TenantId = tenant.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        db.Users.Add(owner);
+        db.UserTenants.Add(new UserTenant
+        {
+            UserId = owner.Id,
+            TenantId = tenant.Id,
+            Role = TenantRole.Owner,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        db.Invitations.Add(new Invitation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenant.Id,
+            InvitedById = owner.Id,
+            Email = "wallet@example.com",
+            Role = TenantRole.Member,
+            Status = InvitationStatus.Pending,
+            Token = token,
+            ShortCode = $"TST-{Guid.NewGuid():N}"[..8].ToUpper(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+        return token;
     }
 
     private static readonly TimeSpan SseTimeout = TimeSpan.FromSeconds(10);

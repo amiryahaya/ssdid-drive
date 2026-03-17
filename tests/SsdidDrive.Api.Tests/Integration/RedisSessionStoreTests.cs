@@ -21,7 +21,7 @@ public class RedisSessionStoreIntegrationTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _redis.StartAsync();
-        _mux = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        _mux = await ConnectionMultiplexer.ConnectAsync($"{_redis.GetConnectionString()},allowAdmin=true");
         var cache = new RedisCache(Options.Create(new RedisCacheOptions
         {
             Configuration = _redis.GetConnectionString(),
