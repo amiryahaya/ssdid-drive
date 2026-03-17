@@ -88,6 +88,24 @@ interface AuditLogResponse {
   page_size: number
 }
 
+export interface NotificationLog {
+  id: string
+  scope: string
+  target_id: string | null
+  title: string
+  message: string
+  recipient_count: number
+  created_at: string
+  sent_by_name: string
+}
+
+interface NotificationLogsResponse {
+  items: NotificationLog[]
+  total: number
+  page: number
+  page_size: number
+}
+
 interface AdminState {
   users: User[]
   usersTotal: number
@@ -118,6 +136,12 @@ interface AdminState {
   auditLogTotal: number
   auditLogLoading: boolean
   fetchAuditLog: (page: number, pageSize: number, filters?: { actor?: string; action?: string; from?: string; to?: string }) => Promise<void>
+
+  notificationLogs: NotificationLog[]
+  notificationLogsTotal: number
+  notificationLogsLoading: boolean
+  sendNotification: (scope: string, targetId: string | null, title: string, message: string) => Promise<{ recipients: number }>
+  fetchNotificationLogs: (page?: number, pageSize?: number) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -263,6 +287,29 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       throw err
     } finally {
       set({ auditLogLoading: false })
+    }
+  },
+
+  notificationLogs: [],
+  notificationLogsTotal: 0,
+  notificationLogsLoading: false,
+
+  sendNotification: async (scope: string, targetId: string | null, title: string, message: string) => {
+    return api.post<{ recipients: number }>('/api/admin/notifications', { scope, target_id: targetId, title, message })
+  },
+
+  fetchNotificationLogs: async (page = 1, pageSize = 20) => {
+    set({ notificationLogsLoading: true })
+    try {
+      const res = await api.get<NotificationLogsResponse>(
+        `/api/admin/notifications?page=${page}&pageSize=${pageSize}`,
+      )
+      set({ notificationLogs: res.items, notificationLogsTotal: res.total })
+    } catch (err) {
+      set({ notificationLogs: [], notificationLogsTotal: 0 })
+      throw err
+    } finally {
+      set({ notificationLogsLoading: false })
     }
   },
 }))

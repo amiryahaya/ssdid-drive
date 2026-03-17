@@ -10,6 +10,7 @@ const routeTitles: Record<string, string> = {
   '/users': 'Users',
   '/tenants': 'Tenants',
   '/audit-log': 'Audit Log',
+  '/notifications': 'Notifications',
 }
 
 function getPageTitle(pathname: string): string {

@@ -10,6 +10,7 @@ import UsersPage from './pages/UsersPage'
 import TenantsPage from './pages/TenantsPage'
 import TenantDetailPage from './pages/TenantDetailPage'
 import AuditLogPage from './pages/AuditLogPage'
+import NotificationsPage from './pages/NotificationsPage'
 import Layout from './components/Layout'
 
 class ErrorBoundary extends Component<
@@ -71,6 +72,7 @@ function AuthenticatedApp() {
         <Route path="/tenants" element={<TenantsPage />} />
         <Route path="/tenants/:id" element={<TenantDetailPage />} />
         <Route path="/audit-log" element={<AuditLogPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>
