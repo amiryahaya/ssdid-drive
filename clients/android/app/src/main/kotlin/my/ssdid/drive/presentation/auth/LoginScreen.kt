@@ -20,9 +20,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import my.ssdid.drive.R
+import my.ssdid.drive.util.WalletCallbackHolder
 
 @Composable
 fun LoginScreen(
@@ -58,6 +62,24 @@ fun LoginScreen(
             context.startActivity(intent)
             viewModel.onOidcLaunched()
         }
+    }
+
+    // Consume OIDC/wallet auth callback when app resumes from browser
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                when (val result = WalletCallbackHolder.consume(WalletCallbackHolder.Flow.AUTH)) {
+                    is WalletCallbackHolder.Result.Success ->
+                        viewModel.handleAuthCallback(result.sessionToken)
+                    is WalletCallbackHolder.Result.Error ->
+                        viewModel.showError(result.message)
+                    null -> {}
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(

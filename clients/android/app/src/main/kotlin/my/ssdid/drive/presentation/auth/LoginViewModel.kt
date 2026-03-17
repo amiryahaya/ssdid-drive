@@ -129,4 +129,29 @@ class LoginViewModel @Inject constructor(
     fun onOidcLaunched() {
         _uiState.update { it.copy(oidcLaunchUrl = null) }
     }
+
+    /**
+     * Handle auth callback from OIDC browser redirect or wallet deep link.
+     * Saves the session token and navigates to main.
+     */
+    fun handleAuthCallback(sessionToken: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            try {
+                authRepository.saveSession(sessionToken, "")
+                _uiState.update { it.copy(isLoading = false, isAuthenticated = true) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = "Sign-in failed. Please try again.")
+                }
+            }
+        }
+    }
+
+    /**
+     * Show an error message from external callback (OIDC error, wallet error).
+     */
+    fun showError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
 }

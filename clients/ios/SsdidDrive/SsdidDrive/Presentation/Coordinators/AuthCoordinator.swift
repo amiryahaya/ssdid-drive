@@ -256,7 +256,7 @@ extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
             }
 
             if let sessionToken = queryItems.first(where: { $0.name == "token" })?.value, !sessionToken.isEmpty {
-                self?.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+                self?.inviteAcceptViewModel?.handleWalletCallback(sessionToken: sessionToken)
             } else {
                 self?.inviteAcceptViewModel?.registrationError = "No session token received"
             }
