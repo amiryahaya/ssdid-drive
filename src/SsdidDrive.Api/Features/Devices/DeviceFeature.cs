@@ -11,5 +11,7 @@ public static class DeviceFeature
         GetCurrentDevice.Map(group);
         UpdateDevice.Map(group);
         RevokeDevice.Map(group);
+        RegisterPush.Map(group);
+        UnregisterPush.Map(group);
     }
 }

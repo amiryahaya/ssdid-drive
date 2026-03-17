@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Login> Logins => Set<Login>();
     public DbSet<ExtensionService> ExtensionServices => Set<ExtensionService>();
     public DbSet<TenantRequest> TenantRequests => Set<TenantRequest>();
+    public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -419,6 +420,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(u => u.Logins)
                 .HasForeignKey(x => x.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationLog>(e =>
+        {
+            e.ToTable("notification_logs");
+            e.HasKey(n => n.Id);
+            e.Property(n => n.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(n => n.Scope).HasMaxLength(32).IsRequired();
+            e.Property(n => n.Title).HasMaxLength(256).IsRequired();
+            e.Property(n => n.Message).HasMaxLength(1024).IsRequired();
+            e.Property(n => n.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasIndex(n => n.CreatedAt).IsDescending();
+            e.HasIndex(n => n.SentById);
+
+            e.HasOne(n => n.SentBy)
+                .WithMany()
+                .HasForeignKey(n => n.SentById)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

@@ -11,6 +11,7 @@ public class Device
     public DeviceStatus Status { get; set; } = DeviceStatus.Active;
     public string KeyAlgorithm { get; set; } = default!;     // "kaz_sign", "ml_dsa"
     public byte[]? PublicKey { get; set; }                    // Device signing public key
+    public string? PushPlayerId { get; set; }
     public DateTimeOffset? LastUsedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

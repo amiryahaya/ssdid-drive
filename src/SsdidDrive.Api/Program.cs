@@ -169,6 +169,8 @@ builder.Services.AddHttpClient<OidcCodeExchanger>(client =>
 builder.Services.AddScoped<ExtensionServiceContext>();
 builder.Services.AddSingleton<HmacReplayCache>();
 
+builder.Services.Configure<OneSignalOptions>(builder.Configuration.GetSection("OneSignal"));
+builder.Services.AddHttpClient<PushService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<InvitationAcceptanceService>();
