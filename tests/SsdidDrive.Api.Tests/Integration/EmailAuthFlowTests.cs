@@ -72,11 +72,14 @@ public class EmailAuthFlowTests : IClassFixture<SsdidDriveFactory>
     // ── Task 7: Email Login ──
 
     [Fact]
-    public async Task EmailLogin_UnknownEmail_Returns404()
+    public async Task EmailLogin_UnknownEmail_Returns200_AntiEnumeration()
     {
+        // Anti-enumeration: unknown email returns same 200 as known email
         var resp = await _client.PostAsJsonAsync("/api/auth/email/login",
             new { email = "nonexistent@example.com" }, SnakeJson);
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var json = await resp.Content.ReadFromJsonAsync<JsonElement>(SnakeJson);
+        Assert.True(json.GetProperty("requires_totp").GetBoolean());
     }
 
     [Fact]

@@ -62,7 +62,7 @@ public static class TotpRecoveryVerify
 
         return Results.Ok(new
         {
-            token,
+            session_token = token,
             account_id = user.Id,
             totp_disabled = true,
             requires_totp_setup = true,

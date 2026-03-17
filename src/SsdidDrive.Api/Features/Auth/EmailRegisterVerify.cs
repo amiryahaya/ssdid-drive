@@ -90,7 +90,7 @@ public static class EmailRegisterVerify
 
         return Results.Ok(new
         {
-            token = sessionToken,
+            session_token = sessionToken,
             account_id = user.Id,
             email = user.Email,
             requires_totp_setup = true,

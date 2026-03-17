@@ -119,7 +119,7 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
 
         Assert.Equal(HttpStatusCode.OK, verifyResp.StatusCode);
         var body = await verifyResp.Content.ReadFromJsonAsync<JsonElement>(Json);
-        var newToken = body.GetProperty("token").GetString();
+        var newToken = body.GetProperty("session_token").GetString();
         Assert.False(string.IsNullOrEmpty(newToken));
 
         // Verify the new session is NOT MFA-pending (can access /api/me)

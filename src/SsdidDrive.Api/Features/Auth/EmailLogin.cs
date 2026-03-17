@@ -29,11 +29,13 @@ public static class EmailLogin
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email && u.Status == UserStatus.Active, ct);
 
-        if (user is null)
-            return AppError.NotFound("No account with this email").ToProblemResult();
-
-        if (!user.TotpEnabled)
-            return AppError.BadRequest("TOTP is not set up for this account").ToProblemResult();
+        // SECURITY: Always return the same response to prevent user enumeration.
+        // Whether the email is unknown, exists but has no TOTP, or is valid — same shape.
+        if (user is null || !user.TotpEnabled)
+        {
+            // Simulate processing time to prevent timing oracle
+            await Task.Delay(100, ct);
+        }
 
         return Results.Ok(new { requires_totp = true, email });
     }

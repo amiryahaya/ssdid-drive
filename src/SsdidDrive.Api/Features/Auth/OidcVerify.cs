@@ -98,7 +98,7 @@ public static class OidcVerify
 
             return Results.Ok(new
             {
-                token,
+                session_token = token,
                 account_id = user.Id,
                 email = user.Email,
                 display_name = user.DisplayName,
@@ -170,7 +170,7 @@ public static class OidcVerify
 
         return Results.Ok(new
         {
-            token = newToken,
+            session_token = newToken,
             account_id = newUser.Id,
             email = newUser.Email,
             display_name = newUser.DisplayName,

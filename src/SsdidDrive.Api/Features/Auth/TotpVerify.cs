@@ -79,7 +79,7 @@ public static class TotpVerify
 
         return Results.Ok(new
         {
-            token,
+            session_token = token,
             account_id = user.Id,
             email = user.Email,
             display_name = user.DisplayName,
