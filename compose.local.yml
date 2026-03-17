@@ -12,7 +12,7 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: ssdid_drive
-      POSTGRES_PASSWORD: ssdid_drive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ssdid_drive
     ports:
       - "5432:5432"
@@ -45,14 +45,16 @@ services:
     secrets:
       - ssdid-identity
     environment:
-      ConnectionStrings__Default: "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=ssdid_drive"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=ssdid_drive;Username=ssdid_drive;Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Redis: "redis:6379"
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: "http://+:5000"
-      Email__ApiKey: "re_CVcS3GKg_8KwkrWnJL1HRWmKNZ7cHcxta"
+      Email__ApiKey: ${Email__ApiKey}
       Ssdid__ServiceUrl: "http://localhost:5050"
       Ssdid__SecretPath: "/run/secrets/ssdid-identity"
-      Auth__TotpEncryptionKey: "XwjPWnWbliLvRFH2eRvGbugkozbnJZN3O6LI1h4QucM="
+      Auth__TotpEncryptionKey: ${Auth__TotpEncryptionKey}
+      OneSignal__AppId: ${OneSignal__AppId}
+      OneSignal__ApiKey: ${OneSignal__ApiKey}
     depends_on:
       db:
         condition: service_healthy

@@ -24,6 +24,8 @@ final class MockAuthRepository: AuthRepository {
     var saveSessionFromWalletResult: Result<Void, Error> = .success(())
     var acceptInvitationAsExistingUserResult: Result<Void, Error> = .success(())
     var acceptInvitationWithOidcResult: Result<Void, Error> = .success(())
+    var registerPushSubscriptionResult: Result<Void, Error> = .success(())
+    var unregisterPushSubscriptionResult: Result<Void, Error> = .success(())
 
     // MARK: - Call Tracking
 
@@ -46,6 +48,8 @@ final class MockAuthRepository: AuthRepository {
     var saveSessionFromWalletCallCount = 0
     var acceptInvitationAsExistingUserCallCount = 0
     var acceptInvitationWithOidcCallCount = 0
+    var registerPushSubscriptionCallCount = 0
+    var unregisterPushSubscriptionCallCount = 0
 
     // MARK: - Last Call Parameters
 
@@ -61,6 +65,7 @@ final class MockAuthRepository: AuthRepository {
     var lastAcceptWithOidcToken: String?
     var lastAcceptWithOidcProvider: String?
     var lastAcceptWithOidcIdToken: String?
+    var lastRegisterPushSubscriptionPlayerId: String?
 
     // MARK: - Properties
 
@@ -197,6 +202,19 @@ final class MockAuthRepository: AuthRepository {
         try acceptInvitationWithOidcResult.get()
     }
 
+    // MARK: - Push Subscription
+
+    func registerPushSubscription(playerId: String) async throws {
+        registerPushSubscriptionCallCount += 1
+        lastRegisterPushSubscriptionPlayerId = playerId
+        try registerPushSubscriptionResult.get()
+    }
+
+    func unregisterPushSubscription() async throws {
+        unregisterPushSubscriptionCallCount += 1
+        try unregisterPushSubscriptionResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -219,6 +237,8 @@ final class MockAuthRepository: AuthRepository {
         saveSessionFromWalletResult = .success(())
         acceptInvitationAsExistingUserResult = .success(())
         acceptInvitationWithOidcResult = .success(())
+        registerPushSubscriptionResult = .success(())
+        unregisterPushSubscriptionResult = .success(())
 
         // Reset call counts
         logoutCallCount = 0
@@ -240,6 +260,8 @@ final class MockAuthRepository: AuthRepository {
         saveSessionFromWalletCallCount = 0
         acceptInvitationAsExistingUserCallCount = 0
         acceptInvitationWithOidcCallCount = 0
+        registerPushSubscriptionCallCount = 0
+        unregisterPushSubscriptionCallCount = 0
 
         // Reset last call parameters
         lastEnrollDeviceName = nil
@@ -254,6 +276,7 @@ final class MockAuthRepository: AuthRepository {
         lastAcceptWithOidcToken = nil
         lastAcceptWithOidcProvider = nil
         lastAcceptWithOidcIdToken = nil
+        lastRegisterPushSubscriptionPlayerId = nil
 
         // Reset properties
         stubbedCurrentUserId = nil

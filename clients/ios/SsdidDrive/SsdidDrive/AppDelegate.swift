@@ -91,6 +91,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             #if DEBUG
             print("OneSignal: User \(accepted ? "accepted" : "declined") push notifications")
             #endif
+
+            // If the user just granted permission, a subscription ID will now be available.
+            // Register it with the backend so the server can target this device.
+            if accepted {
+                let playerId = OneSignal.User.pushSubscription.id
+                if let playerId = playerId, !playerId.isEmpty {
+                    Task {
+                        do {
+                            try await DependencyContainer.shared.authRepository.registerPushSubscription(playerId: playerId)
+                            #if DEBUG
+                            print("OneSignal: Registered push subscription after permission grant: \(playerId)")
+                            #endif
+                        } catch {
+                            logger.warning("OneSignal: Failed to register push subscription after permission grant: \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                }
+            }
         }, fallbackToSettings: true)
         #endif
     }
@@ -105,6 +123,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         #if DEBUG
         print("OneSignal: Logged in with userId: \(userId)")
         #endif
+
+        // Register the OneSignal push subscription ID with the backend so the server
+        // can target push notifications to this specific device.
+        let playerId = OneSignal.User.pushSubscription.id
+        if let playerId = playerId, !playerId.isEmpty {
+            Task {
+                do {
+                    try await DependencyContainer.shared.authRepository.registerPushSubscription(playerId: playerId)
+                    #if DEBUG
+                    print("OneSignal: Registered push subscription with backend: \(playerId)")
+                    #endif
+                } catch {
+                    // Non-fatal — push notifications will still work via OneSignal;
+                    // the backend simply won't be able to target this device directly.
+                    logger.warning("OneSignal: Failed to register push subscription with backend: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
         #endif
     }
 
@@ -112,6 +148,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Call this on logout.
     func logoutOneSignal() {
         #if canImport(OneSignalFramework)
+        // Unregister the push subscription from the backend before logging out of OneSignal
+        // so the server no longer sends notifications to this device.
+        Task {
+            do {
+                try await DependencyContainer.shared.authRepository.unregisterPushSubscription()
+                #if DEBUG
+                print("OneSignal: Unregistered push subscription from backend")
+                #endif
+            } catch {
+                // Non-fatal — proceed with OneSignal logout regardless.
+                logger.warning("OneSignal: Failed to unregister push subscription from backend: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         OneSignal.logout()
         #if DEBUG
         print("OneSignal: Logged out")

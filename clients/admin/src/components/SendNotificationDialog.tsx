@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAdminStore } from '../stores/adminStore'
+import type { User } from '../stores/adminStore'
 
 interface SendNotificationDialogProps {
   open: boolean
@@ -15,9 +16,15 @@ export default function SendNotificationDialog({
   const sendNotification = useAdminStore((s) => s.sendNotification)
   const tenants = useAdminStore((s) => s.tenants)
   const fetchTenants = useAdminStore((s) => s.fetchTenants)
+  const fetchUsers = useAdminStore((s) => s.fetchUsers)
+  const users = useAdminStore((s) => s.users)
+  const usersLoading = useAdminStore((s) => s.usersLoading)
 
   const [scope, setScope] = useState<'user' | 'tenant' | 'broadcast'>('broadcast')
   const [targetUserId, setTargetUserId] = useState('')
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [targetTenantId, setTargetTenantId] = useState('')
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
@@ -25,10 +32,16 @@ export default function SendNotificationDialog({
   const [error, setError] = useState<string | null>(null)
   const [recipientCount, setRecipientCount] = useState<number | null>(null)
 
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const userDropdownRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (open) {
       setScope('broadcast')
       setTargetUserId('')
+      setSelectedUser(null)
+      setUserSearch('')
+      setShowUserDropdown(false)
       setTargetTenantId('')
       setTitle('')
       setMessage('')
@@ -49,17 +62,59 @@ export default function SendNotificationDialog({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, submitting, onClose])
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) {
+        setShowUserDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleUserSearchChange = (value: string) => {
+    setUserSearch(value)
+    // Clear selected user if the search text changes
+    if (selectedUser) {
+      setSelectedUser(null)
+      setTargetUserId('')
+    }
+    setShowUserDropdown(true)
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    if (value.trim().length >= 1) {
+      searchDebounceRef.current = setTimeout(() => {
+        fetchUsers(1, 10, value.trim()).catch(() => {/* ignore */})
+      }, 300)
+    }
+  }
+
+  const handleSelectUser = (user: User) => {
+    setSelectedUser(user)
+    setTargetUserId(user.id)
+    setUserSearch(user.email ?? user.display_name ?? user.did)
+    setShowUserDropdown(false)
+  }
+
+  const handleClearUser = () => {
+    setSelectedUser(null)
+    setTargetUserId('')
+    setUserSearch('')
+    setShowUserDropdown(false)
+  }
+
   if (!open) return null
 
   const getTargetId = () => {
-    if (scope === 'user') return targetUserId.trim() || null
+    if (scope === 'user') return targetUserId || null
     if (scope === 'tenant') return targetTenantId || null
     return null
   }
 
   const isValid = () => {
     if (!title.trim() || !message.trim()) return false
-    if (scope === 'user' && !targetUserId.trim()) return false
+    if (scope === 'user' && !targetUserId) return false
     if (scope === 'tenant' && !targetTenantId) return false
     return true
   }
@@ -79,6 +134,14 @@ export default function SendNotificationDialog({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const getUserLabel = (user: User) => {
+    const parts: string[] = []
+    if (user.display_name) parts.push(user.display_name)
+    if (user.email) parts.push(user.email)
+    if (parts.length === 0) return user.did
+    return parts.join(' — ')
   }
 
   return (
@@ -161,25 +224,80 @@ export default function SendNotificationDialog({
                 </div>
               </div>
 
-              {/* Conditional target input */}
+              {/* User search */}
               {scope === 'user' && (
-                <div>
-                  <label htmlFor="notif-user-id" className="block text-sm font-medium text-gray-700 mb-1">
-                    User ID
+                <div ref={userDropdownRef} className="relative">
+                  <label htmlFor="notif-user-search" className="block text-sm font-medium text-gray-700 mb-1">
+                    User
                   </label>
-                  <input
-                    id="notif-user-id"
-                    type="text"
-                    value={targetUserId}
-                    onChange={(e) => setTargetUserId(e.target.value)}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <input
+                      id="notif-user-search"
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => handleUserSearchChange(e.target.value)}
+                      onFocus={() => {
+                        if (userSearch.trim().length >= 1 && !selectedUser) {
+                          setShowUserDropdown(true)
+                        }
+                      }}
+                      placeholder="Search by name or email..."
+                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8 ${
+                        selectedUser ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+                      }`}
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    {selectedUser && (
+                      <button
+                        type="button"
+                        onClick={handleClearUser}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label="Clear selected user"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown results */}
+                  {showUserDropdown && !selectedUser && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {usersLoading ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">Searching...</div>
+                      ) : users.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
+                      ) : (
+                        users.map((user) => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => handleSelectUser(user)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="font-medium text-gray-800">
+                              {user.display_name ?? user.email ?? user.did}
+                            </span>
+                            {user.email && user.display_name && (
+                              <span className="text-gray-500 ml-2">{user.email}</span>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {selectedUser && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Selected: {getUserLabel(selectedUser)}
+                    </p>
+                  )}
                 </div>
               )}
 
+              {/* Tenant dropdown */}
               {scope === 'tenant' && (
                 <div>
                   <label htmlFor="notif-tenant-id" className="block text-sm font-medium text-gray-700 mb-1">

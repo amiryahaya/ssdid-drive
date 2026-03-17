@@ -39,6 +39,7 @@ enum Constants {
             static let devices = "/devices"
             static let enrollDevice = "/devices/enroll"
             static let revokeDevice = "/devices/{id}/revoke"
+            static let registerDevicePush = "/devices/{id}/push"
 
             // Files
             static let files = "/files"

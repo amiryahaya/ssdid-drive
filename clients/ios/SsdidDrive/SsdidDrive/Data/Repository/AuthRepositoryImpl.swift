@@ -221,6 +221,34 @@ final class AuthRepositoryImpl: AuthRepository {
         keychainManager.deviceId
     }
 
+    func registerPushSubscription(playerId: String) async throws {
+        guard let deviceId = keychainManager.deviceId else { return }
+        let endpoint = Constants.API.Endpoints.registerDevicePush
+            .replacingOccurrences(of: "{id}", with: deviceId)
+
+        struct PushRegisterRequest: Encodable {
+            let playerId: String
+            enum CodingKeys: String, CodingKey { case playerId = "player_id" }
+        }
+
+        try await apiClient.requestNoContent(
+            endpoint,
+            method: .post,
+            body: PushRegisterRequest(playerId: playerId)
+        )
+    }
+
+    func unregisterPushSubscription() async throws {
+        guard let deviceId = keychainManager.deviceId else { return }
+        let endpoint = Constants.API.Endpoints.registerDevicePush
+            .replacingOccurrences(of: "{id}", with: deviceId)
+
+        try await apiClient.requestNoContent(
+            endpoint,
+            method: .delete
+        )
+    }
+
     // MARK: - KEM Key Sync
 
     /// Sync KEM keys to the shared keychain so the File Provider extension can decrypt and encrypt files.

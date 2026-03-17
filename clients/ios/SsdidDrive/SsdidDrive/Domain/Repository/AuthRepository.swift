@@ -60,6 +60,12 @@ protocol AuthRepository: AnyObject {
     /// Get current device ID
     var currentDeviceId: String? { get }
 
+    /// Register a OneSignal push subscription ID with the backend for the current device.
+    func registerPushSubscription(playerId: String) async throws
+
+    /// Unregister the OneSignal push subscription from the backend for the current device.
+    func unregisterPushSubscription() async throws
+
     // MARK: - Invitation Token (Public - for new users)
 
     /// Get public invitation info by token.

@@ -128,7 +128,7 @@ public static class TestFixture
         }, Json);
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>(Json);
-        return body.GetProperty("id").GetString()!;
+        return body.GetProperty("data").GetProperty("id").GetString()!;
     }
 
     public static async Task<string> UploadFileAsync(HttpClient client, string folderId,

@@ -108,6 +108,8 @@ public static class CreateShare
             actionResourceId: share.Id.ToString(),
             ct: ct);
 
+        await db.SaveChangesAsync(ct);
+
         var resourceOwnerId = req.ResourceType == "folder"
             ? await db.Folders.Where(f => f.Id == req.ResourceId).Select(f => f.OwnerId).FirstOrDefaultAsync(ct)
             : await db.Files.Where(f => f.Id == req.ResourceId).Select(f => f.UploadedById).FirstOrDefaultAsync(ct);

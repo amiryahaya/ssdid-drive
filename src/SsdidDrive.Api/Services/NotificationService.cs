@@ -20,6 +20,7 @@ public class NotificationService(AppDbContext db, PushService pushService)
     {
         db.Notifications.Add(new Notification
         {
+            Id = Guid.NewGuid(),
             UserId = userId,
             Type = type,
             Title = title,

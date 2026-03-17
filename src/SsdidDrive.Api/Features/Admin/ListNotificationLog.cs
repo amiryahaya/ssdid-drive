@@ -14,10 +14,8 @@ public static class ListNotificationLog
     {
         var pagination = new PaginationParams(page, pageSize);
         var total = await db.NotificationLogs.CountAsync(ct);
-        var items = await db.NotificationLogs
-            .OrderByDescending(n => n.CreatedAt)
-            .Skip(pagination.Skip)
-            .Take(pagination.Take)
+        // Client-side ordering for SQLite compatibility in tests
+        var items = (await db.NotificationLogs
             .Include(n => n.SentBy)
             .Select(n => new
             {
@@ -25,7 +23,11 @@ public static class ListNotificationLog
                 n.RecipientCount, n.CreatedAt,
                 SentByName = n.SentBy.DisplayName ?? n.SentBy.Did
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .OrderByDescending(n => n.CreatedAt)
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToList();
 
         return Results.Ok(new PagedResponse<object>(items, total, pagination.NormalizedPage, pagination.Take));
     }
