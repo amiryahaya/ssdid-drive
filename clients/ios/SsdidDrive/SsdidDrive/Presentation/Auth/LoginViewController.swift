@@ -1,6 +1,7 @@
 import UIKit
 import Combine
 import CoreImage.CIFilterBuiltins
+import AuthenticationServices
 
 /// Delegate protocol for LoginViewController navigation events
 protocol LoginViewControllerDelegate: AnyObject {
@@ -656,5 +657,13 @@ final class LoginViewController: BaseViewController {
             }
         }
         return UIImage(systemName: "xmark.circle") ?? UIImage()
+    }
+}
+
+// MARK: - ASWebAuthenticationPresentationContextProviding
+
+extension LoginViewController: ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        view.window ?? ASPresentationAnchor()
     }
 }

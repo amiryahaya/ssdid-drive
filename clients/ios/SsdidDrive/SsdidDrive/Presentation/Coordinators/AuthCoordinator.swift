@@ -1,6 +1,7 @@
 import UIKit
 import SwiftUI
 import Combine
+import AuthenticationServices
 
 /// Delegate for auth coordinator events
 protocol AuthCoordinatorDelegate: AnyObject {
@@ -29,6 +30,9 @@ final class AuthCoordinator: BaseCoordinator {
 
     /// Navigation delegate adapter for cleaning up invite ViewModel on back-swipe
     private var navDelegateAdapter: NavigationDelegateAdapter?
+
+    /// Retained ASWebAuthenticationSession — must be kept alive for the duration of the session
+    private var authSession: ASWebAuthenticationSession?
 
     // MARK: - Start
 
@@ -138,14 +142,50 @@ extension AuthCoordinator: LoginViewControllerDelegate {
     }
 
     func loginDidRequestOidc(provider: String) {
-        // TODO: Launch ASWebAuthenticationSession for OIDC provider
-        let alert = UIAlertController(
-            title: "\(provider.capitalized) Sign In",
-            message: "OIDC sign-in with \(provider.capitalized) is coming soon.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        navigationController.present(alert, animated: true)
+        let inviteCode = loginViewModel?.pendingInviteCode ?? ""
+        let callbackScheme = "ssdid-drive"
+
+        var urlString = "\(Constants.API.baseURL)/api/auth/oidc/\(provider)/authorize"
+        urlString += "?redirect_uri=\(callbackScheme)://auth/callback"
+        if !inviteCode.isEmpty {
+            urlString += "&invitation_token=\(inviteCode.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? inviteCode)"
+        }
+
+        guard let url = URL(string: urlString) else { return }
+
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: callbackScheme
+        ) { [weak self] callbackURL, error in
+            self?.authSession = nil
+
+            if let error = error as? ASWebAuthenticationSessionError,
+               error.code == .canceledLogin { return }
+
+            guard let callbackURL = callbackURL else {
+                self?.loginViewModel?.errorMessage = "Sign-in was cancelled or failed"
+                return
+            }
+
+            let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
+            let queryItems = components?.queryItems ?? []
+
+            if let errorMsg = queryItems.first(where: { $0.name == "error" })?.value {
+                self?.loginViewModel?.errorMessage = errorMsg
+                return
+            }
+
+            if let token = queryItems.first(where: { $0.name == "token" })?.value, !token.isEmpty {
+                self?.loginViewModel?.handleAuthCallback(sessionToken: token)
+            } else {
+                self?.loginViewModel?.errorMessage = "No session token received"
+            }
+        }
+
+        session.presentationContextProvider = navigationController.topViewController as? ASWebAuthenticationPresentationContextProviding
+        session.prefersEphemeralWebBrowserSession = true
+        session.start()
+        authSession = session
     }
 
     func loginDidRequestTenantRequest() {
@@ -183,7 +223,49 @@ extension AuthCoordinator: InviteAcceptViewModelCoordinatorDelegate {
     }
 
     func inviteAcceptViewModelDidRequestOidc(provider: String, token: String) {
-        // TODO: Navigate to OIDC authentication flow with provider and invitation token
+        let callbackScheme = "ssdid-drive"
+
+        var urlString = "\(Constants.API.baseURL)/api/auth/oidc/\(provider)/authorize"
+        urlString += "?redirect_uri=\(callbackScheme)://auth/callback"
+        if !token.isEmpty {
+            urlString += "&invitation_token=\(token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token)"
+        }
+
+        guard let url = URL(string: urlString) else { return }
+
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: callbackScheme
+        ) { [weak self] callbackURL, error in
+            self?.authSession = nil
+
+            if let error = error as? ASWebAuthenticationSessionError,
+               error.code == .canceledLogin { return }
+
+            guard let callbackURL = callbackURL else {
+                self?.inviteAcceptViewModel?.registrationError = "Sign-in was cancelled or failed"
+                return
+            }
+
+            let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
+            let queryItems = components?.queryItems ?? []
+
+            if let errorMsg = queryItems.first(where: { $0.name == "error" })?.value {
+                self?.inviteAcceptViewModel?.registrationError = errorMsg
+                return
+            }
+
+            if let sessionToken = queryItems.first(where: { $0.name == "token" })?.value, !sessionToken.isEmpty {
+                self?.loginViewModel?.handleAuthCallback(sessionToken: sessionToken)
+            } else {
+                self?.inviteAcceptViewModel?.registrationError = "No session token received"
+            }
+        }
+
+        session.presentationContextProvider = navigationController.topViewController as? ASWebAuthenticationPresentationContextProviding
+        session.prefersEphemeralWebBrowserSession = true
+        session.start()
+        authSession = session
     }
 }
 
