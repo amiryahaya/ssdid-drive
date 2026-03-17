@@ -66,7 +66,7 @@ struct TenantSwitchResponse: Codable {
 struct TenantSwitchData: Codable {
     let currentTenantId: String
     let role: String
-    let accessToken: String
+    let sessionToken: String
     let refreshToken: String
     let expiresIn: Int
     let tokenType: String
@@ -74,7 +74,7 @@ struct TenantSwitchData: Codable {
     enum CodingKeys: String, CodingKey {
         case currentTenantId = "current_tenant_id"
         case role
-        case accessToken = "access_token"
+        case sessionToken = "session_token"
         case refreshToken = "refresh_token"
         case expiresIn = "expires_in"
         case tokenType = "token_type"

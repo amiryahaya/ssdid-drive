@@ -8,6 +8,8 @@ final class TenantRepositoryImpl: TenantRepository {
 
     private let apiClient: APIClient
     private let keychainManager: KeychainManager
+    private let thumbnailCache: ThumbnailCache
+    private let spotlightIndexer: SpotlightIndexer
 
     private let tenantContextSubject = CurrentValueSubject<TenantContext?, Never>(nil)
 
@@ -21,9 +23,16 @@ final class TenantRepositoryImpl: TenantRepository {
 
     // MARK: - Initialization
 
-    init(apiClient: APIClient, keychainManager: KeychainManager) {
+    init(
+        apiClient: APIClient,
+        keychainManager: KeychainManager,
+        thumbnailCache: ThumbnailCache = .shared,
+        spotlightIndexer: SpotlightIndexer = .shared
+    ) {
         self.apiClient = apiClient
         self.keychainManager = keychainManager
+        self.thumbnailCache = thumbnailCache
+        self.spotlightIndexer = spotlightIndexer
     }
 
     // MARK: - Tenant Context
@@ -73,11 +82,16 @@ final class TenantRepositoryImpl: TenantRepository {
 
         // Save new tokens and tenant context atomically
         try keychainManager.saveTokensWithTenantContext(
-            accessToken: response.data.accessToken,
+            accessToken: response.data.sessionToken,
             refreshToken: response.data.refreshToken,
             tenantId: response.data.currentTenantId,
             role: response.data.role
         )
+
+        // SECURITY: Purge all local caches to prevent cross-tenant data leakage
+        thumbnailCache.clearCache()
+        spotlightIndexer.clearAllIndexes()
+        keychainManager.clearSharedKemKeys()
 
         // Refresh tenant list to get updated info
         let tenants = try await getUserTenants()

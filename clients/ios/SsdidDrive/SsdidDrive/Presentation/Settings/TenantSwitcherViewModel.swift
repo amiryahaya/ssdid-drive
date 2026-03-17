@@ -12,6 +12,7 @@ final class TenantSwitcherViewModel: ObservableObject {
     @Published var isSwitching: Bool = false
     @Published var error: String?
     @Published var switchSuccess: Bool = false
+    @Published var hasActiveUploads: Bool = false
 
     // MARK: - Properties
 
@@ -87,6 +88,10 @@ final class TenantSwitcherViewModel: ObservableObject {
 
     func switchTenant(_ tenant: Tenant) {
         guard tenant.id != currentTenant?.id else { return }
+        guard !hasActiveUploads else {
+            error = "Upload in Progress — Please wait for the upload to complete or cancel it before switching organizations."
+            return
+        }
 
         isSwitching = true
         error = nil

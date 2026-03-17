@@ -1,5 +1,6 @@
 import UIKit
 import SwiftUI
+import Combine
 
 /// Delegate for auth coordinator events
 protocol AuthCoordinatorDelegate: AnyObject {
@@ -16,6 +17,7 @@ final class AuthCoordinator: BaseCoordinator {
     // MARK: - Properties
 
     weak var delegate: AuthCoordinatorDelegate?
+    private var cancellables = Set<AnyCancellable>()
 
     /// Reference to the current login view model so the SceneDelegate can
     /// deliver auth callback tokens to it.
@@ -74,7 +76,7 @@ final class AuthCoordinator: BaseCoordinator {
         let hostingController = UIHostingController(rootView: joinTenantView)
 
         if let sheet = hostingController.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
+            sheet.detents = [.large()]
             sheet.prefersGrabberVisible = true
         }
 
@@ -194,9 +196,26 @@ extension AuthCoordinator: JoinTenantViewModelDelegate {
 
     func joinTenantDidRequestLogin(inviteCode: String) {
         navigationController.dismiss(animated: true) { [weak self] in
-            // The user needs to authenticate first, then the invite will be auto-accepted.
-            // Store the pending code for the app coordinator to process after auth.
-            self?.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
+            guard let self else { return }
+            // Store the pending invite code for auto-accept after authentication
+            self.delegate?.authDidRequestLoginWithInvite(code: inviteCode)
+
+            // Pass invite code to login view model so it's included in the wallet deeplink
+            self.loginViewModel?.pendingInviteCode = inviteCode
+
+            // Clear old deeplink so we wait for the NEW challenge that includes invite_code
+            self.loginViewModel?.walletDeepLink = nil
+
+            // Create a fresh challenge (with invite code in deeplink), then open wallet
+            self.loginViewModel?.createChallenge()
+            self.loginViewModel?.$walletDeepLink
+                .compactMap { $0 }
+                .first()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.loginViewModel?.openWallet()
+                }
+                .store(in: &self.cancellables)
         }
     }
 }

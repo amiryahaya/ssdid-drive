@@ -111,13 +111,13 @@ final class ShareRepositoryImpl: ShareRepository {
     // MARK: - List Shares
 
     func getCreatedShares() async throws -> [Share] {
-        let response: ShareListDataResponse = try await apiClient.request("/shares/created")
-        return response.data
+        let response: SharePagedResponse = try await apiClient.request("/shares/created")
+        return response.items
     }
 
     func getReceivedShares() async throws -> [Share] {
-        let response: ShareListDataResponse = try await apiClient.request("/shares/received")
-        return response.data
+        let response: SharePagedResponse = try await apiClient.request("/shares/received")
+        return response.items
     }
 
     func getShare(shareId: String) async throws -> Share {

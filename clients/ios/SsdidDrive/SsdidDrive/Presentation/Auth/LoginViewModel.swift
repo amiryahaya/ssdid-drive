@@ -23,6 +23,9 @@ final class LoginViewModel: BaseViewModel {
     @Published var navigateToTotp: String?
     @Published var qrPayload: String?
     @Published var walletDeepLink: URL?
+
+    /// Pending invite code to pass to wallet via deeplink for invite-only registration
+    var pendingInviteCode: String?
     @Published var isExpired = false
 
     private var sseStreamTask: Task<Void, Never>?
@@ -98,6 +101,9 @@ final class LoginViewModel: BaseViewModel {
                        let claimsString = String(data: claimsData, encoding: .utf8) {
                         queryItems.append(URLQueryItem(name: "requested_claims", value: claimsString))
                     }
+                }
+                if let inviteCode = pendingInviteCode {
+                    queryItems.append(URLQueryItem(name: "invite_code", value: inviteCode))
                 }
 
                 components.queryItems = queryItems

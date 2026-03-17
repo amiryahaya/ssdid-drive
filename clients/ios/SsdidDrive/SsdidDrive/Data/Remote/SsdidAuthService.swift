@@ -45,7 +45,7 @@ final class SsdidAuthService {
 
     private init() {
         baseURL = ProcessInfo.processInfo.environment["API_URL"]
-            ?? "https://drive.ssdid.my"
+            ?? Constants.API.baseURL
 
         // D8: Use pinning-aware URLSession when SSL pinning is configured
         if Constants.API.isSSLPinningConfigured {

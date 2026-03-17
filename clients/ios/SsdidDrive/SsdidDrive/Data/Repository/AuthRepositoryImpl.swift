@@ -403,7 +403,7 @@ extension AuthRepositoryImpl {
     // MARK: - Multi-Auth Invitation Acceptance
 
     func acceptInvitationAsExistingUser(token: String) async throws {
-        let endpoint = "/api/invitations/token/\(token)/accept"
+        let endpoint = "/invitations/token/\(token)/accept"
         let _: AcceptCodeInvitationResponse = try await apiClient.request(
             endpoint,
             method: .post,
@@ -445,7 +445,7 @@ extension AuthRepositoryImpl {
         }
 
         let response: OidcInviteResponse = try await apiClient.request(
-            "/api/auth/oidc/verify",
+            "/auth/oidc/verify",
             method: .post,
             body: request,
             requiresAuth: false

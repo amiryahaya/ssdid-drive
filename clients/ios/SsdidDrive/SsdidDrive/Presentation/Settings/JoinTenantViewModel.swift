@@ -86,15 +86,13 @@ final class JoinTenantViewModel: ObservableObject {
 
         Task {
             do {
-                let response: CodeInvitationResponse = try await apiClient.request(
-                    "/api/invitations/code/\(codeValue)",
+                let invite: CodeInvitation = try await apiClient.request(
+                    "/invitations/code/\(codeValue)",
                     method: .get,
                     body: nil,
                     queryItems: nil,
                     requiresAuth: false
                 )
-
-                let invite = response.data
                 if invite.isExpired {
                     self.state = .error("This invite code has expired.")
                 } else {
@@ -129,7 +127,7 @@ final class JoinTenantViewModel: ObservableObject {
         Task {
             do {
                 let _: AcceptCodeInvitationResponse = try await apiClient.request(
-                    "/api/invitations/\(invitation.id)/accept",
+                    "/invitations/\(invitation.id)/accept",
                     method: .post,
                     body: nil,
                     queryItems: nil,

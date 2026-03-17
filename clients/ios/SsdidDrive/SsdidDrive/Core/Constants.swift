@@ -6,7 +6,11 @@ enum Constants {
     // MARK: - API Configuration
 
     enum API {
+        #if DEBUG
+        static let baseURL = "http://localhost:5050"
+        #else
         static let baseURL = "https://drive.ssdid.my"
+        #endif
 
         static let apiVersion = "api"
         static let timeout: TimeInterval = 30

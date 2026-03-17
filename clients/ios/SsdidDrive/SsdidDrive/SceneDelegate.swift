@@ -89,6 +89,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Handle deep links from launch (custom scheme)
         // Set as pending so the coordinator processes it after startup completes
         if let urlContext = connectionOptions.urlContexts.first {
+
             appCoordinator?.pendingStartupURL = urlContext.url
         }
 
@@ -116,6 +117,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         // Handle deep links when app is running
         if let url = URLContexts.first?.url {
+
             handleDeepLink(url)
         }
     }
@@ -180,6 +182,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // MARK: - Deep Links
 
     private func handleDeepLink(_ url: URL) {
+
         // C3: Resolve pending action tokens from MenuBarHelper before passing to coordinator.
         // ssdid-drive://action/{token} carries an opaque token instead of raw file IDs.
         if url.scheme == "ssdid-drive", url.host == "action",
@@ -229,10 +232,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// D5: Only accepts callbacks when the login screen is actively waiting for one.
     private func handleAuthCallback(sessionToken: String) {
         guard let coordinator = appCoordinator else { return }
-        // Find the AuthCoordinator in the child hierarchy
         guard let authCoordinator = coordinator.childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator,
               let loginViewModel = authCoordinator.loginViewModel else {
-            // No active login flow — ignore the callback to prevent URL scheme hijacking
             return
         }
         loginViewModel.handleAuthCallback(sessionToken: sessionToken)

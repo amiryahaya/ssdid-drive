@@ -1,51 +1,43 @@
 import Foundation
 
 /// Represents a share grant (file or folder shared with a user).
-/// Maps to the backend ShareGrant schema and ShareJSON response format.
+/// Maps to the backend Share entity and ListReceivedShares/ListCreatedShares projections.
 struct Share: Codable, Identifiable, Equatable, Hashable {
     let id: String
     let resourceType: ResourceType
     let resourceId: String
-    let grantorId: String
-    let granteeId: String
+    let sharedById: String
+    let sharedByName: String?
+    let sharedWithId: String
+    let sharedWithName: String?
     let permission: Permission
-    let recursive: Bool
-    let algorithm: String?
-    let wrappedKey: String?      // base64-encoded wrapped DEK (file) or KEK (folder)
-    let kemCiphertext: String?   // base64-encoded KEM ciphertext
-    let signature: String?       // base64-encoded grantor signature
+    let encryptedKey: String?    // base64-encoded encrypted DEK/KEK
+    let kemAlgorithm: String?
     let expiresAt: Date?
     let revokedAt: Date?
-    let revokedById: String?
-    let active: Bool
     let createdAt: Date
-    let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
         case resourceType = "resource_type"
         case resourceId = "resource_id"
-        case grantorId = "grantor_id"
-        case granteeId = "grantee_id"
+        case sharedById = "shared_by_id"
+        case sharedByName = "shared_by_name"
+        case sharedWithId = "shared_with_id"
+        case sharedWithName = "shared_with_name"
         case permission
-        case recursive
-        case algorithm
-        case wrappedKey = "wrapped_key"
-        case kemCiphertext = "kem_ciphertext"
-        case signature
+        case encryptedKey = "encrypted_key"
+        case kemAlgorithm = "kem_algorithm"
         case expiresAt = "expires_at"
         case revokedAt = "revoked_at"
-        case revokedById = "revoked_by_id"
-        case active
         case createdAt = "created_at"
-        case updatedAt = "updated_at"
     }
 
     /// Whether this is a folder share
     var isFolder: Bool { resourceType == .folder }
 
     /// Is the share still active (not revoked, not expired)
-    var isActive: Bool { active }
+    var isActive: Bool { revokedAt == nil }
 
     /// Resource type (file or folder)
     enum ResourceType: String, Codable {
@@ -154,6 +146,19 @@ struct ShareDataResponse: Codable {
 /// Wrapper for backend list responses that use the { "data": [...] } format
 struct ShareListDataResponse: Codable {
     let data: [Share]
+}
+
+/// Wrapper for backend paginated responses that use the { "items": [...] } format
+struct SharePagedResponse: Codable {
+    let items: [Share]
+    let total: Int
+    let page: Int
+    let pageSize: Int
+
+    enum CodingKeys: String, CodingKey {
+        case items, total, page
+        case pageSize = "page_size"
+    }
 }
 
 /// Response containing invitations

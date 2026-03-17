@@ -21,7 +21,7 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
             let key_proof: String
         }
         let _: EmptyResponse = try await apiClient.request(
-            "/api/recovery/setup",
+            "/recovery/setup",
             method: .post,
             body: Request(server_share: serverShare, key_proof: keyProof),
             requiresAuth: true
@@ -30,7 +30,7 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
 
     func getStatus() async throws -> RecoveryStatusResponse {
         return try await apiClient.request(
-            "/api/recovery/status",
+            "/recovery/status",
             method: .get,
             body: nil as String?,
             requiresAuth: true
@@ -40,7 +40,7 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
     func getServerShare(did: String) async throws -> ServerShareResponse {
         let queryItems = [URLQueryItem(name: "did", value: did)]
         return try await apiClient.request(
-            "/api/recovery/share",
+            "/recovery/share",
             method: .get,
             body: nil as String?,
             queryItems: queryItems,
@@ -61,7 +61,7 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
             let kem_public_key: String
         }
         return try await apiClient.request(
-            "/api/recovery/complete",
+            "/recovery/complete",
             method: .post,
             body: Request(old_did: oldDid, new_did: newDid, key_proof: keyProof, kem_public_key: kemPublicKey),
             requiresAuth: false
@@ -70,7 +70,7 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
 
     func deleteSetup() async throws {
         let _: EmptyResponse = try await apiClient.request(
-            "/api/recovery/setup",
+            "/recovery/setup",
             method: .delete,
             body: nil as String?,
             requiresAuth: true

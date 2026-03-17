@@ -79,7 +79,7 @@ final class TenantRequestViewModel: ObservableObject {
                 )
 
                 let _: TenantRequestResponse = try await apiClient.request(
-                    "/api/tenant-requests",
+                    "/tenant-requests",
                     method: .post,
                     body: body,
                     queryItems: nil,

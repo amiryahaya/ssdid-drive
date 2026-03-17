@@ -203,7 +203,7 @@ struct InvitedBy: Codable, Equatable {
 /// Invitation info retrieved by short code.
 /// Used for both authenticated and unauthenticated users.
 struct CodeInvitation: Codable, Equatable {
-    let id: String
+    let id: String?
     let tenantName: String
     let role: UserRole
     let shortCode: String

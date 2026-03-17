@@ -19,6 +19,12 @@ final class LoginViewController: BaseViewController {
     private let viewModel: LoginViewModel
     weak var delegate: LoginViewControllerDelegate?
 
+    /// Whether ssdid-wallet is installed on this device
+    private lazy var isWalletInstalled: Bool = {
+        guard let url = URL(string: "ssdid://") else { return false }
+        return UIApplication.shared.canOpenURL(url)
+    }()
+
     // MARK: - UI Components
 
     private lazy var scrollView: UIScrollView = {
@@ -227,19 +233,47 @@ final class LoginViewController: BaseViewController {
     private lazy var openWalletButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
-        let icon = UIImage(systemName: "arrow.up.forward.app.fill", withConfiguration: config)
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        let icon = UIImage(systemName: "lock.shield.fill", withConfiguration: config)
         button.setImage(icon, for: .normal)
         button.setTitle("  Open SSDID Wallet", for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        button.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
         button.accessibilityIdentifier = "openWalletButton"
         button.accessibilityLabel = "Open SSDID Wallet"
         button.accessibilityHint = "Double tap to open the SSDID Wallet app for authentication"
-        button.applySecondaryStyle()
+        button.applyPrimaryStyle()
         button.addTarget(self, action: #selector(openWalletTapped), for: .touchUpInside)
         button.isHidden = true
         return button
     }()
+
+    // MARK: - Other Options Disclosure
+
+    private lazy var otherOptionsButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        button.setImage(UIImage(systemName: "chevron.right", withConfiguration: config), for: .normal)
+        button.setTitle("  Other sign in options", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 14)
+        button.tintColor = .secondaryLabel
+        button.setTitleColor(.secondaryLabel, for: .normal)
+        button.semanticContentAttribute = .forceLeftToRight
+        button.addTarget(self, action: #selector(otherOptionsTapped), for: .touchUpInside)
+        return button
+    }()
+
+    /// Container for email/OIDC (collapsed when wallet is installed)
+    private lazy var otherOptionsStack: UIStackView = {
+        let stack = UIStackView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.isHidden = true // collapsed by default
+        return stack
+    }()
+
+    private var otherOptionsExpanded = false
 
     // MARK: - Request Org Button
 
@@ -275,156 +309,219 @@ final class LoginViewController: BaseViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
 
+        let horizontalInset: CGFloat = 24
+
+        // Common elements
         contentView.addSubview(logoImageView)
         contentView.addSubview(titleLabel)
         contentView.addSubview(inviteCodeCard)
-        contentView.addSubview(signInDivider)
-        contentView.addSubview(emailTextField)
-        contentView.addSubview(emailContinueButton)
-        contentView.addSubview(orDivider)
-        contentView.addSubview(googleSignInButton)
-        contentView.addSubview(microsoftSignInButton)
-        contentView.addSubview(walletDivider)
-        contentView.addSubview(qrImageView)
-        contentView.addSubview(activityIndicator)
         contentView.addSubview(errorLabel)
-        contentView.addSubview(refreshButton)
-        contentView.addSubview(openWalletButton)
         contentView.addSubview(requestOrgButton)
 
-        let horizontalInset: CGFloat = 24
+        if isWalletInstalled {
+            // ── Layout A: Wallet installed — big button, collapsed other options ──
+            contentView.addSubview(openWalletButton)
+            openWalletButton.isHidden = false
+            contentView.addSubview(activityIndicator)
+            contentView.addSubview(otherOptionsButton)
 
-        NSLayoutConstraint.activate([
-            // Scroll view
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            // Build the "other options" stack
+            otherOptionsStack.addArrangedSubview(signInDivider)
+            otherOptionsStack.addArrangedSubview(emailTextField)
+            otherOptionsStack.addArrangedSubview(emailContinueButton)
+            otherOptionsStack.addArrangedSubview(orDivider)
+            otherOptionsStack.addArrangedSubview(googleSignInButton)
+            otherOptionsStack.addArrangedSubview(microsoftSignInButton)
+            contentView.addSubview(otherOptionsStack)
 
-            // Content view
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            // Logo
-            logoImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
-            logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            logoImageView.widthAnchor.constraint(equalToConstant: 80),
-            logoImageView.heightAnchor.constraint(equalToConstant: 80),
+                logoImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
+                logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                logoImageView.widthAnchor.constraint(equalToConstant: 80),
+                logoImageView.heightAnchor.constraint(equalToConstant: 80),
 
-            // Title
-            titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 24),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 24),
+                titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // Invite code card
-            inviteCodeCard.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 24),
-            inviteCodeCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            inviteCodeCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                inviteCodeCard.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 32),
+                inviteCodeCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                inviteCodeCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // "or sign in" divider
-            signInDivider.topAnchor.constraint(equalTo: inviteCodeCard.bottomAnchor, constant: 20),
-            signInDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            signInDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                // Big wallet button
+                openWalletButton.topAnchor.constraint(equalTo: inviteCodeCard.bottomAnchor, constant: 24),
+                openWalletButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                openWalletButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                openWalletButton.heightAnchor.constraint(equalToConstant: 56),
 
-            // Email text field
-            emailTextField.topAnchor.constraint(equalTo: signInDivider.bottomAnchor, constant: 20),
-            emailTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            emailTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            emailTextField.heightAnchor.constraint(equalToConstant: 48),
+                activityIndicator.centerXAnchor.constraint(equalTo: openWalletButton.centerXAnchor),
+                activityIndicator.topAnchor.constraint(equalTo: openWalletButton.bottomAnchor, constant: 12),
 
-            // Continue with Email button
-            emailContinueButton.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 12),
-            emailContinueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            emailContinueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            emailContinueButton.heightAnchor.constraint(equalToConstant: 52),
+                errorLabel.topAnchor.constraint(equalTo: openWalletButton.bottomAnchor, constant: 12),
+                errorLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                errorLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // "or" divider
-            orDivider.topAnchor.constraint(equalTo: emailContinueButton.bottomAnchor, constant: 20),
-            orDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            orDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                // "Other sign in options" disclosure
+                otherOptionsButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 24),
+                otherOptionsButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            // Google Sign In
-            googleSignInButton.topAnchor.constraint(equalTo: orDivider.bottomAnchor, constant: 20),
-            googleSignInButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            googleSignInButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            googleSignInButton.heightAnchor.constraint(equalToConstant: 52),
+                // Collapsible stack
+                otherOptionsStack.topAnchor.constraint(equalTo: otherOptionsButton.bottomAnchor, constant: 16),
+                otherOptionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                otherOptionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // Microsoft Sign In
-            microsoftSignInButton.topAnchor.constraint(equalTo: googleSignInButton.bottomAnchor, constant: 12),
-            microsoftSignInButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            microsoftSignInButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            microsoftSignInButton.heightAnchor.constraint(equalToConstant: 52),
+                emailTextField.heightAnchor.constraint(equalToConstant: 48),
+                emailContinueButton.heightAnchor.constraint(equalToConstant: 52),
+                googleSignInButton.heightAnchor.constraint(equalToConstant: 52),
+                microsoftSignInButton.heightAnchor.constraint(equalToConstant: 52),
 
-            // "or scan with wallet" divider
-            walletDivider.topAnchor.constraint(equalTo: microsoftSignInButton.bottomAnchor, constant: 20),
-            walletDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            walletDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                requestOrgButton.topAnchor.constraint(equalTo: otherOptionsStack.bottomAnchor, constant: 24),
+                requestOrgButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                requestOrgButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+            ])
+        } else {
+            // ── Layout B: No wallet — show email/OIDC as primary, QR for cross-device ──
+            contentView.addSubview(emailTextField)
+            contentView.addSubview(emailContinueButton)
+            contentView.addSubview(orDivider)
+            contentView.addSubview(googleSignInButton)
+            contentView.addSubview(microsoftSignInButton)
+            contentView.addSubview(walletDivider)
+            contentView.addSubview(qrImageView)
+            contentView.addSubview(activityIndicator)
+            contentView.addSubview(refreshButton)
 
-            // QR code (150x150)
-            qrImageView.topAnchor.constraint(equalTo: walletDivider.bottomAnchor, constant: 20),
-            qrImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            qrImageView.widthAnchor.constraint(equalToConstant: 150),
-            qrImageView.heightAnchor.constraint(equalToConstant: 150),
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
 
-            // Activity indicator (centered on QR area)
-            activityIndicator.centerXAnchor.constraint(equalTo: qrImageView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: qrImageView.centerYAnchor),
+                logoImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 60),
+                logoImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                logoImageView.widthAnchor.constraint(equalToConstant: 80),
+                logoImageView.heightAnchor.constraint(equalToConstant: 80),
 
-            // Error label
-            errorLabel.topAnchor.constraint(equalTo: qrImageView.bottomAnchor, constant: 16),
-            errorLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            errorLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 24),
+                titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // Refresh button
-            refreshButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 16),
-            refreshButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            refreshButton.widthAnchor.constraint(equalToConstant: 160),
-            refreshButton.heightAnchor.constraint(equalToConstant: 44),
+                inviteCodeCard.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 24),
+                inviteCodeCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                inviteCodeCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
 
-            // Open Wallet button
-            openWalletButton.topAnchor.constraint(equalTo: refreshButton.bottomAnchor, constant: 16),
-            openWalletButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
-            openWalletButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
-            openWalletButton.heightAnchor.constraint(equalToConstant: 52),
+                emailTextField.topAnchor.constraint(equalTo: inviteCodeCard.bottomAnchor, constant: 24),
+                emailTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                emailTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                emailTextField.heightAnchor.constraint(equalToConstant: 48),
 
-            // Request org button
-            requestOrgButton.topAnchor.constraint(equalTo: openWalletButton.bottomAnchor, constant: 24),
-            requestOrgButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            requestOrgButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
-        ])
+                emailContinueButton.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 12),
+                emailContinueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                emailContinueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                emailContinueButton.heightAnchor.constraint(equalToConstant: 52),
+
+                orDivider.topAnchor.constraint(equalTo: emailContinueButton.bottomAnchor, constant: 20),
+                orDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                orDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+
+                googleSignInButton.topAnchor.constraint(equalTo: orDivider.bottomAnchor, constant: 20),
+                googleSignInButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                googleSignInButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                googleSignInButton.heightAnchor.constraint(equalToConstant: 52),
+
+                microsoftSignInButton.topAnchor.constraint(equalTo: googleSignInButton.bottomAnchor, constant: 12),
+                microsoftSignInButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                microsoftSignInButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+                microsoftSignInButton.heightAnchor.constraint(equalToConstant: 52),
+
+                walletDivider.topAnchor.constraint(equalTo: microsoftSignInButton.bottomAnchor, constant: 20),
+                walletDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                walletDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+
+                qrImageView.topAnchor.constraint(equalTo: walletDivider.bottomAnchor, constant: 20),
+                qrImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                qrImageView.widthAnchor.constraint(equalToConstant: 150),
+                qrImageView.heightAnchor.constraint(equalToConstant: 150),
+
+                activityIndicator.centerXAnchor.constraint(equalTo: qrImageView.centerXAnchor),
+                activityIndicator.centerYAnchor.constraint(equalTo: qrImageView.centerYAnchor),
+
+                errorLabel.topAnchor.constraint(equalTo: qrImageView.bottomAnchor, constant: 16),
+                errorLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: horizontalInset),
+                errorLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -horizontalInset),
+
+                refreshButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 16),
+                refreshButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                refreshButton.widthAnchor.constraint(equalToConstant: 160),
+                refreshButton.heightAnchor.constraint(equalToConstant: 44),
+
+                requestOrgButton.topAnchor.constraint(equalTo: refreshButton.bottomAnchor, constant: 24),
+                requestOrgButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                requestOrgButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+            ])
+        }
     }
 
     override func setupBindings() {
-        // QR payload
-        viewModel.$qrPayload
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                if let payload = payload {
-                    self?.qrImageView.image = self?.generateQRCode(from: payload)
-                    self?.qrImageView.isHidden = false
-                } else {
-                    self?.qrImageView.isHidden = true
+        if isWalletInstalled {
+            // Layout A: wallet button is always visible, no QR needed
+            // Loading state (shows spinner near wallet button)
+            viewModel.$isLoading
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] isLoading in
+                    isLoading ? self?.activityIndicator.startAnimating() : self?.activityIndicator.stopAnimating()
                 }
-            }
-            .store(in: &cancellables)
-
-        // Loading state
-        viewModel.$isLoading
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                if isLoading {
-                    self?.activityIndicator.startAnimating()
-                    self?.qrImageView.isHidden = true
-                } else {
-                    self?.activityIndicator.stopAnimating()
+                .store(in: &cancellables)
+        } else {
+            // Layout B: QR code + loading
+            viewModel.$qrPayload
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] payload in
+                    if let payload = payload {
+                        self?.qrImageView.image = self?.generateQRCode(from: payload)
+                        self?.qrImageView.isHidden = false
+                    } else {
+                        self?.qrImageView.isHidden = true
+                    }
                 }
-            }
-            .store(in: &cancellables)
+                .store(in: &cancellables)
 
-        // Error message
+            viewModel.$isLoading
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] isLoading in
+                    if isLoading {
+                        self?.activityIndicator.startAnimating()
+                        self?.qrImageView.isHidden = true
+                    } else {
+                        self?.activityIndicator.stopAnimating()
+                    }
+                }
+                .store(in: &cancellables)
+
+            viewModel.$isExpired
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] isExpired in
+                    self?.refreshButton.isHidden = !isExpired
+                }
+                .store(in: &cancellables)
+        }
+
+        // Common bindings
         viewModel.$errorMessage
             .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
@@ -433,23 +530,6 @@ final class LoginViewController: BaseViewController {
             }
             .store(in: &cancellables)
 
-        // Expired state
-        viewModel.$isExpired
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isExpired in
-                self?.refreshButton.isHidden = !isExpired
-            }
-            .store(in: &cancellables)
-
-        // Wallet deep link availability
-        viewModel.$walletDeepLink
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] url in
-                self?.openWalletButton.isHidden = (url == nil)
-            }
-            .store(in: &cancellables)
-
-        // Navigate to TOTP verification
         viewModel.$navigateToTotp
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
@@ -500,6 +580,17 @@ final class LoginViewController: BaseViewController {
     @objc private func openWalletTapped() {
         triggerHapticFeedback()
         viewModel.openWallet()
+    }
+
+    @objc private func otherOptionsTapped() {
+        triggerSelectionFeedback()
+        otherOptionsExpanded.toggle()
+        UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseInOut) {
+            self.otherOptionsStack.isHidden = !self.otherOptionsExpanded
+            let rotation: CGFloat = self.otherOptionsExpanded ? .pi / 2 : 0
+            self.otherOptionsButton.imageView?.transform = CGAffineTransform(rotationAngle: rotation)
+            self.view.layoutIfNeeded()
+        }
     }
 
     // MARK: - Helpers

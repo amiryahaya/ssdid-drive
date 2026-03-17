@@ -9,7 +9,8 @@
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)my.ssdid.drive.app</string>
+		<string>$(AppIdentifierPrefix)my.ssdid.drive</string>
+		<string>$(AppIdentifierPrefix)my.ssdid.drive.shared</string>
 	</array>
 </dict>
 </plist>

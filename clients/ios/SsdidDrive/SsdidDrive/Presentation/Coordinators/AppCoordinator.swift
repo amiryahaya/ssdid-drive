@@ -219,6 +219,15 @@ final class AppCoordinator: BaseCoordinator {
                     savePendingDeepLinkIfAppropriate(action)
 
                     switch action {
+                    case .authCallback(let sessionToken):
+                        // Auth callback received while not yet authenticated — deliver
+                        // the token to the active LoginViewModel so it can save the session.
+                        // This happens when the app was killed while the wallet was open
+                        // and relaunched with the callback URL.
+                        if let authCoordinator = childCoordinators.first(where: { $0 is AuthCoordinator }) as? AuthCoordinator,
+                           let loginViewModel = authCoordinator.loginViewModel {
+                            loginViewModel.handleAuthCallback(sessionToken: sessionToken)
+                        }
                     case .acceptInvitation(let token):
                         handleInvitationDeepLink(token: token)
                     case .walletInviteCallback(let sessionToken):
@@ -289,6 +298,11 @@ final class AppCoordinator: BaseCoordinator {
             DeepLinkParser.cleanupImportFiles()
             return
         }
+
+        // SECURITY: Never persist session tokens to UserDefaults (unencrypted).
+        // Auth callbacks carry tokens and must only be stored in Keychain.
+        if case .authCallback = action { return }
+        if case .walletInviteCallback = action { return }
 
         container.userDefaultsManager.savePendingDeepLink(action)
     }

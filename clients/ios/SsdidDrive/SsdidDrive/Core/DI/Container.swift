@@ -68,7 +68,9 @@ final class DependencyContainer: ObservableObject {
     lazy var tenantRepository: TenantRepository = {
         TenantRepositoryImpl(
             apiClient: apiClient,
-            keychainManager: keychainManager
+            keychainManager: keychainManager,
+            thumbnailCache: .shared,
+            spotlightIndexer: .shared
         )
     }()
 

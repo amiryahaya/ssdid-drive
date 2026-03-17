@@ -96,7 +96,7 @@ final class InvitationsListViewModel: BaseViewModel {
         Task {
             do {
                 let _: AcceptCodeInvitationResponse = try await apiClient.request(
-                    "/api/invitations/\(invitation.id)/accept",
+                    "/invitations/\(invitation.id)/accept",
                     method: .post,
                     body: nil,
                     queryItems: nil,
@@ -117,7 +117,7 @@ final class InvitationsListViewModel: BaseViewModel {
         Task {
             do {
                 try await apiClient.requestNoContent(
-                    "/api/invitations/\(invitation.id)/decline",
+                    "/invitations/\(invitation.id)/decline",
                     method: .post,
                     body: nil,
                     queryItems: nil,

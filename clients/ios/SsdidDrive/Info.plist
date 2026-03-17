@@ -43,6 +43,11 @@
 	</array>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>SSDID Drive needs camera access to scan documents and capture photos for secure sharing.</string>
 	<key>NSFaceIDUsageDescription</key>

@@ -26,7 +26,7 @@ final class ActivityRepositoryImpl: ActivityRepository {
         }
 
         return try await apiClient.request(
-            "/api/activity",
+            "/activity",
             method: .get,
             body: nil,
             queryItems: queryItems,
@@ -45,7 +45,7 @@ final class ActivityRepositoryImpl: ActivityRepository {
         ]
 
         return try await apiClient.request(
-            "/api/activity/resource/\(resourceId)",
+            "/activity/resource/\(resourceId)",
             method: .get,
             body: nil,
             queryItems: queryItems,
