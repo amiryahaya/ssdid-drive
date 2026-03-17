@@ -101,6 +101,9 @@ builder.Services.AddSsdidServer(options =>
     options.IdentityPath = builder.Configuration["Ssdid:IdentityPath"]
         ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
     options.Algorithm = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
+    options.ServiceName = builder.Configuration["Ssdid:ServiceName"] ?? "SSDID Drive";
+    options.ServiceUrl = builder.Configuration["Ssdid:ServiceUrl"] ?? "";
+    options.ServiceId = builder.Configuration["Ssdid:ServiceId"] ?? "drive";
     options.Sessions.SessionTtlMinutes = builder.Configuration.GetValue("Ssdid:Sessions:SessionTtlMinutes", 60);
     options.Sessions.ChallengeTtlMinutes = builder.Configuration.GetValue("Ssdid:Sessions:ChallengeTtlMinutes", 5);
 });
