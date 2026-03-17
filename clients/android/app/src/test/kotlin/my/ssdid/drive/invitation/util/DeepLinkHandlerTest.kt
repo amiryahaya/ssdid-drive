@@ -38,6 +38,82 @@ class DeepLinkHandlerTest {
         unmockkAll()
     }
 
+    // ==================== Custom Scheme - Auth Callback Tests ====================
+
+    @Test
+    fun `parseIntent with auth callback and session_token returns WalletAuthCallback`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "auth",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("session_token" to "sess-abc123")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletAuthCallback)
+        assertEquals("sess-abc123", (action as DeepLinkAction.WalletAuthCallback).sessionToken)
+    }
+
+    @Test
+    fun `parseIntent with auth callback and token param returns WalletAuthCallback`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "auth",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("token" to "oidc-tok-xyz", "provider" to "google")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletAuthCallback)
+        assertEquals("oidc-tok-xyz", (action as DeepLinkAction.WalletAuthCallback).sessionToken)
+    }
+
+    @Test
+    fun `parseIntent with auth callback and error param returns OidcAuthError`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "auth",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("error" to "access_denied")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.OidcAuthError)
+        assertEquals("access_denied", (action as DeepLinkAction.OidcAuthError).error)
+    }
+
+    @Test
+    fun `parseIntent with auth callback and no token or error returns null`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "auth",
+            pathSegments = listOf("callback"),
+            queryParams = emptyMap()
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertNull(action)
+    }
+
+    @Test
+    fun `parseIntent with auth callback session_token takes precedence over token`() {
+        val intent = createMockViewIntent(
+            scheme = "ssdiddrive",
+            host = "auth",
+            pathSegments = listOf("callback"),
+            queryParams = mapOf("session_token" to "preferred-tok", "token" to "fallback-tok")
+        )
+
+        val action = deepLinkHandler.parseIntent(intent)
+
+        assertTrue(action is DeepLinkAction.WalletAuthCallback)
+        assertEquals("preferred-tok", (action as DeepLinkAction.WalletAuthCallback).sessionToken)
+    }
+
     // ==================== Custom Scheme - Invite Callback Tests ====================
 
     @Test

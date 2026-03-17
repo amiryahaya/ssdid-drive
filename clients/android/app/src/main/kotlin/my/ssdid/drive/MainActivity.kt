@@ -268,5 +268,12 @@ private fun handleDeepLink(navController: NavHostController, action: DeepLinkAct
             // Store error for InviteAcceptScreen to consume on resume
             WalletCallbackHolder.setError(action.message, WalletCallbackHolder.Flow.INVITE)
         }
+        is DeepLinkAction.OidcAuthError -> {
+            // Store OIDC browser redirect error for LoginScreen to surface on resume
+            WalletCallbackHolder.setError(action.error, WalletCallbackHolder.Flow.AUTH)
+            navController.navigate(Screen.Login.route) {
+                launchSingleTop = true
+            }
+        }
     }
 }

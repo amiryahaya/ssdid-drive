@@ -1,5 +1,7 @@
 package my.ssdid.drive.presentation.auth
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +36,7 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.isAuthenticated) {
         if (uiState.isAuthenticated) {
@@ -44,6 +48,15 @@ fun LoginScreen(
         uiState.navigateToTotp?.let { email ->
             onNavigateToTotp(email)
             viewModel.onTotpNavigated()
+        }
+    }
+
+    val oidcLaunchUrl = uiState.oidcLaunchUrl
+    LaunchedEffect(oidcLaunchUrl) {
+        if (oidcLaunchUrl != null) {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(oidcLaunchUrl))
+            context.startActivity(intent)
+            viewModel.onOidcLaunched()
         }
     }
 
@@ -198,7 +211,7 @@ fun LoginScreen(
 
         // Google sign-in button
         OutlinedButton(
-            onClick = { onOidcLogin("google") },
+            onClick = { viewModel.launchOidc("google") },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("google_button"),
@@ -211,7 +224,7 @@ fun LoginScreen(
 
         // Microsoft sign-in button
         OutlinedButton(
-            onClick = { onOidcLogin("microsoft") },
+            onClick = { viewModel.launchOidc("microsoft") },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("microsoft_button"),

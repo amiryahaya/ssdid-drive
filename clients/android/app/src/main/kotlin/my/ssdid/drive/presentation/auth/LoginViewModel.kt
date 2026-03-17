@@ -1,7 +1,9 @@
 package my.ssdid.drive.presentation.auth
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import my.ssdid.drive.BuildConfig
 import my.ssdid.drive.domain.repository.AuthRepository
 import my.ssdid.drive.util.PushNotificationManager
 import my.ssdid.drive.util.Result
@@ -21,7 +23,9 @@ data class LoginUiState(
     val isLoading: Boolean = false,
     val isAuthenticated: Boolean = false,
     val navigateToTotp: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val pendingInviteCode: String? = null,
+    val oidcLaunchUrl: String? = null
 )
 
 @HiltViewModel
@@ -88,7 +92,8 @@ class LoginViewModel @Inject constructor(
     fun handleOidcResult(provider: String, idToken: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            when (authRepository.oidcVerify(provider, idToken)) {
+            val inviteCode = _uiState.value.pendingInviteCode?.takeIf { it.isNotBlank() }
+            when (authRepository.oidcVerify(provider, idToken, inviteCode)) {
                 is Result.Success -> {
                     _uiState.update { it.copy(isLoading = false, isAuthenticated = true) }
                 }
@@ -99,5 +104,29 @@ class LoginViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Build the OIDC authorize URL and set it in UI state to trigger browser launch.
+     */
+    fun launchOidc(provider: String) {
+        val baseUrl = BuildConfig.API_BASE_URL.removeSuffix("/").removeSuffix("/api")
+        val redirectUri = "ssdiddrive://auth/callback"
+        var url = "$baseUrl/api/auth/oidc/$provider/authorize" +
+            "?redirect_uri=${Uri.encode(redirectUri)}"
+
+        val inviteCode = _uiState.value.pendingInviteCode
+        if (!inviteCode.isNullOrBlank()) {
+            url += "&invitation_token=${Uri.encode(inviteCode)}"
+        }
+
+        _uiState.update { it.copy(oidcLaunchUrl = url) }
+    }
+
+    /**
+     * Clear the OIDC launch URL after the browser has been opened.
+     */
+    fun onOidcLaunched() {
+        _uiState.update { it.copy(oidcLaunchUrl = null) }
     }
 }

@@ -97,13 +97,18 @@ class DeepLinkHandler @Inject constructor() {
                 }
             }
             "auth" -> {
-                // ssdiddrive://auth/callback?session_token=...
+                // ssdiddrive://auth/callback?session_token=... (SSDID Wallet)
+                // ssdiddrive://auth/callback?token=...&provider=... (OIDC browser redirect)
                 val segment = pathSegments.firstOrNull()
                 if (segment == "callback") {
                     val sessionToken = uri.getQueryParameter("session_token")
-                    if (sessionToken != null) {
-                        DeepLinkAction.WalletAuthCallback(sessionToken)
-                    } else null
+                        ?: uri.getQueryParameter("token")
+                    val error = uri.getQueryParameter("error")
+                    when {
+                        sessionToken != null -> DeepLinkAction.WalletAuthCallback(sessionToken)
+                        error != null -> DeepLinkAction.OidcAuthError(error)
+                        else -> null
+                    }
                 } else null
             }
             else -> null
@@ -210,8 +215,14 @@ sealed class DeepLinkAction {
     /**
      * Handle SSDID Wallet authentication callback.
      * Contains the session token from the wallet after successful authentication.
+     * Also used for OIDC browser redirect callback (token param).
      */
     data class WalletAuthCallback(val sessionToken: String) : DeepLinkAction()
+
+    /**
+     * Handle OIDC browser redirect callback error.
+     */
+    data class OidcAuthError(val error: String) : DeepLinkAction()
 
     /**
      * Handle SSDID Wallet invitation callback with session token.
