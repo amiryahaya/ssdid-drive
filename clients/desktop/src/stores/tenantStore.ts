@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import { useFileStore } from './fileStore';
+import { useAuthStore } from './authStore';
 
 export type TenantRole = 'owner' | 'admin' | 'member';
 export type MemberStatus = 'active' | 'pending' | 'inactive';
@@ -55,8 +57,7 @@ interface TenantListResponse {
 
 interface TenantSwitchResponse {
   tenant: Tenant;
-  access_token: string;
-  refresh_token: string;
+  session_token: string;
 }
 
 interface TenantState {
@@ -140,25 +141,25 @@ export const useTenantStore = create<TenantState>()(
       },
 
       switchTenant: async (tenantId) => {
+        // Guard: block switch if uploads are active
+        const fileStore = useFileStore.getState();
+        const activeUploads = [...fileStore.uploadProgress.values()].filter(
+          (u) => u.phase !== 'complete' && u.phase !== 'error'
+        );
+        if (activeUploads.length > 0) {
+          set({ error: 'Cannot switch tenant while uploads are in progress.' });
+          return;
+        }
+
         set({ isSwitching: true, error: null });
         try {
           const response = await invoke<TenantSwitchResponse>('switch_tenant', { tenantId });
 
-          // Update available tenants with the new tenant info
-          const availableTenants = get().availableTenants.map((t) =>
-            t.id === tenantId ? response.tenant : t
-          );
+          // Save the new session token before reloading
+          await useAuthStore.getState().loginWithSession(response.session_token);
 
-          set({
-            currentTenantId: tenantId,
-            currentTenant: response.tenant,
-            availableTenants,
-            tenantConfig: null, // Clear config, will reload
-            isSwitching: false,
-          });
-
-          // Reload config for new tenant
-          get().loadTenantConfig();
+          // Reload to clear all in-memory state
+          window.location.reload();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           set({ error: message, isSwitching: false });

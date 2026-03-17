@@ -140,6 +140,46 @@ class TenantSwitcherViewModelTest {
         assertEquals("Not authorized", state.error)
     }
 
+    @Test
+    fun `switchTenant blocked when upload in progress`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.setUploadInProgress(true)
+        viewModel.switchTenant("tenant-b")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isSwitching)
+        assertFalse(state.switchSuccess)
+        assertEquals(
+            "Cannot switch organization while an upload is in progress",
+            state.error
+        )
+        coVerify(exactly = 0) { tenantRepository.switchTenant(any()) }
+    }
+
+    @Test
+    fun `switchTenant allowed after upload completes`() = runTest {
+        val newContext = TenantContext(
+            currentTenantId = "tenant-b",
+            currentRole = UserRole.USER,
+            availableTenants = listOf(tenantA, tenantB)
+        )
+        coEvery { tenantRepository.switchTenant("tenant-b") } returns Result.Success(newContext)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.setUploadInProgress(true)
+        viewModel.setUploadInProgress(false)
+        viewModel.switchTenant("tenant-b")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.switchSuccess)
+        coVerify { tenantRepository.switchTenant("tenant-b") }
+    }
+
     // ==================== leaveTenant Tests ====================
 
     @Test

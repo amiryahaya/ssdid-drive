@@ -1,10 +1,18 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useTenantStore } from '../tenantStore';
+import { useFileStore } from '../fileStore';
+import { useAuthStore } from '../authStore';
 import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core');
+vi.mock('../fileStore');
+vi.mock('../authStore');
 
 const mockInvoke = vi.mocked(invoke);
+
+const mockLoginWithSession = vi.fn().mockResolvedValue(undefined);
+const mockUseAuthStore = vi.mocked(useAuthStore);
+const mockUseFileStore = vi.mocked(useFileStore);
 
 const mockTenant = {
   id: 'tenant-1',
@@ -34,6 +42,23 @@ describe('tenantStore', () => {
       isLoading: false,
       isSwitching: false,
       error: null,
+    });
+
+    // Default: no active uploads
+    mockUseFileStore.getState = vi.fn().mockReturnValue({
+      uploadProgress: new Map(),
+    });
+
+    // Default: loginWithSession succeeds
+    mockLoginWithSession.mockResolvedValue(undefined);
+    mockUseAuthStore.getState = vi.fn().mockReturnValue({
+      loginWithSession: mockLoginWithSession,
+    });
+
+    // Mock window.location.reload
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, reload: vi.fn() },
     });
   });
 
@@ -79,18 +104,41 @@ describe('tenantStore', () => {
   });
 
   describe('switchTenant', () => {
-    it('should switch to a different tenant', async () => {
+    it('should invoke switch_tenant and reload on success', async () => {
       useTenantStore.setState({ availableTenants: [mockTenant] });
-      // switchTenant expects TenantSwitchResponse
-      mockInvoke
-        .mockResolvedValueOnce({ tenant: mockTenant, access_token: 'tok', refresh_token: 'ref' })
-        .mockResolvedValueOnce(mockTenantConfig); // loadTenantConfig is called after switch
+      mockInvoke.mockResolvedValueOnce({ tenant: mockTenant, session_token: 'new-session-tok' });
 
       await useTenantStore.getState().switchTenant('tenant-1');
 
-      const state = useTenantStore.getState();
-      expect(state.currentTenantId).toBe('tenant-1');
-      expect(state.isSwitching).toBe(false);
+      expect(mockInvoke).toHaveBeenCalledWith('switch_tenant', { tenantId: 'tenant-1' });
+      expect(mockLoginWithSession).toHaveBeenCalledWith('new-session-tok');
+      expect(window.location.reload).toHaveBeenCalled();
+    });
+
+    it('should block switch if uploads are active', async () => {
+      const activeUpload = new Map([
+        ['upload-1', { file_id: 'upload-1', file_name: 'test.txt', phase: 'uploading', bytes_uploaded: 100, total_bytes: 200, progress_percent: 50 }],
+      ]);
+      mockUseFileStore.getState = vi.fn().mockReturnValue({ uploadProgress: activeUpload });
+
+      await useTenantStore.getState().switchTenant('tenant-1');
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(useTenantStore.getState().error).toBe('Cannot switch tenant while uploads are in progress.');
+    });
+
+    it('should not block switch if all uploads are complete or errored', async () => {
+      const doneUploads = new Map([
+        ['upload-1', { file_id: 'upload-1', file_name: 'test.txt', phase: 'complete', bytes_uploaded: 200, total_bytes: 200, progress_percent: 100 }],
+        ['upload-2', { file_id: 'upload-2', file_name: 'fail.txt', phase: 'error', bytes_uploaded: 0, total_bytes: 100, progress_percent: 0 }],
+      ]);
+      mockUseFileStore.getState = vi.fn().mockReturnValue({ uploadProgress: doneUploads });
+      mockInvoke.mockResolvedValueOnce({ tenant: mockTenant, session_token: 'new-session-tok' });
+
+      await useTenantStore.getState().switchTenant('tenant-1');
+
+      expect(mockInvoke).toHaveBeenCalledWith('switch_tenant', { tenantId: 'tenant-1' });
+      expect(mockLoginWithSession).toHaveBeenCalledWith('new-session-tok');
     });
 
     it('should set error on switch failure', async () => {

@@ -7,6 +7,8 @@ import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.PqcAlgorithm
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
+import my.ssdid.drive.domain.repository.NotificationRepository
+import my.ssdid.drive.util.CacheManager
 import my.ssdid.drive.data.remote.dto.CreateInvitationRequest
 import my.ssdid.drive.data.remote.dto.CreateInvitationResponse
 import my.ssdid.drive.data.remote.dto.CreatedInvitationDto
@@ -78,6 +80,8 @@ class TenantRepositoryImplTest {
     private lateinit var secureStorage: SecureStorage
     private lateinit var cryptoConfig: CryptoConfig
     private lateinit var folderKeyManager: FolderKeyManager
+    private lateinit var cacheManager: CacheManager
+    private lateinit var notificationRepository: NotificationRepository
     private lateinit var gson: Gson
     private lateinit var repository: TenantRepositoryImpl
 
@@ -95,6 +99,8 @@ class TenantRepositoryImplTest {
         secureStorage = mockk(relaxed = true)
         cryptoConfig = mockk(relaxed = true)
         folderKeyManager = mockk(relaxed = true)
+        cacheManager = mockk(relaxed = true)
+        notificationRepository = mockk(relaxed = true)
         gson = Gson()
 
         repository = TenantRepositoryImpl(
@@ -102,6 +108,8 @@ class TenantRepositoryImplTest {
             secureStorage = secureStorage,
             cryptoConfig = cryptoConfig,
             folderKeyManager = folderKeyManager,
+            cacheManager = cacheManager,
+            notificationRepository = notificationRepository,
             gson = gson
         )
     }
@@ -160,8 +168,7 @@ class TenantRepositoryImplTest {
         val switchData = TenantSwitchData(
             currentTenantId = testTenantId,
             role = "admin",
-            accessToken = "new-access-token",
-            refreshToken = "new-refresh-token",
+            sessionToken = "new-session-token",
             expiresIn = 3600,
             tokenType = "Bearer"
         )
@@ -177,10 +184,12 @@ class TenantRepositoryImplTest {
         assertEquals(testTenantId, context.currentTenantId)
         assertEquals(UserRole.ADMIN, context.currentRole)
         verify { folderKeyManager.clearCache() }
+        coVerify { cacheManager.clearAllCaches() }
+        coVerify { notificationRepository.deleteAllNotifications() }
         coVerify {
             secureStorage.saveTokensWithTenantContext(
-                accessToken = "new-access-token",
-                refreshToken = "new-refresh-token",
+                accessToken = "new-session-token",
+                refreshToken = "",
                 tenantId = testTenantId,
                 role = "admin"
             )

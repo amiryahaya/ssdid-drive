@@ -23,7 +23,8 @@ data class TenantSwitcherUiState(
     val isLoading: Boolean = false,
     val isSwitching: Boolean = false,
     val error: String? = null,
-    val switchSuccess: Boolean = false
+    val switchSuccess: Boolean = false,
+    val uploadInProgress: Boolean = false
 )
 
 /**
@@ -136,6 +137,12 @@ class TenantSwitcherViewModel @Inject constructor(
             return
         }
 
+        // Block switch if an upload is in progress
+        if (currentState.uploadInProgress) {
+            _uiState.update { it.copy(error = "Cannot switch organization while an upload is in progress") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isSwitching = true, error = null, switchSuccess = false) }
 
@@ -208,6 +215,16 @@ class TenantSwitcherViewModel @Inject constructor(
      */
     fun clearSwitchSuccess() {
         _uiState.update { it.copy(switchSuccess = false) }
+    }
+
+    /**
+     * Notify the ViewModel whether an upload is currently active.
+     *
+     * Call this from the hosting screen/ViewModel when upload state changes so
+     * that tenant switching can be blocked while a transfer is in progress.
+     */
+    fun setUploadInProgress(inProgress: Boolean) {
+        _uiState.update { it.copy(uploadInProgress = inProgress) }
     }
 
     /**

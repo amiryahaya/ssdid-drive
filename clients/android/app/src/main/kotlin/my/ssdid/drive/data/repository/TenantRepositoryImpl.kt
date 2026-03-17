@@ -8,6 +8,8 @@ import my.ssdid.drive.crypto.FolderKeyManager
 import my.ssdid.drive.crypto.PqcAlgorithm
 import my.ssdid.drive.data.local.SecureStorage
 import my.ssdid.drive.data.remote.ApiService
+import my.ssdid.drive.domain.repository.NotificationRepository
+import my.ssdid.drive.util.CacheManager
 import my.ssdid.drive.data.remote.dto.CreateInvitationRequest
 import my.ssdid.drive.data.remote.dto.InviteMemberRequest
 import my.ssdid.drive.data.remote.dto.SubmitTenantRequestBody
@@ -52,6 +54,8 @@ class TenantRepositoryImpl @Inject constructor(
     private val secureStorage: SecureStorage,
     private val cryptoConfig: CryptoConfig,
     private val folderKeyManager: FolderKeyManager,
+    private val cacheManager: CacheManager,
+    private val notificationRepository: NotificationRepository,
     private val gson: Gson
 ) : TenantRepository {
 
@@ -122,10 +126,16 @@ class TenantRepositoryImpl @Inject constructor(
                 // Clear cached folder keys (they're tenant-specific)
                 folderKeyManager.clearCache()
 
+                // Clear preview and offline download cache (tenant-specific content)
+                cacheManager.clearAllCaches()
+
+                // Clear local notifications (tenant-specific)
+                notificationRepository.deleteAllNotifications()
+
                 // Save new tokens and tenant context atomically
                 secureStorage.saveTokensWithTenantContext(
-                    accessToken = data.accessToken,
-                    refreshToken = data.refreshToken,
+                    accessToken = data.sessionToken,
+                    refreshToken = "",
                     tenantId = data.currentTenantId,
                     role = data.role
                 )
