@@ -86,6 +86,43 @@ public static class RegisterVerify
             return user;
         }
 
+        // Auto-link: if shared email claim matches an existing user, link the DID
+        // to the existing account instead of creating a duplicate.
+        var sharedEmail = claims?.GetValueOrDefault("email")?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(sharedEmail))
+        {
+            var existingByEmail = await db.Users.FirstOrDefaultAsync(u => u.Email == sharedEmail);
+            if (existingByEmail is not null)
+            {
+                // Link wallet DID to existing account
+                existingByEmail.Did = did;
+                ApplyClaims(existingByEmail, claims);
+
+                if (!string.IsNullOrWhiteSpace(inviteToken))
+                {
+                    await using var tx = await db.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await AcceptInviteForUser(db, existingByEmail, inviteToken);
+                        await db.SaveChangesAsync();
+                        await tx.CommitAsync();
+                    }
+                    catch
+                    {
+                        await tx.RollbackAsync();
+                        db.ChangeTracker.Clear();
+                        existingByEmail = await db.Users.FirstOrDefaultAsync(u => u.Email == sharedEmail);
+                    }
+                }
+                else
+                {
+                    await db.SaveChangesAsync();
+                }
+
+                return existingByEmail;
+            }
+        }
+
         // New user — require invite token (except for AdminDid bootstrap)
         var isAdmin = !string.IsNullOrEmpty(adminDid) && did == adminDid;
 

@@ -128,25 +128,48 @@ public static class OidcVerify
             && !string.Equals(invitation.Email, oidcClaims.Email, StringComparison.OrdinalIgnoreCase))
             return AppError.Forbidden($"This invitation is for {invitation.Email}").ToProblemResult();
 
-        var newUser = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = oidcClaims.Email,
-            DisplayName = oidcClaims.Name,
-            EmailVerified = true,
-            Status = UserStatus.Active,
-            TenantId = invitation.TenantId,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow,
-        };
-        db.Users.Add(newUser);
+        // Auto-link: check if a user with this email already exists
+        var newUser = await db.Users.FirstOrDefaultAsync(
+            u => u.Email == oidcClaims.Email, ct);
 
-        db.Logins.Add(new Login
+        if (newUser is not null)
         {
-            AccountId = newUser.Id,
-            Provider = providerEnum.Value,
-            ProviderSubject = oidcClaims.Subject,
-        });
+            // Link OIDC login to existing account
+            newUser.DisplayName ??= oidcClaims.Name;
+            newUser.EmailVerified = true;
+            newUser.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            // Create new user
+            newUser = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = oidcClaims.Email,
+                DisplayName = oidcClaims.Name,
+                EmailVerified = true,
+                Status = UserStatus.Active,
+                TenantId = invitation.TenantId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(newUser);
+        }
+
+        // Add OIDC login link if not already linked
+        var hasOidcLogin = await db.Logins.AnyAsync(
+            l => l.AccountId == newUser.Id
+                && l.Provider == providerEnum.Value
+                && l.ProviderSubject == oidcClaims.Subject, ct);
+        if (!hasOidcLogin)
+        {
+            db.Logins.Add(new Login
+            {
+                AccountId = newUser.Id,
+                Provider = providerEnum.Value,
+                ProviderSubject = oidcClaims.Subject,
+            });
+        }
 
         invitation.Status = InvitationStatus.Accepted;
         invitation.InvitedUserId = newUser.Id;

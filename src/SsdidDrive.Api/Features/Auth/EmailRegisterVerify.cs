@@ -50,25 +50,49 @@ public static class EmailRegisterVerify
         if (invitation is null)
             return AppError.NotFound("Invalid or expired invitation").ToProblemResult();
 
-        // Create user
-        var user = new User
+        // Auto-link: check if a user with this email already exists (e.g., registered via OIDC or SSDID)
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        if (user is not null)
         {
-            Id = Guid.NewGuid(),
-            Email = email,
-            EmailVerified = true,
-            Status = UserStatus.Active,
-            TenantId = invitation.TenantId,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow,
-        };
-        db.Users.Add(user);
+            // Link Email login to existing account
+            user.EmailVerified = true;
+            user.UpdatedAt = DateTimeOffset.UtcNow;
 
-        db.Logins.Add(new Login
+            // Add Email login if not already linked
+            var hasEmailLogin = await db.Logins.AnyAsync(
+                l => l.AccountId == user.Id && l.Provider == LoginProvider.Email, ct);
+            if (!hasEmailLogin)
+            {
+                db.Logins.Add(new Login
+                {
+                    AccountId = user.Id,
+                    Provider = LoginProvider.Email,
+                    ProviderSubject = email,
+                });
+            }
+        }
+        else
         {
-            AccountId = user.Id,
-            Provider = LoginProvider.Email,
-            ProviderSubject = email,
-        });
+            // Create new user
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                EmailVerified = true,
+                Status = UserStatus.Active,
+                TenantId = invitation.TenantId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(user);
+
+            db.Logins.Add(new Login
+            {
+                AccountId = user.Id,
+                Provider = LoginProvider.Email,
+                ProviderSubject = email,
+            });
+        }
 
         await db.SaveChangesAsync(ct);
 
