@@ -8,11 +8,6 @@ vi.mock('../../stores/authStore', () => ({
   useAuthStore: vi.fn(),
 }))
 
-// Mock QRCodeSVG to avoid rendering actual QR codes
-vi.mock('qrcode.react', () => ({
-  QRCodeSVG: ({ value }: { value: string }) => <div data-testid="qr-code">{value}</div>,
-}))
-
 const mockLogin = vi.fn()
 
 beforeEach(() => {
@@ -21,7 +16,6 @@ beforeEach(() => {
     (selector: (s: unknown) => unknown) =>
       selector({ login: mockLogin })
   )
-  // Mock fetch for email login
   vi.stubGlobal('fetch', vi.fn())
 })
 
@@ -36,14 +30,9 @@ describe('LoginPage', () => {
     expect(screen.getByText('Admin Portal')).toBeInTheDocument()
   })
 
-  it('defaults to Email tab', () => {
+  it('shows email input and continue button', () => {
     render(<LoginPage />)
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
-    expect(screen.getByText('Continue')).toBeInTheDocument()
-  })
-
-  it('shows email input and continue button on email tab', () => {
-    render(<LoginPage />)
     expect(screen.getByPlaceholderText('admin@example.com')).toBeInTheDocument()
     expect(screen.getByText('Continue')).toBeInTheDocument()
   })
@@ -53,34 +42,16 @@ describe('LoginPage', () => {
     expect(screen.getByText('Continue')).toBeDisabled()
   })
 
-  it('shows Google and Microsoft OIDC links', () => {
+  it('does not show OIDC or wallet options', () => {
     render(<LoginPage />)
-    expect(screen.getByText('Google')).toBeInTheDocument()
-    expect(screen.getByText('Microsoft')).toBeInTheDocument()
+    expect(screen.queryByText('Google')).not.toBeInTheDocument()
+    expect(screen.queryByText('Microsoft')).not.toBeInTheDocument()
+    expect(screen.queryByText('SSDID Wallet')).not.toBeInTheDocument()
   })
 
-  it('Google link points to correct OAuth endpoint', () => {
+  it('shows SuperAdmin access message', () => {
     render(<LoginPage />)
-    const googleLink = screen.getByText('Google').closest('a')!
-    expect(googleLink.getAttribute('href')).toBe('/api/auth/oidc/google/authorize')
-  })
-
-  it('Microsoft link points to correct OAuth endpoint', () => {
-    render(<LoginPage />)
-    const msLink = screen.getByText('Microsoft').closest('a')!
-    expect(msLink.getAttribute('href')).toBe('/api/auth/oidc/microsoft/authorize')
-  })
-
-  it('switches to wallet tab when SSDID Wallet is clicked', async () => {
-    const user = userEvent.setup()
-    // Mock fetch for initiate call
-    ;(fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('no server'))
-
-    render(<LoginPage />)
-    await user.click(screen.getByText('SSDID Wallet'))
-
-    // Email form should not be visible; wallet loading/error should be present
-    expect(screen.queryByPlaceholderText('admin@example.com')).not.toBeInTheDocument()
+    expect(screen.getByText('SuperAdmin access only. Email + TOTP required.')).toBeInTheDocument()
   })
 
   it('submits email and transitions to TOTP step', async () => {
@@ -175,11 +146,11 @@ describe('LoginPage', () => {
     expect(screen.getByText('Verify')).not.toBeDisabled()
   })
 
-  it('calls login after successful TOTP verification', async () => {
+  it('calls login with session_token after successful TOTP', async () => {
     const user = userEvent.setup()
     ;(fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // email
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ token: 'tok-123' }) }) // totp
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ session_token: 'tok-123' }) })
 
     mockLogin.mockResolvedValue(undefined)
 
@@ -215,11 +186,6 @@ describe('LoginPage', () => {
     await user.click(screen.getByText('Back'))
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
-  })
-
-  it('shows requires SuperAdmin message', () => {
-    render(<LoginPage />)
-    expect(screen.getByText('Requires SuperAdmin role to access.')).toBeInTheDocument()
   })
 
   it('strips non-digit characters from TOTP code input', async () => {

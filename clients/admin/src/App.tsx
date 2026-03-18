@@ -3,7 +3,6 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
-import AuthCallbackPage from './pages/AuthCallbackPage'
 import BootstrapPage from './pages/BootstrapPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
@@ -101,7 +100,6 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter basename="/admin">
         <Routes>
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="*" element={
             bootstrapRequired
               ? <BootstrapPage />
