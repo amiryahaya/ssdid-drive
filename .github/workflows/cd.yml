@@ -24,6 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout ssdid-sdk-dotnet
+        uses: actions/checkout@v4
+        with:
+          repository: amiryahaya/ssdid-sdk-dotnet
+          path: ../ssdid-sdk-dotnet
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       # Download libkazsign native library from PQC-KAZ release
       - name: Download libkazsign (linux-x64)
         run: |
@@ -61,10 +68,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Copy SDK source into build context (Containerfile expects ssdid-sdk-dotnet-src/)
+      - name: Prepare SDK source for container build
+        run: cp -r ../ssdid-sdk-dotnet/src ssdid-sdk-dotnet-src
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: src/SsdidDrive.Api
+          context: .
           file: src/SsdidDrive.Api/Containerfile
           push: true
           tags: |

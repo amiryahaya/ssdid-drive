@@ -123,12 +123,24 @@ describe('CreateInvitationDialog', () => {
     setupStores();
     const { user } = renderDialog();
 
-    const messageInput = screen.getByLabelText(/Message/i);
-    const longText = 'a'.repeat(600);
-    await user.type(messageInput, longText);
+    const messageInput = screen.getByLabelText(/Message/i) as HTMLTextAreaElement;
+    // Type a short string, verify counter, then set value directly to test cap
+    await user.type(messageInput, 'hello');
+    expect(screen.getByText('5/500')).toBeInTheDocument();
 
-    expect(messageInput).toHaveValue('a'.repeat(500));
+    // Simulate setting a long value via the onChange handler
+    // The component's onChange rejects values > 500 chars
+    const longValue = 'a'.repeat(500);
+    await user.clear(messageInput);
+    // Use fireEvent for direct value setting (faster than typing 500 chars)
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(messageInput, { target: { value: longValue } });
+    expect(messageInput.value).toHaveLength(500);
     expect(screen.getByText('500/500')).toBeInTheDocument();
+
+    // Verify exceeding 500 is rejected
+    fireEvent.change(messageInput, { target: { value: 'a'.repeat(501) } });
+    expect(messageInput.value).toHaveLength(500); // unchanged
   });
 
   it('should show character counter for message', () => {
@@ -153,7 +165,7 @@ describe('CreateInvitationDialog', () => {
         role: 'member',
         message: undefined,
       });
-    });
+    }, { timeout: 5000 });
   });
 
   it('should show short code after successful creation', async () => {

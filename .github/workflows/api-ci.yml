@@ -48,6 +48,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout ssdid-sdk-dotnet
+        uses: actions/checkout@v4
+        with:
+          repository: amiryahaya/ssdid-sdk-dotnet
+          path: ../ssdid-sdk-dotnet
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Download libkazsign (linux-x64)
         run: |
           mkdir -p src/SsdidDrive.Api/runtimes/linux-amd64/native
