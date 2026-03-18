@@ -28,20 +28,6 @@ vi.mock('@/components/auth/QrChallenge', () => ({
   ),
 }));
 
-// Mock OidcButtons
-vi.mock('@/components/auth/OidcButtons', () => ({
-  OidcButtons: ({ onProviderClick, disabled }: { onProviderClick: (p: string) => void; disabled: boolean }) => (
-    <div data-testid="oidc-buttons">
-      <button data-testid="oidc-google" onClick={() => onProviderClick('google')} disabled={disabled}>
-        Google
-      </button>
-      <button data-testid="oidc-microsoft" onClick={() => onProviderClick('microsoft')} disabled={disabled}>
-        Microsoft
-      </button>
-    </div>
-  ),
-}));
-
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,22 +60,23 @@ describe('LoginPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/login/email');
   });
 
-  it('should render OIDC buttons', () => {
+  it('should render OIDC buttons (Google and Microsoft)', () => {
     render(<LoginPage />);
 
-    expect(screen.getByTestId('oidc-buttons')).toBeInTheDocument();
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByText('Microsoft')).toBeInTheDocument();
   });
 
-  it('should show collapsible SSDID Wallet section', () => {
+  it('should show SSDID Wallet tab', () => {
     render(<LoginPage />);
 
-    expect(screen.getByText('Sign in with SSDID Wallet')).toBeInTheDocument();
+    expect(screen.getByText('SSDID Wallet')).toBeInTheDocument();
   });
 
-  it('should show QR challenge when wallet section is expanded', async () => {
+  it('should show QR challenge when wallet tab is selected', async () => {
     const { user } = render(<LoginPage />);
 
-    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+    await user.click(screen.getByText('SSDID Wallet'));
 
     expect(screen.getByTestId('qr-challenge')).toBeInTheDocument();
   });
@@ -100,8 +87,8 @@ describe('LoginPage', () => {
 
     const { user } = render(<LoginPage />);
 
-    // Expand wallet section first
-    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+    // Switch to wallet tab first
+    await user.click(screen.getByText('SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 
     expect(loginWithSessionSpy).toHaveBeenCalledWith('mock-session-token');
@@ -113,7 +100,7 @@ describe('LoginPage', () => {
 
     const { user } = render(<LoginPage />);
 
-    await user.click(screen.getByText('Sign in with SSDID Wallet'));
+    await user.click(screen.getByText('SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 
     expect(mockNavigate).toHaveBeenCalledWith('/files');
@@ -146,11 +133,11 @@ describe('LoginPage', () => {
     expect(registerLink).toHaveAttribute('href', '/register');
   });
 
-  it('should show invite code link', () => {
+  it('should show link to recover page', () => {
     render(<LoginPage />);
 
-    const inviteLink = screen.getByRole('link', { name: /invite code/i });
-    expect(inviteLink).toBeInTheDocument();
-    expect(inviteLink).toHaveAttribute('href', '/join');
+    const recoverLink = screen.getByRole('link', { name: /recover/i });
+    expect(recoverLink).toBeInTheDocument();
+    expect(recoverLink).toHaveAttribute('href', '/recover');
   });
 });

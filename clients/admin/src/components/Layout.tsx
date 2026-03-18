@@ -73,10 +73,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => mql.removeEventListener('change', handleChange)
   }, [])
 
-  // Close mobile drawer on route change
-  useEffect(() => {
+  // Close mobile drawer on route change — reset key forces state to false
+  const [pathnameKey, setPathnameKey] = useState(location.pathname)
+  if (pathnameKey !== location.pathname) {
+    setPathnameKey(location.pathname)
     setMobileOpen(false)
-  }, [location.pathname])
+  }
 
   const handleToggle = useCallback(() => {
     setCollapsed((prev) => !prev)

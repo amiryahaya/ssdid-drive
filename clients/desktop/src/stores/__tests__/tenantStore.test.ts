@@ -23,12 +23,13 @@ const mockTenant = {
   created_at: '2026-01-01T00:00:00Z',
 };
 
-const mockTenantConfig = {
-  max_file_size: 100 * 1024 * 1024,
-  max_storage: 10 * 1024 * 1024 * 1024,
-  allowed_file_types: ['*'],
-  features: { pii_detection: true, audit_log: true },
-};
+// Tenant config shape kept for reference but not used in current tests
+// const mockTenantConfig = {
+//   max_file_size: 100 * 1024 * 1024,
+//   max_storage: 10 * 1024 * 1024 * 1024,
+//   allowed_file_types: ['*'],
+//   features: { pii_detection: true, audit_log: true },
+// };
 
 describe('tenantStore', () => {
   beforeEach(() => {

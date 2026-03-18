@@ -91,8 +91,6 @@ describe('EditTenantDialog', () => {
   })
 
   it('shows validation error for negative storage quota', async () => {
-    const user = userEvent.setup()
-
     render(<EditTenantDialog {...defaultProps} />)
 
     // Set a negative value via fireEvent since type="number" min="0" may prevent
@@ -127,7 +125,7 @@ describe('EditTenantDialog', () => {
 
   it('shows "Saving..." while submitting', async () => {
     const user = userEvent.setup()
-    let resolveUpdate: () => void
+    let resolveUpdate: (value?: unknown) => void
     mockUpdateTenant.mockImplementation(() => new Promise((resolve) => { resolveUpdate = resolve }))
 
     render(<EditTenantDialog {...defaultProps} />)

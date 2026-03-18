@@ -58,8 +58,16 @@ export default function AuditLogPage() {
   )
 
   useEffect(() => {
-    loadAuditLog(page)
-  }, [page, loadAuditLog])
+    fetchAuditLog(page, PAGE_SIZE, {
+      actor: appliedFilters.actor || undefined,
+      action: appliedFilters.action || undefined,
+      from: appliedFilters.from || undefined,
+      to: appliedFilters.to ? `${appliedFilters.to}T23:59:59Z` : undefined,
+    }).then(
+      () => setError(null),
+      (err) => setError(err instanceof Error ? err.message : 'Failed to load audit log'),
+    )
+  }, [page, fetchAuditLog, appliedFilters])
 
   const handleApplyFilters = () => {
     const filters = { actor: actorFilter, action: actionFilter, from: fromDate, to: toDate }

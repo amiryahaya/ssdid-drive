@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 
@@ -6,32 +6,26 @@ export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams()
   const login = useAuthStore((s) => s.login)
   const loginError = useAuthStore((s) => s.loginError)
-  const [error, setError] = useState<string | null>(null)
+  const [loginCallError, setLoginCallError] = useState<string | null>(null)
   const attempted = useRef(false)
+
+  // Derive URL-based errors during render (not in an effect)
+  const token = useMemo(() => searchParams.get('token'), [searchParams])
+  const callbackError = useMemo(() => searchParams.get('error'), [searchParams])
+  const urlError = callbackError ?? (!token ? 'No token received' : null)
 
   useEffect(() => {
     if (attempted.current) return
     attempted.current = true
 
-    const token = searchParams.get('token')
-    const callbackError = searchParams.get('error')
-
-    if (callbackError) {
-      setError(callbackError)
-      return
-    }
-
-    if (!token) {
-      setError('No token received')
-      return
-    }
+    if (urlError || !token) return
 
     login(token).catch((err) => {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setLoginCallError(err instanceof Error ? err.message : 'Login failed')
     })
-  }, [searchParams, login])
+  }, [token, urlError, login])
 
-  const displayError = error || loginError
+  const displayError = urlError || loginCallError || loginError
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">

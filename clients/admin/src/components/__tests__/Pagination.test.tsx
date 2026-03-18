@@ -63,8 +63,7 @@ describe('Pagination', () => {
     expect(onChange).toHaveBeenCalledWith(4)
   })
 
-  it('does not go below page 1', async () => {
-    const user = userEvent.setup()
+  it('does not go below page 1', () => {
     const onChange = vi.fn()
     render(
       <Pagination page={1} totalPages={5} loading={false} total={100} onChange={onChange} />
@@ -73,8 +72,7 @@ describe('Pagination', () => {
     expect(screen.getByText('Previous')).toBeDisabled()
   })
 
-  it('does not go above totalPages', async () => {
-    const user = userEvent.setup()
+  it('does not go above totalPages', () => {
     const onChange = vi.fn()
     render(
       <Pagination page={5} totalPages={5} loading={false} total={100} onChange={onChange} />

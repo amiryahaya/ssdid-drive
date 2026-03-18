@@ -105,7 +105,7 @@ describe('Sidebar', () => {
   })
 
   it('highlights the active nav item', () => {
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={['/users']}>
         <Sidebar collapsed={false} onToggle={vi.fn()} />
       </MemoryRouter>

@@ -29,17 +29,6 @@ vi.mock('@/components/auth/QrChallenge', () => ({
   ),
 }));
 
-// Mock OidcButtons
-vi.mock('@/components/auth/OidcButtons', () => ({
-  OidcButtons: ({ onProviderClick, disabled }: { onProviderClick: (p: string) => void; disabled: boolean }) => (
-    <div data-testid="oidc-buttons">
-      <button data-testid="oidc-google" onClick={() => onProviderClick('google')} disabled={disabled}>
-        Google
-      </button>
-    </div>
-  ),
-}));
-
 // Mock OtpInput
 vi.mock('@/components/auth/OtpInput', () => ({
   OtpInput: ({ onComplete }: { onComplete: (code: string) => void }) => (
@@ -63,38 +52,54 @@ describe('RegisterPage', () => {
     });
   });
 
-  it('should render the Create Account heading', () => {
+  it('should render the Enter Invitation Code heading initially', () => {
     render(<RegisterPage />);
 
+    expect(screen.getByText('Enter Invitation Code')).toBeInTheDocument();
+  });
+
+  it('should render invitation code input', () => {
+    render(<RegisterPage />);
+
+    expect(screen.getByPlaceholderText('Paste your invitation code')).toBeInTheDocument();
+  });
+
+  it('should render Continue button', () => {
+    render(<RegisterPage />);
+
+    expect(screen.getByText('Continue')).toBeInTheDocument();
+  });
+
+  it('should show choose step with OIDC buttons after entering invite code', async () => {
+    const { user } = render(<RegisterPage />);
+
+    // Enter an invitation code
+    const input = screen.getByPlaceholderText('Paste your invitation code');
+    await user.type(input, 'INVITE-CODE-123');
+    await user.click(screen.getByText('Continue'));
+
+    // Now on 'choose' step — should see Google and Microsoft OIDC buttons
     expect(screen.getByText('Create Account')).toBeInTheDocument();
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByText('Microsoft')).toBeInTheDocument();
   });
 
-  it('should render email input', () => {
-    render(<RegisterPage />);
+  it('should show collapsible SSDID Wallet section on choose step', async () => {
+    const { user } = render(<RegisterPage />);
 
-    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-  });
-
-  it('should render Send verification code button', () => {
-    render(<RegisterPage />);
-
-    expect(screen.getByText('Send verification code')).toBeInTheDocument();
-  });
-
-  it('should render OIDC buttons', () => {
-    render(<RegisterPage />);
-
-    expect(screen.getByTestId('oidc-buttons')).toBeInTheDocument();
-  });
-
-  it('should show collapsible SSDID Wallet section', () => {
-    render(<RegisterPage />);
+    const input = screen.getByPlaceholderText('Paste your invitation code');
+    await user.type(input, 'INVITE-CODE-123');
+    await user.click(screen.getByText('Continue'));
 
     expect(screen.getByText('Register with SSDID Wallet')).toBeInTheDocument();
   });
 
   it('should show QR challenge when wallet section is expanded', async () => {
     const { user } = render(<RegisterPage />);
+
+    const input = screen.getByPlaceholderText('Paste your invitation code');
+    await user.type(input, 'INVITE-CODE-123');
+    await user.click(screen.getByText('Continue'));
 
     await user.click(screen.getByText('Register with SSDID Wallet'));
 
@@ -127,6 +132,12 @@ describe('RegisterPage', () => {
 
     const { user } = render(<RegisterPage />);
 
+    // Navigate to choose step
+    const input = screen.getByPlaceholderText('Paste your invitation code');
+    await user.type(input, 'INVITE-CODE-123');
+    await user.click(screen.getByText('Continue'));
+
+    // Expand wallet section and authenticate
     await user.click(screen.getByText('Register with SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 
@@ -139,6 +150,12 @@ describe('RegisterPage', () => {
 
     const { user } = render(<RegisterPage />);
 
+    // Navigate to choose step
+    const input = screen.getByPlaceholderText('Paste your invitation code');
+    await user.type(input, 'INVITE-CODE-123');
+    await user.click(screen.getByText('Continue'));
+
+    // Expand wallet section and authenticate
     await user.click(screen.getByText('Register with SSDID Wallet'));
     await user.click(screen.getByTestId('mock-authenticate'));
 

@@ -59,8 +59,11 @@ export default function NotificationsPage() {
   )
 
   useEffect(() => {
-    loadLogs(page)
-  }, [page, loadLogs])
+    fetchNotificationLogs(page, PAGE_SIZE).then(
+      () => setError(null),
+      (err) => setError(err instanceof Error ? err.message : 'Failed to load notifications'),
+    )
+  }, [page, fetchNotificationLogs])
 
   const handleSent = () => {
     // Refresh from page 1 after sending
