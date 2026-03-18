@@ -62,10 +62,11 @@ class CryptoConfig @Inject constructor() {
 
     /**
      * Current PQC algorithm selection.
-     * Defaults to KAZ for backward compatibility.
+     * Defaults to ML (NIST standard ML-KEM + ML-DSA).
+     * KAZ remains available for backward compatibility.
      */
     @Volatile
-    private var algorithm: PqcAlgorithm = PqcAlgorithm.KAZ
+    private var algorithm: PqcAlgorithm = PqcAlgorithm.NIST
 
     /**
      * Get the current algorithm setting.

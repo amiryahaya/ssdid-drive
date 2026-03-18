@@ -100,7 +100,7 @@ builder.Services.AddSsdidServer(options =>
     options.RegistryUrl = builder.Configuration["Ssdid:RegistryUrl"] ?? "https://registry.ssdid.my";
     options.IdentityPath = builder.Configuration["Ssdid:IdentityPath"]
         ?? Path.Combine(builder.Environment.ContentRootPath, "data", "server-identity.json");
-    options.Algorithm = builder.Configuration["Ssdid:Algorithm"] ?? "KazSignVerificationKey2024";
+    options.Algorithm = builder.Configuration["Ssdid:Algorithm"] ?? "MlDsa44VerificationKey2024";
     options.ServiceName = builder.Configuration["Ssdid:ServiceName"] ?? "SSDID Drive";
     options.ServiceUrl = builder.Configuration["Ssdid:ServiceUrl"] ?? "";
     options.ServiceId = builder.Configuration["Ssdid:ServiceId"] ?? "drive";
