@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import CryptoKit
 
 /// Delegate for recovery view model coordinator events
 protocol RecoveryViewModelCoordinatorDelegate: AnyObject {
@@ -124,7 +123,7 @@ final class RecoveryViewModel: BaseViewModel {
                     throw RecoveryFlowError.invalidFileFormat
                 }
                 let kemPublicKey = kemBase64
-                let keyProofHash = SHA256.hash(data: kemData)
+                let keyProofHash = SHA3_256.hash(data: kemData)
                 let keyProof = keyProofHash.map { String(format: "%02x", $0) }.joined()
 
                 // Complete recovery: re-authenticate with the server using key proof

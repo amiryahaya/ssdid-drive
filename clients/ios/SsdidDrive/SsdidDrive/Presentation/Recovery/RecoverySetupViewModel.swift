@@ -69,8 +69,8 @@ final class RecoverySetupViewModel: BaseViewModel {
                 // Server share is share index 2 (serialized, base64 encoded)
                 serverShare = shares[2].serialize().base64EncodedString()
 
-                // Compute key_proof: SHA-256 of the KEM public key as hex
-                let hash = SHA256.hash(data: kemPublicKey)
+                // Compute key_proof: SHA3-256 of the KEM public key as hex
+                let hash = SHA3_256.hash(data: kemPublicKey)
                 keyProof = hash.map { String(format: "%02x", $0) }.joined()
 
                 let encoder = JSONEncoder()

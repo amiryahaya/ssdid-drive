@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 /// A serialized Shamir share stored as a recovery file.
 struct RecoveryFile: Codable {
@@ -32,7 +31,7 @@ struct RecoveryFile: Codable {
             throw RecoveryError.invalidShareData
         }
 
-        let hash = SHA256.hash(data: rawBytes)
+        let hash = SHA3_256.hash(data: rawBytes)
         let expectedChecksum = hash.map { String(format: "%02x", $0) }.joined()
 
         guard checksum == expectedChecksum else {
@@ -47,7 +46,7 @@ struct RecoveryFile: Codable {
     /// The `share_data` field stores only the y-bytes (not the index prefix),
     /// matching the Desktop and Android implementations for cross-platform compatibility.
     static func create(share: ShamirSecretSharing.Share, userDid: String, kemPublicKey: Data? = nil) -> RecoveryFile {
-        let hash = SHA256.hash(data: share.data)
+        let hash = SHA3_256.hash(data: share.data)
         let checksum = hash.map { String(format: "%02x", $0) }.joined()
 
         return RecoveryFile(
