@@ -80,7 +80,7 @@ public static class CompleteRecovery
 
         return Results.Ok(new
         {
-            token,
+            session_token = token,
             user_id = user.Id
         });
     }

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 
 /// Delegate for recovery view model coordinator events
 protocol RecoveryViewModelCoordinatorDelegate: AnyObject {
@@ -112,13 +113,27 @@ final class RecoveryViewModel: BaseViewModel {
                     threshold: 2
                 )
 
-                // Re-enroll: the key material is restored; authenticate with the server
-                // TODO: Generate new DID + key proof from reconstructed key for full recovery
+                // Extract recovery metadata from the parsed file
+                let recoveryFileData = file1Content!.data(using: .utf8)!
+                let recoveryFile = try JSONDecoder().decode(RecoveryFile.self, from: recoveryFileData)
+                let oldDid = recoveryFile.userDid
+
+                // KEM public key from recovery file → compute key proof
+                guard let kemBase64 = recoveryFile.kemPublicKey,
+                      let kemData = Data(base64Encoded: kemBase64) else {
+                    throw RecoveryFlowError.invalidFileFormat
+                }
+                let kemPublicKey = kemBase64
+                let keyProofHash = SHA256.hash(data: kemData)
+                let keyProof = keyProofHash.map { String(format: "%02x", $0) }.joined()
+
+                // Complete recovery: re-authenticate with the server using key proof
+                // Use same DID (no migration) — server validates key proof + updates session
                 let response = try await recoveryRepository.completeRecovery(
-                    oldDid: "",       // TODO: extract from recovery file
-                    newDid: "",       // TODO: generate new DID
-                    keyProof: "",     // TODO: sign proof with reconstructed key
-                    kemPublicKey: ""  // TODO: generate new KEM keypair
+                    oldDid: oldDid,
+                    newDid: oldDid,           // Keep same DID for basic recovery
+                    keyProof: keyProof,
+                    kemPublicKey: kemPublicKey
                 )
                 let tokenString = response.token
 

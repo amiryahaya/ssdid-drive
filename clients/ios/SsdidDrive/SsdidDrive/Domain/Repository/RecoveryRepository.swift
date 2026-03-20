@@ -71,7 +71,7 @@ struct CompleteRecoveryResponse: Codable {
     let userId: String
 
     enum CodingKeys: String, CodingKey {
-        case token
+        case token = "session_token"
         case userId = "user_id"
     }
 }

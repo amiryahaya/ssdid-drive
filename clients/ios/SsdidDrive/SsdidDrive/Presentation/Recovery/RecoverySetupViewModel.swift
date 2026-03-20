@@ -63,8 +63,8 @@ final class RecoverySetupViewModel: BaseViewModel {
                     totalShares: 3
                 )
 
-                let file1 = RecoveryFile.create(share: shares[0], userDid: userDid)
-                let file2 = RecoveryFile.create(share: shares[1], userDid: userDid)
+                let file1 = RecoveryFile.create(share: shares[0], userDid: userDid, kemPublicKey: kemPublicKey)
+                let file2 = RecoveryFile.create(share: shares[1], userDid: userDid, kemPublicKey: kemPublicKey)
 
                 // Server share is share index 2 (serialized, base64 encoded)
                 serverShare = shares[2].serialize().base64EncodedString()

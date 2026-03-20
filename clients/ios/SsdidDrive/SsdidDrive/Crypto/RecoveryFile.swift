@@ -10,6 +10,7 @@ struct RecoveryFile: Codable {
     let shareData: String
     let checksum: String
     let userDid: String
+    let kemPublicKey: String?   // base64-encoded KEM public key (for recovery completion)
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -17,6 +18,7 @@ struct RecoveryFile: Codable {
         case shareIndex = "share_index"
         case shareData = "share_data"
         case userDid = "user_did"
+        case kemPublicKey = "kem_public_key"
         case createdAt = "created_at"
     }
 
@@ -44,7 +46,7 @@ struct RecoveryFile: Codable {
     ///
     /// The `share_data` field stores only the y-bytes (not the index prefix),
     /// matching the Desktop and Android implementations for cross-platform compatibility.
-    static func create(share: ShamirSecretSharing.Share, userDid: String) -> RecoveryFile {
+    static func create(share: ShamirSecretSharing.Share, userDid: String, kemPublicKey: Data? = nil) -> RecoveryFile {
         let hash = SHA256.hash(data: share.data)
         let checksum = hash.map { String(format: "%02x", $0) }.joined()
 
@@ -56,6 +58,7 @@ struct RecoveryFile: Codable {
             shareData: share.data.base64EncodedString(),
             checksum: checksum,
             userDid: userDid,
+            kemPublicKey: kemPublicKey?.base64EncodedString(),
             createdAt: ISO8601DateFormatter().string(from: Date())
         )
     }

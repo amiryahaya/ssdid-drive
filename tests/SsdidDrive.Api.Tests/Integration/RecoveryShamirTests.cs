@@ -270,7 +270,7 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestFixture.Json);
-        Assert.True(body.TryGetProperty("token", out var tokenProp));
+        Assert.True(body.TryGetProperty("session_token", out var tokenProp));
         Assert.False(string.IsNullOrEmpty(tokenProp.GetString()));
         Assert.True(body.TryGetProperty("user_id", out _));
     }

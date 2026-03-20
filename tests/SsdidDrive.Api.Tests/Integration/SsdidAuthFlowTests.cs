@@ -56,7 +56,7 @@ public class SsdidAuthFlowTests : IClassFixture<SsdidAuthFlowTests.AuthFlowFacto
     {
         var client = _factory.CreateClient();
         var resp = await client.PostAsJsonAsync("/api/auth/ssdid/register",
-            new { did = "did:ssdid:unknown-client", key_id = "did:ssdid:unknown-client#key-1" },
+            new { did = "did:ssdid:unknownClientDid_AABBCC112233", key_id = "did:ssdid:unknownClientDid_AABBCC112233#key-1" },
             SnakeJson);
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
