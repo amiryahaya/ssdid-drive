@@ -16,6 +16,7 @@ enum RecoverySetupStep {
 protocol RecoverySetupViewModelCoordinatorDelegate: AnyObject {
     func recoverySetupDidComplete()
     func recoverySetupDidCancel()
+    func recoverySetupDidRequestTrusteeSelection(totalShares: Int, masterKey: Data)
 }
 
 /// View model for recovery setup wizard.

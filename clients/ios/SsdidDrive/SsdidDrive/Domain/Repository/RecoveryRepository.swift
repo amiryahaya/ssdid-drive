@@ -30,6 +30,9 @@ protocol RecoveryRepository {
     /// Get the current user's configured trustees.
     func getTrustees() async throws -> [Trustee]
 
+    /// Search org members by email/name for trustee candidate selection.
+    func searchMembers(query: String) async throws -> [Trustee]
+
     /// Get pending recovery requests where the current user is a trustee.
     func getPendingRequests() async throws -> [RecoveryRequest]
 

@@ -14,6 +14,8 @@ public static class RecoveryFeature
         GetPendingRequests.Map(group);
         ApproveRecoveryRequest.Map(group);
         RejectRecoveryRequest.Map(group);
+        InitiateRecoveryRequest.Map(group);
+        GetMyRecoveryRequest.Map(group);
 
         // Unauthenticated endpoints mapped directly on routes
         GetRecoveryShare.Map(routes);

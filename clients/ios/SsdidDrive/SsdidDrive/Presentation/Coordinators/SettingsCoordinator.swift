@@ -59,9 +59,10 @@ final class SettingsCoordinator: BaseCoordinator {
         navigationController.pushViewController(recoveryVC, animated: true)
     }
 
-    func showTrusteeSelection(totalShares: Int) {
+    func showTrusteeSelection(totalShares: Int, masterKey: Data) {
         let viewModel = TrusteeSelectionViewModel(
             totalShares: totalShares,
+            masterKey: masterKey,
             recoveryRepository: container.recoveryRepository
         )
         viewModel.coordinatorDelegate = self
@@ -273,8 +274,8 @@ extension SettingsCoordinator: RecoverySetupViewModelCoordinatorDelegate {
         navigationController.popViewController(animated: true)
     }
 
-    func recoverySetupDidRequestTrusteeSelection(totalShares: Int) {
-        showTrusteeSelection(totalShares: totalShares)
+    func recoverySetupDidRequestTrusteeSelection(totalShares: Int, masterKey: Data) {
+        showTrusteeSelection(totalShares: totalShares, masterKey: masterKey)
     }
 }
 

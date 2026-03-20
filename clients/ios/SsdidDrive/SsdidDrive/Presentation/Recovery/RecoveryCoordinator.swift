@@ -81,6 +81,11 @@ extension RecoveryCoordinator: RecoverySetupViewModelCoordinatorDelegate {
             self.finish()
         }
     }
+
+    func recoverySetupDidRequestTrusteeSelection(totalShares: Int, masterKey: Data) {
+        // Trustee selection from recovery coordinator context — not used in this flow.
+        // The recovery setup wizard (files-based) does not branch into trustee selection.
+    }
 }
 
 // MARK: - RecoveryViewModelCoordinatorDelegate

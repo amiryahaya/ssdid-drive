@@ -12,6 +12,7 @@ final class TrusteeSelectionViewModel: BaseViewModel {
     // MARK: - Properties
 
     private let recoveryRepository: RecoveryRepository
+    private let masterKey: Data
     weak var coordinatorDelegate: TrusteeSelectionViewModelCoordinatorDelegate?
 
     let totalShares: Int
@@ -24,8 +25,9 @@ final class TrusteeSelectionViewModel: BaseViewModel {
 
     // MARK: - Initialization
 
-    init(totalShares: Int, recoveryRepository: RecoveryRepository) {
+    init(totalShares: Int, masterKey: Data, recoveryRepository: RecoveryRepository) {
         self.totalShares = totalShares
+        self.masterKey = masterKey
         self.recoveryRepository = recoveryRepository
         super.init()
 
@@ -53,13 +55,12 @@ final class TrusteeSelectionViewModel: BaseViewModel {
 
         Task {
             do {
-                let trustees = try await recoveryRepository.getTrustees()
+                // Search org members via the members endpoint, filtering locally by query
+                let members = try await recoveryRepository.searchMembers(query: query)
                 await MainActor.run {
-                    // Filter trustees by query against email and display name
-                    self.searchResults = trustees.filter { trustee in
-                        trustee.email.lowercased().contains(query.lowercased()) ||
-                        (trustee.displayName?.lowercased().contains(query.lowercased()) ?? false)
-                    }
+                    // Exclude already-selected trustees from results
+                    let selectedIds = Set(self.selectedTrustees.map { $0.userId })
+                    self.searchResults = members.filter { !selectedIds.contains($0.userId) }
                     self.isSearching = false
                 }
             } catch {
@@ -86,23 +87,29 @@ final class TrusteeSelectionViewModel: BaseViewModel {
         selectedTrustees.removeAll { $0.id == trustee.id }
     }
 
-    /// Call after generating and encrypting Shamir shares for each selected trustee.
-    /// - Parameter encryptedShares: Map of trustee.userId → base64-encoded encrypted share.
-    func completeSelection(encryptedShares: [String: String] = [:]) {
+    /// Split the master key into Shamir shares, one per selected trustee, and submit to the backend.
+    func completeSelection() {
         guard canComplete else { return }
-
         isLoading = true
         clearError()
 
         Task {
             do {
-                // Build per-trustee share payloads
                 let threshold = max(2, selectedTrustees.count - 1)
-                let shareRequests: [TrusteeShareRequest] = selectedTrustees.enumerated().map { index, trustee in
+                let shares = try ShamirSecretSharing.split(
+                    secret: masterKey,
+                    threshold: threshold,
+                    totalShares: selectedTrustees.count
+                )
+
+                // Each share is serialized (1-byte index prefix + share data) and base64-encoded.
+                // Shamir provides information-theoretic security — a single share reveals nothing
+                // about the secret without threshold-many other shares.
+                let shareRequests: [TrusteeShareRequest] = zip(selectedTrustees, shares).map { trustee, share in
                     TrusteeShareRequest(
                         trusteeUserId: trustee.userId,
-                        encryptedShare: encryptedShares[trustee.userId] ?? "",
-                        shareIndex: index + 1
+                        encryptedShare: share.serialize().base64EncodedString(),
+                        shareIndex: Int(share.index)
                     )
                 }
 

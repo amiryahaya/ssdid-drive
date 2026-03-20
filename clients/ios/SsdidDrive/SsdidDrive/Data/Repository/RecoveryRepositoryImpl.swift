@@ -141,9 +141,44 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
     }
 
     func getMyRecoveryRequest() async throws -> RecoveryRequest? {
-        // The requester's own request is tracked client-side after createRecoveryRequest().
-        // There is no "my request" endpoint — return nil.
-        return nil
+        struct Response: Decodable {
+            let id: String
+            let status: String
+            let approvedShares: Int
+            let requiredShares: Int
+            let expiresAt: Date
+            let createdAt: Date
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case status
+                case approvedShares = "approved_shares"
+                case requiredShares = "required_shares"
+                case expiresAt = "expires_at"
+                case createdAt = "created_at"
+            }
+        }
+        struct WrappedResponse: Decodable {
+            let request: Response?
+        }
+        let wrapped: WrappedResponse = try await apiClient.request(
+            "/recovery/requests/mine",
+            method: .get,
+            body: nil as String?,
+            requiresAuth: true
+        )
+        guard let r = wrapped.request else { return nil }
+        return RecoveryRequest(
+            id: r.id,
+            requesterId: "",
+            requesterEmail: "",
+            requesterName: nil,
+            status: RecoveryRequest.Status(rawValue: r.status) ?? .pending,
+            approvedShares: r.approvedShares,
+            requiredShares: r.requiredShares,
+            expiresAt: r.expiresAt,
+            createdAt: r.createdAt
+        )
     }
 
     func createRecoveryRequest(did: String) async throws -> RecoveryRequest {
@@ -202,9 +237,75 @@ final class RecoveryRepositoryImpl: RecoveryRepository {
     }
 
     func initiateRecovery() async throws -> RecoveryRequest {
-        // This endpoint is for the unauthenticated recovery flow (locked-out user).
-        // From the settings/authenticated context there is no direct initiate endpoint.
-        throw APIClient.APIError.serverError
+        struct Response: Decodable {
+            let requestId: String
+            let status: String
+            let requiredCount: Int
+            let expiresAt: Date
+
+            enum CodingKeys: String, CodingKey {
+                case requestId = "request_id"
+                case status
+                case requiredCount = "required_count"
+                case expiresAt = "expires_at"
+            }
+        }
+        let response: Response = try await apiClient.request(
+            "/recovery/requests/initiate",
+            method: .post,
+            body: nil as String?,
+            requiresAuth: true
+        )
+        return RecoveryRequest(
+            id: response.requestId,
+            requesterId: "",
+            requesterEmail: "",
+            requesterName: nil,
+            status: RecoveryRequest.Status(rawValue: response.status) ?? .pending,
+            approvedShares: 0,
+            requiredShares: response.requiredCount,
+            expiresAt: response.expiresAt,
+            createdAt: Date()
+        )
+    }
+
+    func searchMembers(query: String) async throws -> [Trustee] {
+        struct MemberEntry: Decodable {
+            let id: String
+            let displayName: String?
+            let email: String?
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case displayName = "display_name"
+                case email
+            }
+        }
+        // Backend returns array of users in current tenant
+        let members: [MemberEntry] = try await apiClient.request(
+            "/users",
+            method: .get,
+            body: nil as String?,
+            requiresAuth: true
+        )
+        // Filter by query locally and convert to Trustee candidates
+        let lowercased = query.lowercased()
+        return members
+            .filter { member in
+                (member.email?.lowercased().contains(lowercased) ?? false) ||
+                (member.displayName?.lowercased().contains(lowercased) ?? false)
+            }
+            .compactMap { member in
+                guard let email = member.email else { return nil }
+                return Trustee(
+                    id: member.id,
+                    userId: member.id,
+                    email: email,
+                    displayName: member.displayName,
+                    hasAccepted: false,
+                    acceptedAt: nil
+                )
+            }
     }
 }
 

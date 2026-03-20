@@ -16,7 +16,13 @@ public static class ListTenantUsers
 
         var users = await db.UserTenants
             .Where(ut => ut.TenantId == tenantId)
-            .Select(ut => new { ut.User.Id, ut.User.Did, ut.User.DisplayName })
+            .Select(ut => new
+            {
+                ut.User.Id,
+                did = ut.User.Did,
+                display_name = ut.User.DisplayName,
+                email = ut.User.Email
+            })
             .ToListAsync();
 
         return Results.Ok(users);
