@@ -29,6 +29,8 @@ pub use pii_service::{
 };
 pub use recovery_service::{
     RecoveryService, RecoveryFile, RecoveryStatus, ServerShareResponse, CompleteRecoveryResponse,
+    TrusteeRecoverySetup, TrusteeInfo, PendingRecoveryRequest,
+    SetupTrusteesRequest, ShareEntry as RecoveryShareEntry,
 };
 pub use sharing_service::SharingService;
 pub use sync_service::{SyncService, SyncStatus, OfflineOperation, CachedFile};

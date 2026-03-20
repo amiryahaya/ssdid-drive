@@ -34,6 +34,111 @@ pub struct RecoveryStatus {
     pub created_at: Option<String>,
 }
 
+/// A trustee entry returned by ListTrustees
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrusteeEntry {
+    pub id: String,
+    pub trustee_user_id: String,
+    pub display_name: Option<String>,
+    pub email: Option<String>,
+    pub share_index: i32,
+    pub created_at: String,
+}
+
+/// The trustee recovery setup returned to the frontend
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrusteeRecoverySetup {
+    /// Unique ID for this setup (derived from user's recovery_setup id)
+    pub id: String,
+    pub threshold: i32,
+    pub total_trustees: i32,
+    pub trustees: Vec<TrusteeInfo>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Trustee info shaped for the frontend RecoverySetup type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrusteeInfo {
+    pub id: String,
+    pub email: String,
+    pub name: Option<String>,
+    /// Always "accepted" — trustees are written once (no invite flow)
+    pub status: String,
+    pub added_at: String,
+}
+
+/// API response shape for a single pending recovery request.
+/// Field names match what the backend returns.
+#[derive(Debug, Deserialize)]
+pub struct PendingRecoveryRequestApi {
+    pub id: String,
+    pub requester_name: Option<String>,
+    pub requester_email: Option<String>,
+    pub status: String,
+    pub approved_count: i32,
+    pub required_count: i32,
+    pub expires_at: String,
+    pub created_at: String,
+}
+
+/// Frontend-shaped pending recovery request.
+/// Field names match the TypeScript `RecoveryRequest` interface.
+#[derive(Debug, Serialize)]
+pub struct PendingRecoveryRequest {
+    pub id: String,
+    pub requester_name: Option<String>,
+    pub requester_email: Option<String>,
+    pub status: String,
+    pub approvals_received: i32,
+    pub approvals_required: i32,
+    pub expires_at: String,
+    pub created_at: String,
+}
+
+impl From<PendingRecoveryRequestApi> for PendingRecoveryRequest {
+    fn from(api: PendingRecoveryRequestApi) -> Self {
+        Self {
+            id: api.id,
+            requester_name: api.requester_name,
+            requester_email: api.requester_email,
+            status: api.status,
+            approvals_received: api.approved_count,
+            approvals_required: api.required_count,
+            expires_at: api.expires_at,
+            created_at: api.created_at,
+        }
+    }
+}
+
+/// Response from ListTrustees API
+#[derive(Debug, Deserialize)]
+pub struct ListTrusteesResponse {
+    pub trustees: Vec<TrusteeEntry>,
+    pub threshold: i32,
+}
+
+/// Response from GetPendingRequests API
+#[derive(Debug, Deserialize)]
+pub struct PendingRequestsApiResponse {
+    pub requests: Vec<PendingRecoveryRequestApi>,
+}
+
+/// A single share entry to POST to /api/recovery/trustees/setup
+#[derive(Debug, Serialize)]
+pub struct ShareEntry {
+    pub trustee_user_id: String,
+    pub encrypted_share: String,
+    pub share_index: i32,
+}
+
+/// Request body for /api/recovery/trustees/setup
+#[derive(Debug, Serialize)]
+pub struct SetupTrusteesRequest {
+    pub threshold: i32,
+    pub shares: Vec<ShareEntry>,
+}
+
 /// Response from server-side share retrieval
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerShareResponse {
@@ -241,6 +346,101 @@ impl RecoveryService {
     pub async fn delete_setup(&self) -> AppResult<()> {
         self.api_client
             .delete::<serde_json::Value>("/api/recovery/setup")
+            .await?;
+        Ok(())
+    }
+
+    // --- Trustee recovery API calls ---
+
+    /// Fetch the current trustee recovery setup (trustees + threshold).
+    ///
+    /// Returns `None` if no active setup exists.
+    pub async fn get_trustee_setup(&self) -> AppResult<Option<TrusteeRecoverySetup>> {
+        let resp: ListTrusteesResponse = self
+            .api_client
+            .get("/api/recovery/trustees")
+            .await?;
+
+        if resp.trustees.is_empty() && resp.threshold == 0 {
+            return Ok(None);
+        }
+
+        let trustees: Vec<TrusteeInfo> = resp
+            .trustees
+            .iter()
+            .map(|t| TrusteeInfo {
+                id: t.id.clone(),
+                email: t.email.clone().unwrap_or_default(),
+                name: t.display_name.clone(),
+                status: "accepted".to_string(),
+                added_at: t.created_at.clone(),
+            })
+            .collect();
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let first_added = trustees
+            .first()
+            .map(|t| t.added_at.clone())
+            .unwrap_or_else(|| now.clone());
+
+        Ok(Some(TrusteeRecoverySetup {
+            id: "trustee-setup".to_string(),
+            threshold: resp.threshold,
+            total_trustees: trustees.len() as i32,
+            trustees,
+            created_at: first_added,
+            updated_at: now,
+        }))
+    }
+
+    /// Configure trustees with pre-encrypted shares.
+    pub async fn setup_trustees(&self, request: &SetupTrusteesRequest) -> AppResult<()> {
+        self.api_client
+            .post::<_, serde_json::Value>("/api/recovery/trustees/setup", request)
+            .await?;
+        Ok(())
+    }
+
+    /// Initiate a recovery request (authenticated — current user requests recovery).
+    pub async fn initiate_recovery_request(&self) -> AppResult<serde_json::Value> {
+        self.api_client
+            .post::<_, serde_json::Value>(
+                "/api/recovery/requests/initiate",
+                &serde_json::Value::Null,
+            )
+            .await
+    }
+
+    /// Get the current user's active recovery request (if any).
+    pub async fn get_my_recovery_request(&self) -> AppResult<serde_json::Value> {
+        self.api_client
+            .get("/api/recovery/requests/mine")
+            .await
+    }
+
+    /// Fetch pending recovery requests where the current user is a trustee.
+    pub async fn get_pending_requests(&self) -> AppResult<Vec<PendingRecoveryRequest>> {
+        let resp: PendingRequestsApiResponse = self
+            .api_client
+            .get("/api/recovery/requests/pending")
+            .await?;
+        Ok(resp.requests.into_iter().map(PendingRecoveryRequest::from).collect())
+    }
+
+    /// Approve a recovery request.
+    pub async fn approve_request(&self, request_id: &str) -> AppResult<()> {
+        let url = format!("/api/recovery/requests/{}/approve", request_id);
+        self.api_client
+            .post::<_, serde_json::Value>(&url, &serde_json::Value::Null)
+            .await?;
+        Ok(())
+    }
+
+    /// Reject a recovery request.
+    pub async fn reject_request(&self, request_id: &str) -> AppResult<()> {
+        let url = format!("/api/recovery/requests/{}/reject", request_id);
+        self.api_client
+            .post::<_, serde_json::Value>(&url, &serde_json::Value::Null)
             .await?;
         Ok(())
     }

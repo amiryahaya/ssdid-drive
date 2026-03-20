@@ -150,8 +150,8 @@ pub fn run() {
             commands::sharing::get_share_details,
             commands::sharing::accept_share,
             commands::sharing::decline_share,
-            // Recovery commands
-            commands::recovery::setup_recovery,
+            // Recovery commands (low-level Shamir key-split flow)
+            commands::recovery::upload_recovery_server_share,
             commands::recovery::get_recovery_status,
             commands::recovery::split_master_key_command,
             commands::recovery::reconstruct_master_key_command,
@@ -161,6 +161,14 @@ pub fn run() {
             commands::recovery::complete_recovery,
             commands::recovery::delete_recovery_setup,
             commands::recovery::compute_key_proof_command,
+            // Recovery commands (trustee-based flow — wired to backend trustee endpoints)
+            commands::recovery::get_recovery_setup,
+            commands::recovery::setup_recovery,
+            commands::recovery::update_recovery,
+            commands::recovery::remove_recovery,
+            commands::recovery::get_pending_recovery_requests,
+            commands::recovery::approve_recovery_request,
+            commands::recovery::deny_recovery_request,
             // Settings commands
             commands::settings::get_settings,
             commands::settings::update_settings,

@@ -477,7 +477,7 @@ export const tauriService = {
   },
 
   async setupRecovery(serverShare: string, keyProof: string): Promise<void> {
-    return invoke('setup_recovery', { server_share: serverShare, key_proof: keyProof });
+    return invoke('upload_recovery_server_share', { server_share: serverShare, key_proof: keyProof });
   },
 
   async recoverWithFiles(file1Contents: string, file2Contents: string): Promise<RecoverResult> {
