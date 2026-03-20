@@ -6,9 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.GsonBuilder
 import my.ssdid.drive.crypto.RecoveryFile
 import my.ssdid.drive.crypto.ShamirSecretSharing
+import my.ssdid.drive.data.remote.dto.ApproveRequestResponse
 import my.ssdid.drive.data.remote.dto.CompleteRecoveryResponse
+import my.ssdid.drive.data.remote.dto.MyRecoveryRequestData
+import my.ssdid.drive.data.remote.dto.PendingRecoveryRequestDto
+import my.ssdid.drive.data.remote.dto.RecoveryRequestResponse
 import my.ssdid.drive.data.remote.dto.RecoveryStatusResponse
+import my.ssdid.drive.data.remote.dto.RejectRequestResponse
+import my.ssdid.drive.data.remote.dto.ReleasedShareDto
 import my.ssdid.drive.data.remote.dto.ServerShareResponse
+import my.ssdid.drive.data.remote.dto.SetupTrusteesRequest
+import my.ssdid.drive.data.remote.dto.TrusteeDto
+import my.ssdid.drive.data.remote.dto.TrusteeShareEntry
 import my.ssdid.drive.domain.repository.RecoveryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -210,7 +219,7 @@ class RecoveryWizardViewModel @Inject constructor(
                 val file1 = RecoveryFile.create(shares[0].first, shares[0].second, userDid)
                 val file2 = RecoveryFile.create(shares[1].first, shares[1].second, userDid)
                 val serverShareB64 = Base64.encodeToString(shares[2].second, Base64.NO_WRAP)
-                val proof = MessageDigest.getInstance("SHA-256")
+                val proof = MessageDigest.getInstance("SHA3-256")
                     .digest(kemPublicKey)
                     .joinToString("") { "%02x".format(it) }
 
@@ -398,5 +407,284 @@ class RecoveryFlowViewModel @Inject constructor(
 
     fun clearError() {
         _flowState.update { it.copy(step = FlowStep.SELECT_PATH, error = null) }
+    }
+}
+
+// ==================== Trustee Setup ViewModel ====================
+
+@HiltViewModel
+class TrusteeSetupViewModel @Inject constructor(
+    private val recoveryRepository: RecoveryRepository
+) : ViewModel() {
+
+    data class UiState(
+        val trustees: List<TrusteeDto> = emptyList(),
+        val threshold: Int = 0,
+        val isLoading: Boolean = false,
+        val isSetupComplete: Boolean = false,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        loadTrustees()
+    }
+
+    fun loadTrustees() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            recoveryRepository.getTrustees()
+                .onSuccess { response ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            trustees = response.trustees,
+                            threshold = response.threshold
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    fun setupTrustees(threshold: Int, shares: List<TrusteeShareEntry>) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            recoveryRepository.setupTrustees(SetupTrusteesRequest(threshold, shares))
+                .onSuccess {
+                    _uiState.update { it.copy(isLoading = false, isSetupComplete = true) }
+                    loadTrustees()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+}
+
+// ==================== Initiate Recovery ViewModel ====================
+
+@HiltViewModel
+class InitiateRecoveryViewModel @Inject constructor(
+    private val recoveryRepository: RecoveryRepository
+) : ViewModel() {
+
+    data class UiState(
+        val activeRequest: MyRecoveryRequestData? = null,
+        val isLoading: Boolean = false,
+        val isInitiated: Boolean = false,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        checkRecoveryStatus()
+    }
+
+    fun checkRecoveryStatus() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            recoveryRepository.getMyRecoveryRequest()
+                .onSuccess { response ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            activeRequest = response.request,
+                            isInitiated = response.request != null
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    fun initiateRecovery() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            recoveryRepository.initiateRecoveryRequest()
+                .onSuccess { response ->
+                    _uiState.update { it.copy(isLoading = false, isInitiated = true) }
+                    checkRecoveryStatus()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+}
+
+// ==================== Pending Requests ViewModel (Trustee View) ====================
+
+@HiltViewModel
+class PendingRecoveryRequestsViewModel @Inject constructor(
+    private val recoveryRepository: RecoveryRepository
+) : ViewModel() {
+
+    data class UiState(
+        val requests: List<PendingRecoveryRequestDto> = emptyList(),
+        val isLoading: Boolean = false,
+        val processingId: String? = null,
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        loadPendingRequests()
+    }
+
+    fun loadPendingRequests() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            recoveryRepository.getPendingRecoveryRequests()
+                .onSuccess { response ->
+                    _uiState.update { it.copy(isLoading = false, requests = response.requests) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    fun approveRequest(requestId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(processingId = requestId, error = null) }
+            recoveryRepository.approveRecoveryRequest(requestId)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            processingId = null,
+                            requests = state.requests.filterNot { it.id == requestId }
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(processingId = null, error = e.message) }
+                }
+        }
+    }
+
+    fun rejectRequest(requestId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(processingId = requestId, error = null) }
+            recoveryRepository.rejectRecoveryRequest(requestId)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            processingId = null,
+                            requests = state.requests.filterNot { it.id == requestId }
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(processingId = null, error = e.message) }
+                }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+}
+
+// ==================== Trustee-Based Recovery Flow ViewModel ====================
+
+@HiltViewModel
+class TrusteeRecoveryViewModel @Inject constructor(
+    private val recoveryRepository: RecoveryRepository
+) : ViewModel() {
+
+    enum class FlowStep { IDLE, REQUESTING, WAITING_APPROVAL, FETCHING_SHARES, SUCCESS, ERROR }
+
+    data class UiState(
+        val step: FlowStep = FlowStep.IDLE,
+        val activeRequest: MyRecoveryRequestData? = null,
+        val releasedShares: List<ReleasedShareDto> = emptyList(),
+        val did: String = "",
+        val error: String? = null
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    fun setDid(did: String) {
+        _uiState.update { it.copy(did = did) }
+    }
+
+    /** Unauthenticated path: create recovery request by DID (no session). */
+    fun createRecoveryRequest() {
+        val did = _uiState.value.did
+        if (did.isBlank()) {
+            _uiState.update { it.copy(step = FlowStep.ERROR, error = "DID is required") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(step = FlowStep.REQUESTING, error = null) }
+            recoveryRepository.createRecoveryRequest(did)
+                .onSuccess {
+                    _uiState.update { it.copy(step = FlowStep.WAITING_APPROVAL) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(step = FlowStep.ERROR, error = e.message) }
+                }
+        }
+    }
+
+    /** Poll the user's active recovery request status. */
+    fun checkRequestStatus() {
+        viewModelScope.launch {
+            recoveryRepository.getMyRecoveryRequest()
+                .onSuccess { response ->
+                    val req = response.request
+                    if (req != null && req.status == "approved") {
+                        _uiState.update { it.copy(activeRequest = req, step = FlowStep.FETCHING_SHARES) }
+                    } else {
+                        _uiState.update { it.copy(activeRequest = req) }
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message) }
+                }
+        }
+    }
+
+    /** Fetch released trustee shares once the request is approved. */
+    fun fetchReleasedShares(requestId: String) {
+        val did = _uiState.value.did
+        viewModelScope.launch {
+            recoveryRepository.getReleasedShares(requestId, did)
+                .onSuccess { response ->
+                    _uiState.update {
+                        it.copy(
+                            releasedShares = response.shares,
+                            step = FlowStep.SUCCESS
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(step = FlowStep.ERROR, error = e.message) }
+                }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(step = FlowStep.IDLE, error = null) }
     }
 }

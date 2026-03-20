@@ -5,10 +5,20 @@ import my.ssdid.drive.data.remote.dto.ActivityResponseDto
 import my.ssdid.drive.data.remote.dto.AuthResponse
 import my.ssdid.drive.data.remote.dto.AcceptInviteRequest
 import my.ssdid.drive.data.remote.dto.AcceptInviteResponse
+import my.ssdid.drive.data.remote.dto.ApproveRequestResponse
 import my.ssdid.drive.data.remote.dto.CompleteRecoveryRequest
 import my.ssdid.drive.data.remote.dto.CompleteRecoveryResponse
+import my.ssdid.drive.data.remote.dto.CreateRecoveryRequestBody
+import my.ssdid.drive.data.remote.dto.ListTrusteesResponse
+import my.ssdid.drive.data.remote.dto.MyRecoveryRequestResponse
+import my.ssdid.drive.data.remote.dto.PendingRequestsResponse
+import my.ssdid.drive.data.remote.dto.RecoveryRequestResponse
 import my.ssdid.drive.data.remote.dto.RecoveryStatusResponse
+import my.ssdid.drive.data.remote.dto.RejectRequestResponse
+import my.ssdid.drive.data.remote.dto.ReleasedSharesResponse
 import my.ssdid.drive.data.remote.dto.ServerShareResponse
+import my.ssdid.drive.data.remote.dto.SetupTrusteesRequest
+import my.ssdid.drive.data.remote.dto.SetupTrusteesResponse
 import my.ssdid.drive.data.remote.dto.CreateFolderRequest
 import my.ssdid.drive.data.remote.dto.DeviceEnrollmentResponse
 import my.ssdid.drive.data.remote.dto.DeviceEnrollmentsResponse
@@ -446,6 +456,39 @@ interface ApiService {
 
     @DELETE("recovery/setup")
     suspend fun deleteRecoverySetup(): Response<Unit>
+
+    // Trustee management (authenticated)
+    @POST("recovery/trustees/setup")
+    suspend fun setupTrustees(@Body request: SetupTrusteesRequest): Response<SetupTrusteesResponse>
+
+    @GET("recovery/trustees")
+    suspend fun getTrustees(): Response<ListTrusteesResponse>
+
+    // Recovery requests — authenticated
+    @POST("recovery/requests/initiate")
+    suspend fun initiateRecoveryRequest(): Response<RecoveryRequestResponse>
+
+    @GET("recovery/requests/mine")
+    suspend fun getMyRecoveryRequest(): Response<MyRecoveryRequestResponse>
+
+    @GET("recovery/requests/pending")
+    suspend fun getPendingRecoveryRequests(): Response<PendingRequestsResponse>
+
+    @POST("recovery/requests/{id}/approve")
+    suspend fun approveRecoveryRequest(@Path("id") id: String): Response<ApproveRequestResponse>
+
+    @POST("recovery/requests/{id}/reject")
+    suspend fun rejectRecoveryRequest(@Path("id") id: String): Response<RejectRequestResponse>
+
+    // Recovery requests — unauthenticated
+    @POST("recovery/requests")
+    suspend fun createRecoveryRequest(@Body request: CreateRecoveryRequestBody): Response<RecoveryRequestResponse>
+
+    @GET("recovery/requests/{id}/shares")
+    suspend fun getReleasedShares(
+        @Path("id") requestId: String,
+        @Query("did") did: String
+    ): Response<ReleasedSharesResponse>
 
     // ==================== Device Enrollment ====================
 
