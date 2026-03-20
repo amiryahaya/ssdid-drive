@@ -37,11 +37,7 @@ public static class GetReleasedShares
             return AppError.BadRequest($"Recovery request is not approved (current status: {request.Status.ToString().ToLowerInvariant()})").ToProblemResult();
 
         if (request.ExpiresAt <= DateTimeOffset.UtcNow)
-        {
-            request.Status = RecoveryRequestStatus.Expired;
-            await db.SaveChangesAsync(ct);
-            return AppError.Gone("Recovery request has expired").ToProblemResult();
-        }
+            return AppError.Gone("This recovery request has expired").ToProblemResult();
 
         // Get encrypted shares from trustees who approved
         var approvedTrusteeIds = await db.RecoveryRequestApprovals

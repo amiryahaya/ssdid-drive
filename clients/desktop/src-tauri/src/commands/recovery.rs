@@ -214,7 +214,7 @@ async fn setup_trustees_internal(
 
     // Step 2: split into shares (one per trustee)
     let n = trustee_emails.len();
-    let shares = split_n_shares(&master_key, n)?;
+    let shares = split_n_shares(&master_key, n, threshold as u8)?;
 
     // Step 3 + 4: for each trustee, search + encrypt share
     let mut share_entries: Vec<RecoveryShareEntry> = Vec::with_capacity(n);
@@ -286,7 +286,7 @@ async fn setup_trustees_internal(
 /// For n > 3, we create a (threshold, n) scheme by taking the first `n` shares from
 /// a (2-of-n) dealer — this means any `threshold` shares suffice.
 /// Uses the same `sharks` crate as the existing split_master_key.
-fn split_n_shares(master_key: &[u8; 32], n: usize) -> AppResult<Vec<(u8, Vec<u8>)>> {
+fn split_n_shares(master_key: &[u8; 32], n: usize, threshold: u8) -> AppResult<Vec<(u8, Vec<u8>)>> {
     use sharks::{Share, Sharks};
 
     if n < 2 {
@@ -295,7 +295,6 @@ fn split_n_shares(master_key: &[u8; 32], n: usize) -> AppResult<Vec<(u8, Vec<u8>
         ));
     }
 
-    let threshold = 2u8; // minimum threshold for recovery
     let sharks = Sharks(threshold);
     let dealer = sharks.dealer(master_key);
     let shares: Vec<Share> = dealer.take(n).collect();
@@ -484,7 +483,7 @@ pub async fn delete_recovery_setup(state: State<'_, AppState>) -> AppResult<()> 
     state.recovery_service().delete_setup().await
 }
 
-/// Compute a key proof (SHA-256 hex of a KEM public key).
+/// Compute a key proof (SHA3-256 hex of a KEM public key).
 #[tauri::command]
 pub async fn compute_key_proof_command(
     kem_public_key_b64: String,

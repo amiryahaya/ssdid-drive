@@ -35,6 +35,9 @@ public static class ApproveRecoveryRequest
             return AppError.Gone("Recovery request has expired").ToProblemResult();
         }
 
+        if (request.RequesterId == accessor.UserId)
+            return AppError.Forbidden("You cannot approve your own recovery request").ToProblemResult();
+
         // Validate user is a trustee for this request's setup
         var isTrustee = await db.RecoveryTrustees
             .AnyAsync(rt => rt.RecoverySetupId == request.RecoverySetupId
@@ -56,10 +59,19 @@ public static class ApproveRecoveryRequest
             DecidedAt = DateTimeOffset.UtcNow
         });
 
-        request.ApprovedCount++;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            return AppError.Conflict("You have already responded to this request").ToProblemResult();
+        }
 
-        // Check if threshold met
-        if (request.ApprovedCount >= request.RequiredCount)
+        // Recount from DB to avoid race conditions
+        var actualApproved = await db.RecoveryRequestApprovals
+            .CountAsync(a => a.RecoveryRequestId == request.Id && a.Decision == ApprovalDecision.Approved, ct);
+        if (actualApproved >= request.RequiredCount)
         {
             request.Status = RecoveryRequestStatus.Approved;
 
@@ -72,7 +84,7 @@ public static class ApproveRecoveryRequest
                 actionResourceId: request.Id.ToString(),
                 ct: ct);
         }
-
+        request.ApprovedCount = actualApproved;
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(new

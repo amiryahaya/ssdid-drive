@@ -266,6 +266,21 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
+    // POST /api/recovery/requests — partitioned by IP, 5 req/IP/hour
+    options.AddPolicy("recovery-create", httpContext =>
+    {
+        if (isTesting)
+            return RateLimitPartition.GetNoLimiter("no-limit");
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter($"recovery-create:{ip}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromHours(1),
+            QueueLimit = 0
+        });
+    });
+
     // TOTP recovery — 3 per IP per hour
     options.AddPolicy("auth-recovery", httpContext =>
     {

@@ -33,6 +33,9 @@ public static class RejectRecoveryRequest
             return AppError.Gone("Recovery request has expired").ToProblemResult();
         }
 
+        if (request.RequesterId == accessor.UserId)
+            return AppError.Forbidden("You cannot approve your own recovery request").ToProblemResult();
+
         // Validate user is a trustee for this request's setup
         var isTrustee = await db.RecoveryTrustees
             .AnyAsync(rt => rt.RecoverySetupId == request.RecoverySetupId

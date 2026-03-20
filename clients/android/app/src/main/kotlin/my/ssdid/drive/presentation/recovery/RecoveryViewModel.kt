@@ -387,6 +387,15 @@ class RecoveryFlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Complete recovery with DID migration params.
+     *
+     * NOTE: This method currently sends an empty keyProof. It should NOT be called
+     * directly from a basic UI action. The user should go through a full recovery flow
+     * that collects trustee shares, reconstructs the master key, generates a new
+     * DID/KEM keypair, and computes a real key proof before calling completeRecovery.
+     * TODO: Route through a complete recovery flow that fills in real keyProof.
+     */
     fun completeRecovery() {
         val s = _flowState.value
         val oldDid = s.oldDid.ifBlank {
@@ -394,6 +403,8 @@ class RecoveryFlowViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // TODO: keyProof should be computed from the reconstructed master key,
+            // not passed as empty string. Route through full recovery flow.
             recoveryRepository.completeRecovery(
                 oldDid = oldDid,
                 newDid = s.newDid.ifBlank { oldDid },

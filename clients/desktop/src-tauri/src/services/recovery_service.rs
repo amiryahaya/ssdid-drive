@@ -6,7 +6,7 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha3::{Digest, Sha3_256};
 use sharks::{Share, Sharks};
 use std::sync::Arc;
 use zeroize::Zeroize;
@@ -242,14 +242,14 @@ impl RecoveryService {
 
     /// Create a `RecoveryFile` struct for export as JSON.
     ///
-    /// The `share_data` is base64-encoded; `checksum` is the SHA-256 hex
+    /// The `share_data` is base64-encoded; `checksum` is the SHA3-256 hex
     /// digest of the raw share bytes for integrity verification.
     pub fn create_recovery_file(
         share_index: u8,
         share_data: &[u8],
         user_did: &str,
     ) -> RecoveryFile {
-        let checksum = hex::encode(Sha256::digest(share_data));
+        let checksum = hex::encode(Sha3_256::digest(share_data));
         RecoveryFile {
             version: 1,
             scheme: "shamir-gf256".to_string(),
@@ -264,7 +264,7 @@ impl RecoveryService {
 
     /// Parse and validate a `.recovery` JSON file.
     ///
-    /// Verifies the version field and SHA-256 checksum of the share data.
+    /// Verifies the version field and SHA3-256 checksum of the share data.
     pub fn parse_recovery_file(contents: &str) -> AppResult<RecoveryFile> {
         let file: RecoveryFile = serde_json::from_str(contents)
             .map_err(|e| AppError::Crypto(format!("Invalid recovery file: {}", e)))?;
@@ -279,7 +279,7 @@ impl RecoveryService {
             .decode(&file.share_data)
             .map_err(|e| AppError::Crypto(format!("Invalid share_data base64: {}", e)))?;
 
-        let expected_checksum = hex::encode(Sha256::digest(&raw_bytes));
+        let expected_checksum = hex::encode(Sha3_256::digest(&raw_bytes));
         if file.checksum != expected_checksum {
             return Err(AppError::Crypto(
                 "Recovery file is damaged (checksum mismatch)".to_string(),
@@ -289,9 +289,9 @@ impl RecoveryService {
         Ok(file)
     }
 
-    /// Compute key_proof: SHA-256 hex digest of the KEM public key.
+    /// Compute key_proof: SHA3-256 hex digest of the KEM public key.
     pub fn compute_key_proof(kem_public_key: &[u8]) -> String {
-        hex::encode(Sha256::digest(kem_public_key))
+        hex::encode(Sha3_256::digest(kem_public_key))
     }
 
     // --- API calls ---
@@ -510,7 +510,7 @@ mod tests {
         let mut file = RecoveryService::create_recovery_file(1, &share_data, "did:ssdid:test");
         file.version = 2;
         // Recompute checksum so it passes that check
-        file.checksum = hex::encode(Sha256::digest(&share_data));
+        file.checksum = hex::encode(Sha3_256::digest(&share_data));
 
         let json = serde_json::to_string(&file).unwrap();
         let result = RecoveryService::parse_recovery_file(&json);
@@ -523,7 +523,7 @@ mod tests {
     fn test_compute_key_proof() {
         let pk = b"test_public_key_bytes";
         let proof = RecoveryService::compute_key_proof(pk);
-        // Should be a 64-char hex string (SHA-256 = 32 bytes = 64 hex chars)
+        // Should be a 64-char hex string (SHA3-256 = 32 bytes = 64 hex chars)
         assert_eq!(proof.len(), 64);
         // Deterministic
         assert_eq!(RecoveryService::compute_key_proof(pk), proof);

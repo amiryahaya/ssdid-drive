@@ -91,14 +91,23 @@ final class InitiateRecoveryViewModel: BaseViewModel {
         }
     }
 
+    /// Complete recovery with DID migration params.
+    ///
+    /// NOTE: This method currently sends empty DID migration parameters.
+    /// It should NOT be called directly from the UI. The user should go through
+    /// the RecoveryViewModel flow (which collects shares, reconstructs the key,
+    /// and fills in real params). This stub exists only for interface completeness.
+    /// TODO: Route through RecoveryViewModel for actual completion with real params.
     func completeRecovery(newPassword: String) {
         isLoading = true
         clearError()
 
         Task {
             do {
-                // Complete recovery and get the recovered master key
-                // TODO: Pass actual DID migration params from recovery flow
+                // TODO: This path is incomplete — callers should use RecoveryViewModel
+                // which collects trustee shares, reconstructs the master key, generates
+                // a new DID/KEM keypair, and computes a real key proof before calling
+                // completeRecovery with actual parameters.
                 _ = try await recoveryRepository.completeRecovery(
                     oldDid: "",       // TODO: from recovery request
                     newDid: "",       // TODO: generate new DID

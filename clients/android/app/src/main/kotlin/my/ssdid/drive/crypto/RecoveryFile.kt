@@ -26,7 +26,7 @@ data class RecoveryFile(
             return Result.failure(IllegalArgumentException("Invalid share data"))
         }
 
-        val expectedChecksum = MessageDigest.getInstance("SHA-256")
+        val expectedChecksum = MessageDigest.getInstance("SHA3-256")
             .digest(rawBytes)
             .joinToString("") { "%02x".format(it) }
 
@@ -39,7 +39,7 @@ data class RecoveryFile(
 
     companion object {
         fun create(shareIndex: Int, shareData: ByteArray, userDid: String): RecoveryFile {
-            val checksum = MessageDigest.getInstance("SHA-256")
+            val checksum = MessageDigest.getInstance("SHA3-256")
                 .digest(shareData)
                 .joinToString("") { "%02x".format(it) }
 

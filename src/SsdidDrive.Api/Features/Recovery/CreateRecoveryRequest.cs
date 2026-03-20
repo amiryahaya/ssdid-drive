@@ -14,7 +14,7 @@ public static class CreateRecoveryRequest
     public static void Map(IEndpointRouteBuilder routes) =>
         routes.MapPost("/api/recovery/requests", Handle)
             .WithMetadata(new SsdidPublicAttribute())
-            .RequireRateLimiting("recovery-share")
+            .RequireRateLimiting("recovery-create")
             .WithTags("Recovery");
 
     private static async Task<IResult> Handle(
@@ -28,14 +28,13 @@ public static class CreateRecoveryRequest
 
         var user = await db.Users
             .FirstOrDefaultAsync(u => u.Did == req.Did, ct);
-        if (user is null)
-            return AppError.NotFound("User not found").ToProblemResult();
 
-        var setup = await db.RecoverySetups
+        var setup = user is null ? null : await db.RecoverySetups
             .Include(rs => rs.Trustees)
             .FirstOrDefaultAsync(rs => rs.UserId == user.Id && rs.IsActive, ct);
-        if (setup is null || setup.Trustees.Count == 0)
-            return AppError.NotFound("No active trustee recovery setup found").ToProblemResult();
+
+        if (user is null || setup is null || setup.Trustees.Count == 0)
+            return AppError.NotFound("No active recovery setup found for this DID").ToProblemResult();
 
         // Check for existing pending request
         var existingPending = await db.RecoveryRequests
