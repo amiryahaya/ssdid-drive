@@ -8,6 +8,8 @@ public class RecoverySetup
     public string KeyProof { get; set; } = default!;
     public DateTimeOffset ShareCreatedAt { get; set; }
     public bool IsActive { get; set; }
+    public int Threshold { get; set; }
 
     public User User { get; set; } = null!;
+    public ICollection<RecoveryTrustee> Trustees { get; set; } = [];
 }

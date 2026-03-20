@@ -156,3 +156,29 @@ struct RecoveryCompleteResponse: Codable {
         case message
     }
 }
+
+/// Request payload for a single trustee share during setup
+struct TrusteeShareRequest: Codable {
+    let trusteeUserId: String
+    let encryptedShare: String  // base64-encoded encrypted share
+    let shareIndex: Int
+
+    enum CodingKeys: String, CodingKey {
+        case trusteeUserId = "trustee_user_id"
+        case encryptedShare = "encrypted_share"
+        case shareIndex = "share_index"
+    }
+}
+
+/// A released share returned after trustees have approved recovery
+struct ReleasedShare: Codable, Identifiable, Equatable {
+    let id: String
+    let shareIndex: Int
+    let encryptedShare: String  // base64-encoded
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case shareIndex = "share_index"
+        case encryptedShare = "encrypted_share"
+    }
+}

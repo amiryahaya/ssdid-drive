@@ -9,9 +9,16 @@ public static class RecoveryFeature
         SetupRecovery.Map(group);
         GetRecoveryStatus.Map(group);
         DeleteRecoverySetup.Map(group);
+        SetupTrustees.Map(group);
+        ListTrustees.Map(group);
+        GetPendingRequests.Map(group);
+        ApproveRecoveryRequest.Map(group);
+        RejectRecoveryRequest.Map(group);
 
         // Unauthenticated endpoints mapped directly on routes
         GetRecoveryShare.Map(routes);
         CompleteRecovery.Map(routes);
+        CreateRecoveryRequest.Map(routes);
+        GetReleasedShares.Map(routes);
     }
 }

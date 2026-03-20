@@ -22,7 +22,13 @@ protocol RecoveryRepository {
     /// Delete/deactivate recovery setup.
     func deleteSetup() async throws
 
-    // MARK: - Trustee Dashboard (pending backend implementation)
+    // MARK: - Trustee Recovery
+
+    /// Setup trustee recovery: send encrypted shares to designated trustees.
+    func setupTrustees(threshold: Int, shares: [TrusteeShareRequest]) async throws
+
+    /// Get the current user's configured trustees.
+    func getTrustees() async throws -> [Trustee]
 
     /// Get pending recovery requests where the current user is a trustee.
     func getPendingRequests() async throws -> [RecoveryRequest]
@@ -36,13 +42,16 @@ protocol RecoveryRepository {
     /// Reject a recovery request.
     func rejectRequest(requestId: String) async throws
 
-    /// Get available trustees for recovery setup.
-    func getTrustees() async throws -> [User]
-
     /// Get the current user's own recovery request (if any).
     func getMyRecoveryRequest() async throws -> RecoveryRequest?
 
-    /// Initiate a new recovery request.
+    /// Create a new recovery request (unauthenticated — user is locked out).
+    func createRecoveryRequest(did: String) async throws -> RecoveryRequest
+
+    /// Get released shares for a recovery request (unauthenticated).
+    func getReleasedShares(requestId: String, did: String) async throws -> [ReleasedShare]
+
+    /// Initiate a new recovery request (settings flow — authenticated).
     func initiateRecovery() async throws -> RecoveryRequest
 }
 

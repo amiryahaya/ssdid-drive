@@ -16,8 +16,8 @@ final class TrusteeSelectionViewModel: BaseViewModel {
 
     let totalShares: Int
     @Published var searchQuery: String = ""
-    @Published var searchResults: [User] = []
-    @Published var selectedTrustees: [User] = []
+    @Published var searchResults: [Trustee] = []
+    @Published var selectedTrustees: [Trustee] = []
     @Published var isSearching: Bool = false
 
     private var searchDebouncer: AnyCancellable?
@@ -55,7 +55,7 @@ final class TrusteeSelectionViewModel: BaseViewModel {
             do {
                 let trustees = try await recoveryRepository.getTrustees()
                 await MainActor.run {
-                    // Filter trustees by query (simple email/name search)
+                    // Filter trustees by query against email and display name
                     self.searchResults = trustees.filter { trustee in
                         trustee.email.lowercased().contains(query.lowercased()) ||
                         (trustee.displayName?.lowercased().contains(query.lowercased()) ?? false)
@@ -73,20 +73,22 @@ final class TrusteeSelectionViewModel: BaseViewModel {
 
     // MARK: - Actions
 
-    func selectTrustee(_ user: User) {
-        guard !selectedTrustees.contains(where: { $0.id == user.id }) else { return }
+    func selectTrustee(_ trustee: Trustee) {
+        guard !selectedTrustees.contains(where: { $0.id == trustee.id }) else { return }
         guard selectedTrustees.count < totalShares else { return }
 
-        selectedTrustees.append(user)
+        selectedTrustees.append(trustee)
         searchQuery = ""
         searchResults = []
     }
 
-    func removeTrustee(_ user: User) {
-        selectedTrustees.removeAll { $0.id == user.id }
+    func removeTrustee(_ trustee: Trustee) {
+        selectedTrustees.removeAll { $0.id == trustee.id }
     }
 
-    func completeSelection() {
+    /// Call after generating and encrypting Shamir shares for each selected trustee.
+    /// - Parameter encryptedShares: Map of trustee.userId → base64-encoded encrypted share.
+    func completeSelection(encryptedShares: [String: String] = [:]) {
         guard canComplete else { return }
 
         isLoading = true
@@ -94,16 +96,19 @@ final class TrusteeSelectionViewModel: BaseViewModel {
 
         Task {
             do {
-                // Setup recovery with selected trustees
-                // TODO: Implement full Shamir split + trustee invitation flow
-                // For now, this calls the low-level setupRecovery with placeholder values.
-                // The full implementation should:
-                // 1. Generate Shamir shares from the master key
-                // 2. Encrypt each share for the respective trustee
-                // 3. Send encrypted shares to trustees via the backend
-                _ = try await recoveryRepository.setupRecovery(
-                    serverShare: "",  // TODO: generate and split master key
-                    keyProof: ""      // TODO: sign proof with master key
+                // Build per-trustee share payloads
+                let threshold = max(2, selectedTrustees.count - 1)
+                let shareRequests: [TrusteeShareRequest] = selectedTrustees.enumerated().map { index, trustee in
+                    TrusteeShareRequest(
+                        trusteeUserId: trustee.userId,
+                        encryptedShare: encryptedShares[trustee.userId] ?? "",
+                        shareIndex: index + 1
+                    )
+                }
+
+                try await recoveryRepository.setupTrustees(
+                    threshold: threshold,
+                    shares: shareRequests
                 )
 
                 await MainActor.run {

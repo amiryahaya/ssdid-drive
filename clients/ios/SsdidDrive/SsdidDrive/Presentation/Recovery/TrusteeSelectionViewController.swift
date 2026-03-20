@@ -234,16 +234,16 @@ extension TrusteeSelectionViewController: UITableViewDataSource, UITableViewDele
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: UserSearchResultCell.reuseIdentifier, for: indexPath) as! UserSearchResultCell
-        let user = viewModel.searchResults[indexPath.row]
-        let isSelected = viewModel.selectedTrustees.contains { $0.id == user.id }
-        cell.configure(with: user, isSelected: isSelected)
+        let trustee = viewModel.searchResults[indexPath.row]
+        let isSelected = viewModel.selectedTrustees.contains { $0.id == trustee.id }
+        cell.configure(with: trustee, isSelected: isSelected)
         return cell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let user = viewModel.searchResults[indexPath.row]
-        viewModel.selectTrustee(user)
+        let trustee = viewModel.searchResults[indexPath.row]
+        viewModel.selectTrustee(trustee)
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -260,9 +260,9 @@ extension TrusteeSelectionViewController: UICollectionViewDataSource, UICollecti
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TrusteeChipCell.reuseIdentifier, for: indexPath) as! TrusteeChipCell
-        let user = viewModel.selectedTrustees[indexPath.item]
-        cell.configure(with: user) { [weak self] in
-            self?.viewModel.removeTrustee(user)
+        let trustee = viewModel.selectedTrustees[indexPath.item]
+        cell.configure(with: trustee) { [weak self] in
+            self?.viewModel.removeTrustee(trustee)
         }
         return cell
     }
@@ -331,13 +331,13 @@ final class TrusteeChipCell: UICollectionViewCell {
         ])
     }
 
-    func configure(with user: User, onRemove: @escaping () -> Void) {
-        nameLabel.text = user.displayName ?? user.email
+    func configure(with trustee: Trustee, onRemove: @escaping () -> Void) {
+        nameLabel.text = trustee.displayName ?? trustee.email
         self.onRemove = onRemove
 
         // Accessibility
         isAccessibilityElement = true
-        accessibilityLabel = "Selected trustee: \(user.displayName ?? user.email)"
+        accessibilityLabel = "Selected trustee: \(trustee.displayName ?? trustee.email)"
         accessibilityHint = "Double tap to remove"
         accessibilityTraits = [.button]
     }
@@ -433,10 +433,10 @@ final class UserSearchResultCell: UITableViewCell {
         ])
     }
 
-    func configure(with user: User, isSelected: Bool) {
-        let name = user.displayName ?? user.email
+    func configure(with trustee: Trustee, isSelected: Bool) {
+        let name = trustee.displayName ?? trustee.email
         nameLabel.text = name
-        emailLabel.text = user.email
+        emailLabel.text = trustee.email
         checkmarkImageView.isHidden = !isSelected
 
         // Generate initials
