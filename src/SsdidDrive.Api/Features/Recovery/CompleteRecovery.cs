@@ -1,3 +1,4 @@
+using Ssdid.Sdk.Server;
 using Ssdid.Sdk.Server.Session;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Data;
@@ -13,6 +14,7 @@ public static class CompleteRecovery
 
     public static void Map(IEndpointRouteBuilder routes) =>
         routes.MapPost("/api/recovery/complete", Handle)
+            .WithMetadata(new Middleware.SsdidPublicAttribute())
             .RequireRateLimiting("recovery-complete");
 
     private static async Task<IResult> Handle(
@@ -26,6 +28,9 @@ public static class CompleteRecovery
             || string.IsNullOrWhiteSpace(req.KeyProof) || string.IsNullOrWhiteSpace(req.KemPublicKey))
             return AppError.BadRequest("All fields are required").ToProblemResult();
 
+        if (!SsdidDid.IsValid(req.OldDid) || !SsdidDid.IsValid(req.NewDid))
+            return AppError.BadRequest("Invalid DID format").ToProblemResult();
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var user = await db.Users
@@ -38,12 +43,21 @@ public static class CompleteRecovery
         if (setup is null)
             return AppError.NotFound("No active recovery setup found").ToProblemResult();
 
-        var hasApprovedRequest = await db.RecoveryRequests
-            .AnyAsync(rr => rr.RequesterId == user.Id
-                && rr.Status == RecoveryRequestStatus.Approved
-                && rr.ExpiresAt > DateTimeOffset.UtcNow, ct);
-        if (!hasApprovedRequest)
-            return AppError.Forbidden("No approved recovery request found").ToProblemResult();
+        // If trustees are configured, require an approved recovery request
+        // (prevents bypassing the trustee approval flow).
+        // File-based recovery (no trustees) only needs the key proof.
+        var hasTrustees = await db.RecoveryTrustees
+            .AnyAsync(rt => rt.RecoverySetupId == setup.Id, ct);
+        if (hasTrustees)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var hasApprovedRequest = await db.RecoveryRequests
+                .AnyAsync(rr => rr.RequesterId == user.Id
+                    && rr.Status == RecoveryRequestStatus.Approved
+                    && rr.ExpiresAt > now, ct);
+            if (!hasApprovedRequest)
+                return AppError.Forbidden("No approved recovery request found").ToProblemResult();
+        }
 
         var expectedBytes = System.Text.Encoding.UTF8.GetBytes(setup.KeyProof);
         var actualBytes = System.Text.Encoding.UTF8.GetBytes(req.KeyProof);

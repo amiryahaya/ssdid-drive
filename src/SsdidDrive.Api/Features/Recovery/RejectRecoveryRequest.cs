@@ -34,7 +34,7 @@ public static class RejectRecoveryRequest
         }
 
         if (request.RequesterId == accessor.UserId)
-            return AppError.Forbidden("You cannot approve your own recovery request").ToProblemResult();
+            return AppError.Forbidden("You cannot reject your own recovery request").ToProblemResult();
 
         // Validate user is a trustee for this request's setup
         var isTrustee = await db.RecoveryTrustees

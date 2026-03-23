@@ -26,11 +26,12 @@ public static class GetPendingRequests
         if (trusteeSetupIds.Count == 0)
             return Results.Ok(new { requests = Array.Empty<object>() });
 
+        var now = DateTimeOffset.UtcNow;
         // Find pending requests for those setups where this user hasn't decided yet
         var requests = await db.RecoveryRequests
             .Where(rr => trusteeSetupIds.Contains(rr.RecoverySetupId)
                 && rr.Status == RecoveryRequestStatus.Pending
-                && rr.ExpiresAt > DateTimeOffset.UtcNow
+                && rr.ExpiresAt > now
                 && !rr.Approvals.Any(a => a.TrusteeUserId == user.Id))
             .Select(rr => new
             {

@@ -22,10 +22,11 @@ public static class GetMyRecoveryRequest
     {
         var user = accessor.User!;
 
+        var now = DateTimeOffset.UtcNow;
         // Return the most recent pending or approved request (within expiry)
         var request = await db.RecoveryRequests
             .Where(rr => rr.RequesterId == user.Id
-                && rr.ExpiresAt > DateTimeOffset.UtcNow
+                && rr.ExpiresAt > now
                 && (rr.Status == RecoveryRequestStatus.Pending || rr.Status == RecoveryRequestStatus.Approved))
             .OrderByDescending(rr => rr.CreatedAt)
             .Select(rr => new

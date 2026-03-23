@@ -32,10 +32,11 @@ public static class InitiateRecoveryRequest
             return AppError.NotFound("No active trustee recovery setup found. Set up trustees first.").ToProblemResult();
 
         // Check for existing pending request to avoid duplicates
+        var now = DateTimeOffset.UtcNow;
         var existingPending = await db.RecoveryRequests
             .AnyAsync(rr => rr.RequesterId == user.Id
                 && rr.Status == RecoveryRequestStatus.Pending
-                && rr.ExpiresAt > DateTimeOffset.UtcNow, ct);
+                && rr.ExpiresAt > now, ct);
 
         if (existingPending)
             return AppError.Conflict("A pending recovery request already exists").ToProblemResult();

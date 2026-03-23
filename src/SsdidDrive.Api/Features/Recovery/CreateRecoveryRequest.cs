@@ -37,10 +37,11 @@ public static class CreateRecoveryRequest
             return AppError.NotFound("No active recovery setup found for this DID").ToProblemResult();
 
         // Check for existing pending request
+        var now = DateTimeOffset.UtcNow;
         var existingPending = await db.RecoveryRequests
             .AnyAsync(rr => rr.RequesterId == user.Id
                 && rr.Status == RecoveryRequestStatus.Pending
-                && rr.ExpiresAt > DateTimeOffset.UtcNow, ct);
+                && rr.ExpiresAt > now, ct);
         if (existingPending)
             return AppError.Conflict("A pending recovery request already exists").ToProblemResult();
 

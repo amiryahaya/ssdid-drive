@@ -306,8 +306,8 @@ public class RecoveryShamirTests : IClassFixture<SsdidDriveFactory>
         var (client, _, _) = await TestFixture.CreateAuthenticatedClientAsync(_factory, "ShamirUnknownDid");
         var response = await client.PostAsJsonAsync("/api/recovery/complete", new
         {
-            old_did = "did:ssdid:no-such-user-complete",
-            new_did = "did:ssdid:some-new-device",
+            old_did = "did:ssdid:noSuchUserComplete_AABB112233",
+            new_did = "did:ssdid:someNewDevice_CCDD445566778899",
             key_proof = new string('a', 64),
             kem_public_key = Convert.ToBase64String(new byte[32])
         }, TestFixture.Json);
