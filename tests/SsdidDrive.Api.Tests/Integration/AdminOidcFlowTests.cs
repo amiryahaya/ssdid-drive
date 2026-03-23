@@ -176,6 +176,94 @@ public class AdminOidcFlowTests : IClassFixture<SsdidDriveFactory>
     }
 
     [Fact]
+    public async Task OidcAuthorize_ValidIosRedirectUri_Redirects()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync(
+            "/api/auth/oidc/google/authorize?redirect_uri=ssdid-drive://auth/callback");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.ToString();
+        Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth", location);
+    }
+
+    [Fact]
+    public async Task OidcAuthorize_ValidAndroidRedirectUri_Redirects()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync(
+            "/api/auth/oidc/google/authorize?redirect_uri=ssdiddrive://auth/callback");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.ToString();
+        Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth", location);
+    }
+
+    [Fact]
+    public async Task OidcAuthorize_MaliciousRedirectUri_Returns400()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            "/api/auth/oidc/google/authorize?redirect_uri=https://evil.com");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OidcAuthorize_JavascriptScheme_Returns400()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            "/api/auth/oidc/google/authorize?redirect_uri=javascript://xss/payload");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OidcAuthorize_NoRedirectUri_UsesDefault()
+    {
+        // When no redirect_uri is provided the authorize endpoint should still
+        // redirect to the provider (redirect_uri stored as empty string in the
+        // challenge; the callback falls back to the admin portal on completion).
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync("/api/auth/oidc/google/authorize");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.ToString();
+        Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth", location);
+
+        // Verify that an empty redirect_uri is stored in the challenge payload
+        var uri = new Uri(location);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var state = query["state"]!;
+        Assert.False(string.IsNullOrEmpty(state));
+
+        using var scope = _factory.Services.CreateScope();
+        var sessionStore = scope.ServiceProvider.GetRequiredService<ISessionStore>();
+        var challenge = sessionStore.ConsumeChallenge("oidc", state);
+        Assert.NotNull(challenge);
+
+        // Format: "codeVerifier|redirect_uri|invitation_token"
+        var parts = challenge.Challenge.Split('|');
+        Assert.Equal(3, parts.Length);
+        Assert.Equal(string.Empty, parts[1]); // no redirect_uri → empty
+    }
+
+    [Fact]
     public async Task OidcAuthorize_StoresStateInSessionStore()
     {
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
