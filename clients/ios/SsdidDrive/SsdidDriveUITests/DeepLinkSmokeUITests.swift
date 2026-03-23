@@ -1,6 +1,6 @@
 import XCTest
 
-final class DeepLinkUITests: XCTestCase {
+final class DeepLinkSmokeUITests: XCTestCase {
     let app = XCUIApplication()
 
     override func setUp() {

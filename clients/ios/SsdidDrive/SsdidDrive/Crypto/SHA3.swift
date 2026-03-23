@@ -1,4 +1,5 @@
 import Foundation
+import KazSignNative
 
 /// SHA3-256 hash utility using the KazSign native library.
 /// Output: 32 bytes (256 bits), same size as SHA-256.
@@ -10,7 +11,7 @@ enum SHA3_256 {
             output.withUnsafeMutableBytes { outputPtr in
                 kaz_sha3_256(
                     inputPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                    input.count,
+                    UInt64(input.count),
                     outputPtr.baseAddress?.assumingMemoryBound(to: UInt8.self)
                 )
             }
