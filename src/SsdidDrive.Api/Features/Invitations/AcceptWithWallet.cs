@@ -24,6 +24,7 @@ public static class AcceptWithWallet
         AppDbContext db,
         SsdidAuthService auth,
         InvitationAcceptanceService acceptanceService,
+        HttpContext httpContext,
         CancellationToken ct)
     {
         // 1. Verify credential first (cheap to fail fast)
@@ -80,8 +81,11 @@ public static class AcceptWithWallet
                 return result.Match(
                     ok =>
                     {
-                        // 4. Create session
-                        var sessionResult = auth.CreateAuthenticatedSession(did);
+                        // 4. Create session with device binding
+                        var deviceFp = Ssdid.Sdk.Server.Session.DeviceFingerprint.Compute(
+                            httpContext.Request.Headers.UserAgent.FirstOrDefault(),
+                            httpContext.Request.Headers[Ssdid.Sdk.Server.Session.DeviceFingerprint.DeviceIdHeader].FirstOrDefault());
+                        var sessionResult = auth.CreateAuthenticatedSession(did, deviceFp);
                         return sessionResult.Match(
                             session => Results.Ok(new
                             {

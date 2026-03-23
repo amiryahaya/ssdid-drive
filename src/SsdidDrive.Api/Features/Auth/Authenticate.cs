@@ -16,7 +16,7 @@ public static class Authenticate
         group.MapPost("/authenticate", Handle)
             .WithMetadata(new SsdidPublicAttribute());
 
-    private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db, ISseNotificationBus sseBus)
+    private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db, ISseNotificationBus sseBus, HttpContext httpContext)
     {
         // Step 1: Verify the credential (signature + revocation check)
         var verifyResult = await auth.VerifyCredential(req.Credential);
@@ -48,8 +48,11 @@ public static class Authenticate
                 if (user is null)
                     return AppError.NotFound("No account linked to this DID").ToProblemResult();
 
-                // Step 3: Create session only after user is confirmed
-                var sessionResult = auth.CreateAuthenticatedSession(did);
+                // Step 3: Create session with device binding
+                var deviceFp = DeviceFingerprint.Compute(
+                    httpContext.Request.Headers.UserAgent.FirstOrDefault(),
+                    httpContext.Request.Headers[DeviceFingerprint.DeviceIdHeader].FirstOrDefault());
+                var sessionResult = auth.CreateAuthenticatedSession(did, deviceFp);
                 return await sessionResult.Match(
                     async ok =>
                     {
