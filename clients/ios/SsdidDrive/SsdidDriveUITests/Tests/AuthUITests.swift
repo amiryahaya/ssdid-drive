@@ -22,6 +22,7 @@ final class AuthUITests: XCTestCase {
     // MARK: - Test: Login/Logout Flow
 
     func testLoginAndLogoutFlow() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // Verify login screen is displayed
         XCTAssertTrue(loginPage.isDisplayed(), "Login screen should be displayed")
 
@@ -51,6 +52,7 @@ final class AuthUITests: XCTestCase {
     // MARK: - Test: Invalid Credentials Error
 
     func testInvalidCredentialsShowsError() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // Verify login screen is displayed
         XCTAssertTrue(loginPage.isDisplayed(), "Login screen should be displayed")
 
@@ -80,6 +82,7 @@ final class AuthUITests: XCTestCase {
     // MARK: - Test: Biometric Authentication
 
     func testBiometricAuthenticationSetup() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // First, login normally
         loginPage.login(
             email: UITestConfig.testUserEmail,
@@ -123,6 +126,7 @@ final class AuthUITests: XCTestCase {
     // MARK: - Test: Login Button Validation
 
     func testLoginButtonEnabledWithValidInput() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         XCTAssertTrue(loginPage.isDisplayed())
 
         // Initially button should be disabled
@@ -150,6 +154,7 @@ final class AuthUITests: XCTestCase {
     // MARK: - Test: Password Visibility Toggle
 
     func testPasswordVisibilityToggle() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         XCTAssertTrue(loginPage.isDisplayed())
 
         // Enter password

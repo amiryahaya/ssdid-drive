@@ -27,7 +27,7 @@ public static class AcceptWithWallet
         CancellationToken ct)
     {
         // 1. Verify credential first (cheap to fail fast)
-        var verifyResult = auth.VerifyCredential(req.Credential);
+        var verifyResult = await auth.VerifyCredential(req.Credential);
         return await verifyResult.Match(
             async did =>
             {

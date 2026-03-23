@@ -22,6 +22,7 @@ final class RegistrationUITests: XCTestCase {
     // MARK: - Test: Registration Via Invitation
 
     func testRegistrationViaInvitation() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // This test simulates opening an invitation deep link
         // In real E2E testing, this would come from an actual invitation
 
@@ -106,6 +107,7 @@ final class RegistrationUITests: XCTestCase {
     // MARK: - Test: Password Strength Indicator
 
     func testPasswordStrengthIndicator() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // Navigate to registration (if there's a link from login)
         // This depends on app flow - some apps require invitation
         let signUpLink = app.buttons["Sign Up"]
@@ -174,6 +176,7 @@ final class RegistrationUITests: XCTestCase {
     // MARK: - Test: Registration Validation
 
     func testRegistrationFormValidation() throws {
+        throw XCTSkip("Auth migrated to wallet-based")
         // Navigate to registration
         let signUpLink = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] 'sign up' OR label CONTAINS[c] 'create account'")

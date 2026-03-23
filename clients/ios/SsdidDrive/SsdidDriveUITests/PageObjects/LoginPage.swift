@@ -6,13 +6,24 @@ final class LoginPage: BasePage {
     // MARK: - Accessibility Identifiers
 
     enum Identifiers {
-        static let emailTextField = "loginEmailTextField"
+        // Legacy identifiers (email/password auth — no longer in use)
+        static let emailTextField_legacy = "loginEmailTextField"
         static let passwordTextField = "loginPasswordTextField"
-        static let loginButton = "loginButton"
+        static let loginButton_legacy = "loginButton"
         static let showPasswordButton = "showPasswordButton"
         static let errorLabel = "loginErrorLabel"
+
+        // Current wallet-based auth identifiers
         static let logoImageView = "loginLogoImageView"
         static let titleLabel = "loginTitleLabel"
+        static let emailTextField = "emailTextField"
+        static let emailContinueButton = "emailContinueButton"
+        static let openWalletButton = "openWalletButton"
+        static let googleSignInButton = "googleSignInButton"
+        static let microsoftSignInButton = "microsoftSignInButton"
+        static let inviteCodeCard = "inviteCodeCard"
+        static let requestOrgButton = "requestOrgButton"
+        static let refreshButton = "refreshButton"
     }
 
     // MARK: - Elements
@@ -21,16 +32,47 @@ final class LoginPage: BasePage {
         app.textFields[Identifiers.emailTextField]
     }
 
+    /// Legacy password field — kept for backward compatibility (no longer exists in UI).
     var passwordTextField: XCUIElement {
         app.secureTextFields[Identifiers.passwordTextField]
     }
 
+    /// Legacy visible password field — kept for backward compatibility.
     var visiblePasswordTextField: XCUIElement {
         app.textFields[Identifiers.passwordTextField]
     }
 
+    var emailContinueButton: XCUIElement {
+        app.buttons[Identifiers.emailContinueButton]
+    }
+
+    var openWalletButton: XCUIElement {
+        app.buttons[Identifiers.openWalletButton]
+    }
+
+    var googleSignInButton: XCUIElement {
+        app.buttons[Identifiers.googleSignInButton]
+    }
+
+    var microsoftSignInButton: XCUIElement {
+        app.buttons[Identifiers.microsoftSignInButton]
+    }
+
+    var inviteCodeCard: XCUIElement {
+        app.otherElements[Identifiers.inviteCodeCard]
+    }
+
+    var requestOrgButton: XCUIElement {
+        app.buttons[Identifiers.requestOrgButton]
+    }
+
+    var refreshButton: XCUIElement {
+        app.buttons[Identifiers.refreshButton]
+    }
+
+    /// Legacy login button — no longer present in wallet-based auth UI.
     var loginButton: XCUIElement {
-        app.buttons[Identifiers.loginButton]
+        app.buttons[Identifiers.loginButton_legacy]
     }
 
     var showPasswordButton: XCUIElement {
@@ -51,8 +93,13 @@ final class LoginPage: BasePage {
 
     // MARK: - Page Status
 
+    /// Returns true when the login screen is displayed.
+    ///
+    /// Checks for the wallet button or the email continue button — both are
+    /// present on the current wallet-based login screen.
     override func isDisplayed() -> Bool {
-        loginButton.waitForExistence(timeout: UITestConfig.shortTimeout)
+        openWalletButton.waitForExistence(timeout: UITestConfig.shortTimeout)
+            || emailContinueButton.waitForExistence(timeout: UITestConfig.shortTimeout)
     }
 
     // MARK: - Actions

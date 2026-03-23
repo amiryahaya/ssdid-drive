@@ -64,6 +64,16 @@ enum UITestConfig {
     Phone: 555-1234
     """
 
+    // MARK: - Feature Flags
+
+    /// Whether auth-dependent UI tests should run.
+    ///
+    /// Set to `false` until a wallet-based test session mechanism is implemented.
+    /// Tests gated on this flag are skipped gracefully rather than failing.
+    static var isAuthTestEnabled: Bool {
+        ProcessInfo.processInfo.environment["AUTH_TEST_ENABLED"] == "1"
+    }
+
     // MARK: - Launch Arguments
 
     /// Get launch arguments for UI testing

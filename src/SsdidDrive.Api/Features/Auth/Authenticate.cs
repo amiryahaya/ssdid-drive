@@ -18,8 +18,24 @@ public static class Authenticate
 
     private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db, ISseNotificationBus sseBus)
     {
-        // Step 1: Verify the credential (no session created yet)
-        var verifyResult = auth.VerifyCredential(req.Credential);
+        // Step 1: Verify the credential (signature + revocation check)
+        var verifyResult = await auth.VerifyCredential(req.Credential);
+
+        // Step 1b: Explicit expiration enforcement (defense-in-depth)
+        if (req.Credential.TryGetProperty("expirationDate", out var expEl))
+        {
+            var expStr = expEl.GetString();
+            if (expStr is not null &&
+                DateTimeOffset.TryParse(expStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var exp) &&
+                exp < DateTimeOffset.UtcNow)
+            {
+                return Results.Problem(
+                    statusCode: 401,
+                    title: "Credential expired",
+                    detail: $"Credential expired at {expStr}");
+            }
+        }
+
         return await verifyResult.Match(
             async did =>
             {

@@ -1,3 +1,4 @@
+using Ssdid.Sdk.Server;
 using Ssdid.Sdk.Server.Auth;
 using SsdidDrive.Api.Common;
 using SsdidDrive.Api.Middleware;
@@ -14,8 +15,8 @@ public static class Register
 
     private static async Task<IResult> Handle(Request req, SsdidAuthService auth)
     {
-        if (string.IsNullOrWhiteSpace(req.Did) || !req.Did.StartsWith("did:ssdid:") || req.Did.Length > 256)
-            return AppError.BadRequest("Invalid DID format (expected did:ssdid:*, max 256 chars)").ToProblemResult();
+        if (!SsdidDid.IsValid(req.Did))
+            return AppError.BadRequest("Invalid DID format (expected did:ssdid:<base64url>, 22-128 chars)").ToProblemResult();
         if (string.IsNullOrWhiteSpace(req.KeyId) || req.KeyId.Length > 512)
             return AppError.BadRequest("Invalid KeyId (required, max 512 chars)").ToProblemResult();
 

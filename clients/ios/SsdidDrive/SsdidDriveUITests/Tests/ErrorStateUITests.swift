@@ -20,6 +20,7 @@ final class ErrorStateUITests: XCTestCase {
     // MARK: - Test: Error State Handling
 
     func testErrorStateHandling() throws {
+        try XCTSkipUnless(UITestConfig.isAuthTestEnabled, "Auth-dependent UI tests require test session")
         // Launch with error simulation flags
         app.launchArguments = UITestConfig.launchArguments + [
             "-SimulateNetworkError", "true"
@@ -98,6 +99,7 @@ final class ErrorStateUITests: XCTestCase {
     // MARK: - Test: Session Expiry Handling
 
     func testSessionExpiryHandling() throws {
+        try XCTSkipUnless(UITestConfig.isAuthTestEnabled, "Auth-dependent UI tests require test session")
         // Launch normally and login
         app = UITestUtils.launchApp(resetState: true)
 
@@ -161,6 +163,7 @@ final class ErrorStateUITests: XCTestCase {
     // MARK: - Test: Network Error Recovery
 
     func testNetworkErrorRecovery() throws {
+        try XCTSkipUnless(UITestConfig.isAuthTestEnabled, "Auth-dependent UI tests require test session")
         // Launch and login normally
         app = UITestUtils.launchApp(resetState: true)
 
@@ -214,6 +217,7 @@ final class ErrorStateUITests: XCTestCase {
     // MARK: - Test: Retry Button Functionality
 
     func testRetryButtonFunctionality() throws {
+        try XCTSkipUnless(UITestConfig.isAuthTestEnabled, "Auth-dependent UI tests require test session")
         // Launch with error simulation
         app.launchArguments = UITestConfig.launchArguments + [
             "-SimulateNetworkError", "true",

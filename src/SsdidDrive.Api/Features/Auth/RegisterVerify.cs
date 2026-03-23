@@ -22,7 +22,7 @@ public static class RegisterVerify
 
     private static async Task<IResult> Handle(Request req, SsdidAuthService auth, AppDbContext db, IConfiguration config)
     {
-        if (string.IsNullOrWhiteSpace(req.Did) || !req.Did.StartsWith("did:ssdid:") || req.Did.Length > 256)
+        if (!Ssdid.Sdk.Server.SsdidDid.IsValid(req.Did))
             return AppError.BadRequest("Invalid DID format").ToProblemResult();
         if (string.IsNullOrWhiteSpace(req.KeyId) || req.KeyId.Length > 512)
             return AppError.BadRequest("Invalid KeyId").ToProblemResult();
@@ -38,14 +38,9 @@ public static class RegisterVerify
                 var user = await ProvisionUser(db, req.Did, req.InviteToken, req.SharedClaims, adminDid);
                 if (user is null)
                     return AppError.Forbidden("Registration requires a valid invite code").ToProblemResult();
-                // Serialize manually to prevent ASP.NET's global snake_case policy
-                // from converting the VC's camelCase keys (issuanceDate → issuance_date)
-                var responseJson = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    credential = ok.Credential,
-                    did = ok.Did
-                });
-                return Results.Text(responseJson, "application/json", statusCode: 201);
+                // Use VcSerializer to preserve W3C camelCase keys
+                // (the global snake_case policy would convert issuanceDate → issuance_date)
+                return VcSerializer.ToJsonResult(new { credential = ok.Credential, did = ok.Did }, statusCode: 201);
             },
             err => Task.FromResult(err.ToProblemResult()));
     }

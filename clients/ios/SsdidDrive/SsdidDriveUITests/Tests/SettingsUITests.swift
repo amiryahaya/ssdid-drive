@@ -10,6 +10,8 @@ final class SettingsUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        app = XCUIApplication()
+        try XCTSkipUnless(UITestConfig.isAuthTestEnabled, "Auth-dependent UI tests require test session")
         app = UITestUtils.launchApp(resetState: true)
 
         // Login first
