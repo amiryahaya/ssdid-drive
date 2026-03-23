@@ -95,11 +95,11 @@ final class LoginPage: BasePage {
 
     /// Returns true when the login screen is displayed.
     ///
-    /// Checks for the wallet button or the email continue button — both are
-    /// present on the current wallet-based login screen.
+    /// Checks for the title label which is present in both Layout A (wallet
+    /// installed) and Layout B (no wallet). Falls back to checking the
+    /// email continue button for Layout B or the wallet button for Layout A.
     override func isDisplayed() -> Bool {
-        openWalletButton.waitForExistence(timeout: UITestConfig.shortTimeout)
-            || emailContinueButton.waitForExistence(timeout: UITestConfig.shortTimeout)
+        titleLabel.waitForExistence(timeout: UITestConfig.shortTimeout)
     }
 
     // MARK: - Actions

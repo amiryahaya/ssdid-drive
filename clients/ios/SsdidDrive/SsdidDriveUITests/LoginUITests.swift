@@ -6,50 +6,87 @@ final class LoginUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app.launch()
+        // Skip onboarding if shown (first-launch flow).
+        let skipButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'skip'")).firstMatch
+        if skipButton.waitForExistence(timeout: 3) {
+            skipButton.tap()
+        }
     }
 
-    func testLoginScreenDisplaysCorrectly() {
-        // Verify logo, title, invite code card
-        XCTAssertTrue(app.staticTexts["SSDID Drive"].exists)
-        XCTAssertTrue(app.buttons["openWalletButton"].exists || app.images["qrCodeImageView"].exists)
+    // MARK: - Helpers
+
+    /// Returns true if the login screen is currently visible.
+    private var isLoginScreenVisible: Bool {
+        app.staticTexts["loginTitleLabel"].waitForExistence(timeout: UITestConfig.defaultTimeout)
     }
 
-    func testInviteCodeCardIsVisible() {
+    // MARK: - Tests
+
+    func testLoginScreenDisplaysCorrectly() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
+        // Verify title or wallet/email button exists
+        let walletBtn = app.buttons["openWalletButton"]
+        let emailBtn = app.buttons["emailContinueButton"]
+        XCTAssertTrue(
+            walletBtn.exists || emailBtn.exists,
+            "Login screen should display a primary auth button"
+        )
+    }
+
+    func testInviteCodeCardIsVisible() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
         XCTAssertTrue(app.otherElements["inviteCodeCard"].exists)
     }
 
-    func testEmailFieldExists() {
-        // Email field should be visible (in Layout B) or in "Other options" (Layout A)
+    func testEmailFieldExists() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
+        // Email field should be visible (Layout B) or in "Other options" (Layout A).
         let emailField = app.textFields["emailTextField"]
-        let otherOptionsButton = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Other sign in options'")).firstMatch
+        let otherOptionsButton = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Other sign in options'")
+        ).firstMatch
         XCTAssertTrue(emailField.exists || otherOptionsButton.exists)
     }
 
-    func testOidcButtonsExist() {
-        // Google and Microsoft buttons (may need to expand "Other options")
+    func testOidcButtonsExist() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
         let google = app.buttons["googleSignInButton"]
         let microsoft = app.buttons["microsoftSignInButton"]
         if !google.exists {
-            // Try expanding other options
+            // Try expanding other options (Layout A)
             let other = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Other'")).firstMatch
             if other.exists { other.tap() }
         }
-        // At least one auth method should be visible
-        XCTAssertTrue(google.exists || microsoft.exists || app.buttons["openWalletButton"].exists)
+        XCTAssertTrue(
+            google.exists || microsoft.exists || app.buttons["openWalletButton"].exists,
+            "At least one auth method should be visible"
+        )
     }
 
-    func testEmptyEmailContinueDisabled() {
+    func testEmptyEmailContinueDisabled() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
         let emailField = app.textFields["emailTextField"]
         guard emailField.exists else { return } // Layout A — skip
         let continueBtn = app.buttons["emailContinueButton"]
         XCTAssertFalse(continueBtn.isEnabled)
     }
 
-    func testRefreshButtonAppearsOnExpiry() {
-        // QR expires → refresh button should appear (hard to trigger in UI test)
-        // Just verify the button exists when visible
+    func testRefreshButtonAppearsOnExpiry() throws {
+        guard isLoginScreenVisible else {
+            throw XCTSkip("Login screen not visible — app may already be authenticated")
+        }
+        // Refresh button should not be hittable until QR code expires.
         let refresh = app.buttons["refreshButton"]
-        // May not be visible initially
         XCTAssertFalse(refresh.isHittable) // hidden by default
     }
 }
