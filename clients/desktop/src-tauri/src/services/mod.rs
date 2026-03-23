@@ -2,6 +2,7 @@
 
 mod api_client;
 mod app_group_service;
+pub mod cert_pinner;
 mod auth_service;
 mod biometric_service;
 mod crypto_service;

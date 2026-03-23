@@ -1,6 +1,7 @@
 //! HTTP API client for backend communication
 
 use crate::error::{AppError, AppResult};
+use crate::services::cert_pinner;
 use reqwest::{header, Client, RequestBuilder, Response};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
@@ -47,6 +48,17 @@ impl ApiClient {
             .map_err(|e| AppError::Network(e.to_string()))?;
 
         let base_url = get_api_base_url();
+
+        // Log certificate pinning status for the configured API host
+        if let Ok(parsed) = url::Url::parse(&base_url) {
+            if let Some(host) = parsed.host_str() {
+                if cert_pinner::is_pinned_host(host) {
+                    tracing::info!("Certificate pinning active for {}", host);
+                } else {
+                    tracing::warn!("No certificate pins configured for API host {}", host);
+                }
+            }
+        }
         tracing::info!("API client initialized with base URL: {}", base_url);
 
         Ok(Self {
