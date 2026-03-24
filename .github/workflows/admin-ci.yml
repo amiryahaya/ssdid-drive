@@ -1,17 +1,17 @@
 name: Admin CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'clients/admin/**'
-      - '.github/workflows/admin-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'clients/admin/**'
-      - '.github/workflows/admin-ci.yml'
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'clients/admin/**'
+  #     - '.github/workflows/admin-ci.yml'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'clients/admin/**'
+  #     - '.github/workflows/admin-ci.yml'
 
 jobs:
   build-and-test:

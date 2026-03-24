@@ -1,17 +1,17 @@
 name: iOS CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'clients/ios/**'
-      - '.github/workflows/ios-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'clients/ios/**'
-      - '.github/workflows/ios-ci.yml'
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'clients/ios/**'
+  #     - '.github/workflows/ios-ci.yml'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'clients/ios/**'
+  #     - '.github/workflows/ios-ci.yml'
 
 jobs:
   build-and-test:

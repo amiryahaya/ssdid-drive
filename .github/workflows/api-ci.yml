@@ -1,17 +1,18 @@
 name: API CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/SsdidDrive.Api/**'
-      - 'tests/SsdidDrive.Api.Tests/**'
-      - '.github/workflows/api-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/SsdidDrive.Api/**'
-      - 'tests/SsdidDrive.Api.Tests/**'
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'src/SsdidDrive.Api/**'
+  #     - 'tests/SsdidDrive.Api.Tests/**'
+  #     - '.github/workflows/api-ci.yml'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'src/SsdidDrive.Api/**'
+  #     - 'tests/SsdidDrive.Api.Tests/**'
 
 env:
   KAZSIGN_VERSION: v2.0.2
